@@ -1,8 +1,6 @@
 import { App, Modal, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 
-import { Schema } from "./parser";
-
 interface SchemaPluginSettings {
   validateInactiveNotes: boolean;
 }
@@ -24,8 +22,6 @@ export default class SchemaPlugin extends Plugin {
       new Alert(this.app).open();
       return;
     }
-
-    console.log(Schema.tryParse("").map((f) => `${f.name}:${f.value}`));
 
     this.addSettingTab(new SchemaSettingsTab(this.app, this));
   }
