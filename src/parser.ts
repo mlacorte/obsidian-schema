@@ -9,10 +9,8 @@ const $ = (str: string) => new RegExp(str, "i");
 
 const text = P.regexp($($text)).node("text");
 const schema = P.regexp($($schema), 1).node("schema");
-const remainder = P.regexp(/.*$/).node("text");
+const empty = P.regexp(/^$/).node("text");
 
-export const Schema: P.Parser<SchemaType[]> = P.seqMap(
-  P.alt<SchemaType>(text, schema).many(),
-  remainder,
-  (results, result) => (results.length === 0 ? [result] : results)
-);
+export const Schema: P.Parser<SchemaType[]> = empty
+  .map((s) => [s])
+  .or(P.alt<SchemaType>(text, schema).many());
