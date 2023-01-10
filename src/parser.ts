@@ -3,7 +3,7 @@ import * as P from "parsimmon";
 type SchemaType = P.Node<string, string>;
 
 const $chars = "(?:\\.|.)";
-const $schema = `%schema%(${$chars}*)%schema%`;
+const $schema = `%schema%(${$chars}*?)%schema%`;
 const $text = `((?!${$schema})${$chars})+`;
 const $ = (str: string) => new RegExp(str, "i");
 
