@@ -15,12 +15,14 @@
 	"dependencies": {
 		"@codemirror/state": "^6.2.0",
 		"@codemirror/view": "^6.7.2",
+		"luxon": "^3.2.1",
 		"obsidian": "^1.1.1",
 		"obsidian-dataview": "^0.5.53",
 		"parsimmon": "^1.18.1"
 	},
 	"devDependencies": {
 		"@types/jest": "^29.2.5",
+		"@types/luxon": "^3.2.0",
 		"@types/node": "^16.18.11",
 		"@types/parsimmon": "^1.10.6",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
@@ -29,6 +31,7 @@
 		"esbuild": "0.14.47",
 		"eslint": "^8.31.0",
 		"eslint-config-prettier": "^8.6.0",
+		"eslint-plugin-simple-import-sort": "^8.0.0",
 		"eslint-plugin-unused-imports": "^2.0.0",
 		"jest": "^29.3.1",
 		"pnpm": "^7.23.0",
