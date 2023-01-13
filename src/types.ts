@@ -76,6 +76,10 @@ class Type<T extends Types> {
     return this.clone([...lVals].filter((lVal) => rVals.has(lVal)));
   }
 
+  get size() {
+    return this.values === "*" ? -1 : this.values.size;
+  }
+
   private clone(values: "*" | TypeOf<T>[] | ReadonlySet<ValueTypeOf<T>>) {
     return new Type<T>(
       this.type,
