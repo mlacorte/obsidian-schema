@@ -1,9 +1,9 @@
 {
-	"id": "obsidian-schema",
+	"id": "obsidian-wired",
 	"name": "Schema",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
-	"description": "Adds schema validation to note metadata",
+	"description": "Adds schema validation and frontmatter generation to notes",
 	"author": "Michael LaCorte",
 	"authorUrl": "",
 	"fundingUrl": "",

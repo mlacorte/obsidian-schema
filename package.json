@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-schema",
+	"name": "obsidian-wired",
 	"version": "0.1.0",
-	"description": "Adds schema validation to note metadata",
+	"description": "Adds schema validation and frontmatter generation to notes",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
