@@ -1,43 +1,31 @@
-import { Number, Union } from "../src/types";
+import { Number, String, Union } from "../src/types";
 
 describe("types", () => {
   test("types", () => {
-    const all = Number;
-    const one = Number.literal(1);
-    const two = Number.literal(2);
-    const none = one.and(two);
-    const both = one.or(two);
+    const one = Number.literals().or(Number.literals(1));
+    const two = Number.and(Number.literals(2));
+    const empty = one.and(two);
+    const union = one.or(two);
+    const intersect = union.and(two);
 
-    expect(all.size).toBe(-1);
-    expect(one.size).toBe(1);
-    expect(two.size).toBe(1);
-    expect(none.size).toBe(0);
-    expect(both.size).toBe(2);
+    expect(Number.isType).toBe(true);
+    expect(one.isValue).toBe(true);
+    expect(two.isValue).toBe(true);
+    expect(empty.isEmpty).toBe(true);
+    expect(union.isType).toBe(true);
+    expect(intersect.isValue).toBe(true);
   });
 
   test("unions", () => {
-    const number = Union.type("number");
-    const one = Union.literal("number", 1);
-    const string = Union.type("string");
-    const a = Union.literal("string", "a");
+    const one = Number.literals(1).and(Number);
+    const a = String.and(String.literals("a"));
 
-    expect(number.size).toBe(1);
-    expect(one.size).toBe(1);
-    expect(string.size).toBe(1);
-    expect(a.size).toBe(1);
+    const union = Union.or(Number, a);
+    const empty = Number.lift().and(a);
+    const literal = Union.or(one, one);
 
-    const typesOr = number.or(string);
-    const typesAnd = number.and(string);
-    const litsOr = one.or(a);
-    const litsAnd = one.and(a);
-    const allOr = typesOr.or(litsOr);
-    const allAnd = typesAnd.and(litsAnd);
-
-    expect(typesOr.size).toBe(2);
-    expect(typesAnd.size).toBe(0);
-    expect(litsOr.size).toBe(2);
-    expect(litsAnd.size).toBe(0);
-    expect(allOr.size).toBe(2);
-    expect(allAnd.size).toBe(0);
+    expect(union.isType).toBe(true);
+    expect(empty.isEmpty).toBe(true);
+    expect(literal.isValue).toBe(true);
   });
 });
