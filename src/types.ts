@@ -1,22 +1,13 @@
-import { Set } from "immutable";
 import * as L from "luxon";
 
+import { intersectIter, mergeObj, unionIter } from "./util";
+
 // any
-const any: unique symbol = Symbol("*");
-type Any = typeof any;
-
-type AnyMap = TypeMap & { union: UnionType };
+type AnyMap = TypeMap & {
+  union: Union;
+  never: NeverType;
+};
 type AnyKey = keyof AnyMap;
-
-interface IType<K extends AnyKey> {
-  key: K;
-  or(other: IType<K>): IType<K>;
-  and(other: IType<K>): IType<K>;
-  isEmpty: boolean;
-  isValue: boolean;
-  isType: boolean;
-  lift(): UnionType;
-}
 
 // type
 type TypeMap = PrimMap & {
@@ -29,6 +20,105 @@ type TypeMap = PrimMap & {
 type TypeKey = keyof TypeMap;
 type TypeVal<K extends TypeKey> = TypeMap[K];
 
+export interface IAny {
+  kind: AnyKey;
+  or(other: IAny): IAny;
+  and(other: IAny): IAny;
+}
+
+export interface INever extends IAny {
+  kind: "never";
+  or<T extends IAny>(other: T): T;
+  and(other: IAny): INever;
+}
+
+export interface IType<K extends TypeKey = TypeKey> extends IAny {
+  kind: K;
+  type: boolean;
+  values: Set<TypeVal<K>>;
+  or(other: INever): IType<K>;
+  or(other: IType<K>): IType<K>;
+  or(other: IAny): IUnion;
+  and(other: INever): INever;
+  and(other: IType<K>): IType<K> | INever;
+  and(other: IType): INever;
+  and(other: IUnion): IType<K> | INever;
+}
+
+export interface IUnion extends IAny {
+  kind: "union";
+  values: { [K in TypeKey]?: IType<K> };
+  or(other: IAny): IUnion;
+  and<T extends IAny>(other: T): T | INever;
+}
+
+type TypeVals<K extends TypeKey> = Set<TypeVal<K>>;
+
+abstract class TypeBase<K extends TypeKey> implements IType<K> {
+  abstract kind: K;
+  type: boolean;
+
+  protected _values: TypeVals<K>;
+
+  get values() {
+    if (this.type) {
+      throw new Error("tried to access 'values' of a type");
+    }
+
+    return this._values;
+  }
+
+  constructor(values?: TypeVals<K>) {
+    if (values) {
+      this.type = false;
+      this._values = values;
+    } else {
+      this.type = true;
+    }
+  }
+
+  or(other: INever): IType<K>;
+  or(other: IType<K>): IType<K>;
+  or(other: IAny): IUnion;
+  or(other: IAny): INever | IType<K> | IUnion {
+    switch (other.kind) {
+      case "never":
+        return this;
+      case this.kind:
+        return this.grow(other as IType<K>);
+      default:
+        return Union.from(this).or(other);
+    }
+  }
+
+  and(other: INever): INever;
+  and(other: IType<K>): IType<K> | INever;
+  and(other: IType): INever;
+  and(other: IUnion): IType<K> | INever;
+  and(other: IAny): IType<K> | INever {
+    switch (other.kind) {
+      case "never":
+        return Never;
+      case this.kind:
+        return this.shrink(other as IType<K>);
+      default:
+        return (other as IUnion).and(this);
+    }
+  }
+
+  protected abstract _or(other: IType<K>): IType<K>;
+  protected abstract _and(other: IType<K>): IType<K>;
+
+  private grow(other: IType<K>): IType<K> {
+    return this.type ? this : other.type ? other : this._or(other);
+  }
+
+  private shrink(other: IType<K>): IType<K> | INever {
+    const res = this._and(other);
+    return !res.type && res.values.size === 0 ? Never : res;
+  }
+}
+
 // prim
 type PrimMap = {
   null: null;
@@ -38,136 +128,126 @@ type PrimMap = {
   date: L.DateTime;
   duration: L.Duration;
 };
+type PrimKey = keyof PrimMap;
 
-class PrimType<K extends TypeKey> implements IType<K> {
-  constructor(public key: K, public state: Any | Set<TypeVal<K>>) {}
-
-  literals(...vals: TypeVal<K>[]): PrimType<K> {
-    return new PrimType(this.key, Set(vals));
+class PrimType<K extends PrimKey> extends TypeBase<K> {
+  constructor(public kind: K, values?: TypeVals<K>) {
+    super(values);
   }
 
-  or(other: PrimType<K>): PrimType<K> {
-    if (this.state === any || other.state === any) {
-      return this;
-    }
-
-    return new PrimType(this.key, this.state.union(other.state));
+  from(...vals: TypeVal<K>[]): PrimType<K> {
+    return new PrimType(this.kind, new Set(vals));
   }
 
-  and(other: PrimType<K>): PrimType<K> {
-    if (this.state === any) {
-      return other;
-    }
+  protected _or(other: IType<K>): IType<K> {
+    const l = this.values;
+    const r = other.values;
 
-    if (other.state === any) {
-      return this;
-    }
-
-    return new PrimType(this.key, this.state.intersect(other.state));
+    return new PrimType(this.kind, unionIter(l, r));
   }
 
-  get isEmpty(): boolean {
-    return this.state !== any && this.state.size === 0;
-  }
+  protected _and(other: IType<K>): IType<K> {
+    const l = this.values;
+    const r = other.values;
 
-  get isValue(): boolean {
-    return this.state !== any && this.state.size === 1;
-  }
-
-  get isType(): boolean {
-    return this.state === any || this.state.size >= 2;
-  }
-
-  lift(): UnionType {
-    return Union.or(this);
+    return new PrimType(this.kind, intersectIter(l, r));
   }
 }
 
-export const Null = new PrimType("null", any);
-export const Number = new PrimType("number", any);
-export const String = new PrimType("string", any);
-export const Boolean = new PrimType("boolean", any);
-export const Date = new PrimType("date", any);
-export const Duration = new PrimType("duration", any);
+export const Null = new PrimType("null");
+export const Number = new PrimType("number");
+export const String = new PrimType("string");
+export const Boolean = new PrimType("boolean");
+export const Date = new PrimType("date");
+export const Duration = new PrimType("duration");
 
 // union
-class UnionType implements IType<"union"> {
-  key = "union" as const;
+type UnionVals = { [K in TypeKey]?: IType<K> };
 
-  constructor(public state: { [K in TypeKey]?: IType<K> } = {}) {}
+class Union implements IUnion {
+  kind = "union" as const;
 
-  or(...types: IType<AnyKey>[]): UnionType {
-    const state = { ...this.state };
+  private constructor(public values: UnionVals) {}
 
-    for (const type of this.flatten(types)) {
-      const old = state[type.key] as any;
-
-      this.update(state, old ? old.or(type) : type);
+  static from<T extends INever>(other: T): INever;
+  static from<T extends IType | IUnion>(other: T): IUnion;
+  static from<T extends IAny>(other: T): IUnion | INever {
+    switch (other.kind) {
+      case "never":
+        return other as INever;
+      case "union":
+        return other as unknown as IUnion;
+      default:
+        return new Union({ [other.kind]: other });
     }
-
-    return new UnionType(state);
   }
 
-  and(...types: IType<AnyKey>[]): UnionType {
-    let state = { ...this.state };
+  or(other: IAny): IUnion {
+    if (other.kind === "never") {
+      return this;
+    }
 
-    for (const union of types.map((t) => t.lift())) {
-      const newState = {};
+    const that = Union.from(other as IType | IUnion);
 
-      for (const key of Object.keys(union) as TypeKey[]) {
-        const old = state[key];
-        const current = union.state[key];
+    return new Union(
+      mergeObj(this.values, that.values, (key) => {
+        const l = this.values[key];
+        const r = that.values[key];
 
-        if (old && current) {
-          this.update(newState, old.and(current as any));
+        if (l && r) {
+          return l.or(r);
+        } else if (l) {
+          return l;
+        } else if (r) {
+          return r;
         }
-      }
-
-      state = newState;
-    }
-
-    return new UnionType(state);
-  }
-
-  get isEmpty(): boolean {
-    return Object.values(this.state).length === 0;
-  }
-
-  get isValue(): boolean {
-    const vals = Object.values(this.state);
-
-    return vals.length === 1 && vals[0].isValue;
-  }
-
-  get isType(): boolean {
-    return !this.isEmpty && !this.isValue;
-  }
-
-  lift(): UnionType {
-    return this;
-  }
-
-  private flatten(types: IType<AnyKey>[]): IType<TypeKey>[] {
-    return types.flatMap((type) =>
-      type.key === "union"
-        ? Object.values((type as UnionType).state)
-        : (type as IType<TypeKey>)
+      })
     );
   }
 
-  private update<K extends TypeKey>(
-    state: { [K in TypeKey]?: IType<K> },
-    type: IType<K>
-  ) {
-    if (type.isEmpty) {
-      delete state[type.key];
-    } else {
-      state[type.key] = type as any;
+  and<T extends IAny>(other: T): T | INever {
+    if (other.kind === "never") {
+      return other;
+    }
+
+    const that = Union.from(other as unknown as IType | IUnion);
+
+    const res = mergeObj(this.values, that.values, (key) => {
+      const l = this.values[key];
+      const r = that.values[key];
+
+      if (l && r) {
+        return l.or(r);
+      }
+    });
+
+    const vals = Object.values(res);
+
+    switch (vals.length) {
+      case 0:
+        return Never;
+      case 1:
+        return vals[0] as unknown as T;
+      default:
+        return new Union(res) as unknown as T;
     }
   }
 }
 
-export const Union = new UnionType();
+// never
+class NeverType implements INever {
+  kind = "never" as const;
+
+  or<T extends IAny>(other: T): T {
+    return other;
+  }
+
+  and(): INever {
+    return this;
+  }
+}
+
+export const Never = new NeverType();
 
 // object
 class ObjectType {} // map<string, type>
