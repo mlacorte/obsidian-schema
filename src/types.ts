@@ -18,105 +18,90 @@ type TypeMap = PrimMap & {
   function: FunctionType;
 };
 type TypeKey = keyof TypeMap;
-type TypeVal<K extends TypeKey> = TypeMap[K];
+type TypeVal<K extends TypeKey = TypeKey> = TypeMap[K];
 
 export interface IAny {
   kind: AnyKey;
+  type: boolean;
+  types: Set<TypeKey>;
+  values: Set<TypeVal>;
   or(other: IAny): IAny;
   and(other: IAny): IAny;
 }
 
 export interface INever extends IAny {
   kind: "never";
-  or<T extends IAny>(other: T): T;
-  and(other: IAny): INever;
+  type: true;
+  types: Set<any>;
+  values: Set<any>;
 }
 
 export interface IType<K extends TypeKey = TypeKey> extends IAny {
   kind: K;
   type: boolean;
+  types: Set<K>;
   values: Set<TypeVal<K>>;
-  or(other: INever): IType<K>;
-  or(other: IType<K>): IType<K>;
-  or(other: IAny): IUnion;
-  and(other: INever): INever;
-  and(other: IType<K>): IType<K> | INever;
-  and(other: IType): INever;
-  and(other: IUnion): IType<K> | INever;
 }
 
 export interface IUnion extends IAny {
   kind: "union";
-  values: { [K in TypeKey]?: IType<K> };
-  or(other: IAny): IUnion;
-  and<T extends IAny>(other: T): T | INever;
+  type: true;
+  subtypes: { [K in TypeKey]?: IType<K> };
 }
-
-type TypeVals<K extends TypeKey> = Set<TypeVal<K>>;
 
 abstract class TypeBase<K extends TypeKey> implements IType<K> {
   abstract kind: K;
   type: boolean;
+  values: Set<TypeVal<K>>;
 
-  protected _values: TypeVals<K>;
-
-  get values() {
-    if (this.type) {
-      throw new Error("tried to access 'values' of a type");
-    }
-
-    return this._values;
+  get types(): Set<K> {
+    return new Set([this.kind]);
   }
 
-  constructor(values?: TypeVals<K>) {
-    if (values) {
-      this.type = false;
-      this._values = values;
-    } else {
-      this.type = true;
-    }
+  constructor(values?: Set<TypeVal<K>>) {
+    this.type = !values;
+    this.values = values || new Set();
   }
 
-  or(other: INever): IType<K>;
-  or(other: IType<K>): IType<K>;
-  or(other: IAny): IUnion;
-  or(other: IAny): INever | IType<K> | IUnion {
+  or(other: IAny): IAny {
     switch (other.kind) {
       case "never":
         return this;
+      case "union":
+        return other.or(this);
       case this.kind:
-        return this.grow(other as IType<K>);
+        return this.type
+          ? this
+          : other.type
+          ? other
+          : this._or(other as IType<K>);
       default:
         return Union.from(this).or(other);
     }
   }
 
-  and(other: INever): INever;
-  and(other: IType<K>): IType<K> | INever;
-  and(other: IType): INever;
-  and(other: IUnion): IType<K> | INever;
-  and(other: IAny): IType<K> | INever {
+  and(other: IAny): IAny {
+    let res: IAny;
+
     switch (other.kind) {
       case "never":
         return Never;
+      case "union":
+        return other.and(this);
       case this.kind:
-        return this.shrink(other as IType<K>);
+        res = this._and(other as IType<K>);
+        if (res.type) {
+          return res;
+        } else {
+          return res.values.size === 0 ? Never : res;
+        }
       default:
-        return (other as IUnion).and(this);
+        return Never;
     }
   }
 
   protected abstract _or(other: IType<K>): IType<K>;
   protected abstract _and(other: IType<K>): IType<K>;
-
-  private grow(other: IType<K>): IType<K> {
-    return this.type ? this : other.type ? other : this._or(other);
-  }
-
-  private shrink(other: IType<K>): IType<K> | INever {
-    const res = this._and(other);
-    return !res.type && res.values.size === 0 ? Never : res;
-  }
 }
 
 // prim
@@ -131,26 +116,28 @@ type PrimMap = {
 type PrimKey = keyof PrimMap;
 
 class PrimType<K extends PrimKey> extends TypeBase<K> {
-  constructor(public kind: K, values?: TypeVals<K>) {
+  constructor(public kind: K, values?: Set<TypeVal<K>>) {
     super(values);
   }
 
-  from(...vals: TypeVal<K>[]): PrimType<K> {
-    return new PrimType(this.kind, new Set(vals));
+  from(val: TypeVal<K>, ...vals: TypeVal<K>[]): PrimType<K> {
+    return new PrimType(this.kind, new Set([val, ...vals]));
   }
 
   protected _or(other: IType<K>): IType<K> {
-    const l = this.values;
-    const r = other.values;
-
-    return new PrimType(this.kind, unionIter(l, r));
+    return new PrimType(this.kind, unionIter(this.values, other.values));
   }
 
   protected _and(other: IType<K>): IType<K> {
-    const l = this.values;
-    const r = other.values;
+    if (this.type) {
+      return other;
+    }
 
-    return new PrimType(this.kind, intersectIter(l, r));
+    if (other.type) {
+      return this;
+    }
+
+    return new PrimType(this.kind, intersectIter(this.values, other.values));
   }
 }
 
@@ -166,8 +153,19 @@ type UnionVals = { [K in TypeKey]?: IType<K> };
 
 class Union implements IUnion {
   kind = "union" as const;
+  type = true as const;
 
-  private constructor(public values: UnionVals) {}
+  get values(): Set<TypeVal> {
+    return new Set(
+      Object.values(this.subtypes).flatMap((type) => [...type.values])
+    );
+  }
+
+  get types(): Set<TypeKey> {
+    return new Set(Object.keys(this.subtypes) as TypeKey[]);
+  }
+
+  private constructor(public subtypes: UnionVals) {}
 
   static from<T extends INever>(other: T): INever;
   static from<T extends IType | IUnion>(other: T): IUnion;
@@ -190,9 +188,9 @@ class Union implements IUnion {
     const that = Union.from(other as IType | IUnion);
 
     return new Union(
-      mergeObj(this.values, that.values, (key) => {
-        const l = this.values[key];
-        const r = that.values[key];
+      mergeObj(this.subtypes, that.subtypes, (key) => {
+        const l = this.subtypes[key];
+        const r = that.subtypes[key];
 
         if (l && r) {
           return l.or(r);
@@ -212,9 +210,9 @@ class Union implements IUnion {
 
     const that = Union.from(other as unknown as IType | IUnion);
 
-    const res = mergeObj(this.values, that.values, (key) => {
-      const l = this.values[key];
-      const r = that.values[key];
+    const res = mergeObj(this.subtypes, that.subtypes, (key) => {
+      const l = this.subtypes[key];
+      const r = that.subtypes[key];
 
       if (l && r) {
         return l.or(r);
@@ -237,8 +235,11 @@ class Union implements IUnion {
 // never
 class NeverType implements INever {
   kind = "never" as const;
+  type = true as const;
+  types = new Set<any>();
+  values = new Set<any>();
 
-  or<T extends IAny>(other: T): T {
+  or(other: IAny): IAny {
     return other;
   }
 
