@@ -33,7 +33,7 @@ describe("types", () => {
     expect(values(never)).toEqual([]);
 
     expect(oneOrTwo.kind).toBe("number");
-    expect(oneOrTwo.type).toBe(false);
+    expect(oneOrTwo.type).toBe(true);
     expect(values(oneOrTwo)).toEqual([1, 2]);
 
     expect(justTwo.kind).toBe("number");
