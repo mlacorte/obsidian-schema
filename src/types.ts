@@ -18,7 +18,7 @@ type TypeMap = PrimMap & {
 type TypeKey = keyof TypeMap;
 type TypeVal<K extends TypeKey = TypeKey> = TypeMap[K];
 
-export interface IAny {
+export interface IAny extends Immutable.ValueObject {
   kind: AnyKey;
   type: boolean;
   types: Immutable.Set<TypeKey>;
@@ -138,10 +138,18 @@ abstract class TypeBase<K extends TypeKey> implements IType<K> {
 
   protected abstract _or(other: IType<K>): IAny;
   protected abstract _and(other: IType<K>): IAny;
-}
 
-class Wrapped<T> {
-  constructor(public value: T, public toString: () => string) {}
+  equals(other: unknown): boolean {
+    if (!(other instanceof TypeBase)) {
+      return false;
+    }
+
+    return this.kind === other.kind && this.values.equals(other.values);
+  }
+
+  hashCode(): number {
+    return this.values.hashCode();
+  }
 }
 
 // prim
@@ -152,7 +160,7 @@ type PrimMap = {
   boolean: boolean;
   date: L.DateTime;
   duration: L.Duration;
-  link: URL;
+  link: string;
 };
 type PrimKey = keyof PrimMap;
 
@@ -165,7 +173,6 @@ class PrimType<K extends PrimKey> extends TypeBase<K> {
 
   constructor(
     public kind: K,
-    public wrapper?: (val: TypeVal<K>) => string,
     public values: Immutable.Set<TypeVal<K>> = Immutable.Set()
   ) {
     super();
@@ -173,23 +180,17 @@ class PrimType<K extends PrimKey> extends TypeBase<K> {
   }
 
   from(val: TypeVal<K>, ...vals: TypeVal<K>[]): PrimType<K> {
-    return new PrimType(this.kind, this.wrapper, Immutable.Set([val, ...vals]));
+    return new PrimType(this.kind, Immutable.Set([val, ...vals]));
   }
 
   protected _or(other: IType<K>): IAny {
-    return new PrimType(
-      this.kind,
-      this.wrapper,
-      this.values.union(other.values)
-    );
+    return new PrimType(this.kind, this.values.union(other.values));
   }
 
   protected _and(other: IType<K>): IAny {
     const vals = this.values.intersect(other.values);
 
-    return vals.size === 0
-      ? Never
-      : new PrimType(this.kind, this.wrapper, vals);
+    return vals.size === 0 ? Never : new PrimType(this.kind, vals);
   }
 }
 
@@ -197,9 +198,9 @@ export const Null = new PrimType("null");
 export const Number = new PrimType("number");
 export const String = new PrimType("string");
 export const Boolean = new PrimType("boolean");
-export const Date = new PrimType("date", (date) => `${date.toMillis()}`);
-export const Duration = new PrimType("duration", (dur) => `${dur.toMillis()}`);
-export const Link = new PrimType("link", (url) => url.href);
+export const Date = new PrimType("date");
+export const Duration = new PrimType("duration");
+export const Link = new PrimType("link");
 
 // union
 class Union implements IUnion {
@@ -260,6 +261,18 @@ class Union implements IUnion {
         return new Union(res);
     }
   }
+
+  equals(other: unknown): boolean {
+    if (!(other instanceof Union)) {
+      return false;
+    }
+
+    return this.values.equals(other.values);
+  }
+
+  hashCode(): number {
+    return this.values.hashCode();
+  }
 }
 
 // never
@@ -275,24 +288,38 @@ export const Never = {
 
   and(_other: IAny): IAny {
     return Never;
+  },
+
+  equals(other: unknown): boolean {
+    return other === Never;
+  },
+
+  hashCode(): number {
+    return 0x42108424;
   }
 };
 
 // object
 class ObjectType extends TypeBase<"object"> {
   kind = "object" as const;
-  type: boolean;
   types = Immutable.Set<"object">(["object"]);
-  values: Immutable.Set<Immutable.Map<string, IAny>>;
 
-  constructor(values?: Immutable.Set<Immutable.Map<string, IAny>>) {
+  get type() {
+    return this.values.size === 0;
+  }
+
+  from(...objs: Record<string, IAny>[]): IAny {
+    return new ObjectType(Immutable.Set(objs.map((obj) => Immutable.Map(obj))));
+  }
+
+  constructor(
+    public values: Immutable.Set<Immutable.Map<string, IAny>> = Immutable.Set()
+  ) {
     super();
-    this.type = !values;
-    this.values = values || Immutable.Set();
   }
 
   protected _or(other: IType<"object">): IAny {
-    throw "todo";
+    return this.values.equals(other.values) ? this : Union.from(this, other);
   }
 
   protected _and(other: IType<"object">): IAny {
@@ -300,8 +327,8 @@ class ObjectType extends TypeBase<"object"> {
   }
 }
 
-const _Object = new ObjectType();
-export { _Object as Object };
+const ObjectVal = new ObjectType();
+export { ObjectVal as Object };
 
 // array
 class ArrayType {} // array<type>
