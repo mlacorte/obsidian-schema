@@ -1,6 +1,5 @@
+import * as Immutable from "immutable";
 import * as L from "luxon";
-
-import { intersectIter, mergeObj, unionIter } from "./util";
 
 // any
 type AnyMap = TypeMap & {
@@ -11,10 +10,10 @@ type AnyKey = keyof AnyMap;
 
 // type
 type TypeMap = PrimMap & {
-  object: Map<string, IAny>;
-  array: Array<IAny>;
-  tuple: Array<IAny>;
-  function: { args: IAny[]; return: IAny };
+  object: Immutable.Map<string, IAny>;
+  array: Immutable.List<IAny>;
+  tuple: Immutable.List<IAny>;
+  function: { args: Immutable.List<IAny>; return: IAny };
 };
 type TypeKey = keyof TypeMap;
 type TypeVal<K extends TypeKey = TypeKey> = TypeMap[K];
@@ -22,8 +21,8 @@ type TypeVal<K extends TypeKey = TypeKey> = TypeMap[K];
 export interface IAny {
   kind: AnyKey;
   type: boolean;
-  types: Set<TypeKey>;
-  values: Set<TypeVal>;
+  types: Immutable.Set<TypeKey>;
+  values: Immutable.Set<TypeVal>;
   or(other: IAny): IAny;
   and(other: IAny): IAny;
 }
@@ -31,28 +30,77 @@ export interface IAny {
 export interface INever extends IAny {
   kind: "never";
   type: true;
-  types: Set<never>;
-  values: Set<never>;
+  types: Immutable.Set<never>;
+  values: Immutable.Set<never>;
 }
 
 export interface IType<K extends TypeKey = TypeKey> extends IAny {
   kind: K;
   type: boolean;
-  types: Set<K>;
-  values: Set<TypeVal<K>>;
+  types: Immutable.Set<K>;
+  values: Immutable.Set<TypeVal<K>>;
+}
+
+const keys = [
+  "null",
+  "number",
+  "string",
+  "boolean",
+  "date",
+  "duration",
+  "link",
+  "object",
+  "array",
+  "tuple",
+  "function"
+] as const;
+
+class Subtypes extends Immutable.Record<{
+  [K in TypeKey]: IType<K> | undefined;
+}>(Object.fromEntries(keys.map((key) => [key, undefined])) as any) {
+  *keys() {
+    for (const [key, _] of this.entries()) {
+      yield key;
+    }
+  }
+
+  *values() {
+    for (const [_, value] of this.entries()) {
+      yield value;
+    }
+  }
+
+  *entries() {
+    for (const key of keys) {
+      const value = this.get(key);
+
+      if (value !== undefined) {
+        yield [key, value] as const;
+      }
+    }
+  }
+
+  mergeAll(
+    other: Subtypes,
+    fn: (l?: IType, r?: IType) => IType | undefined
+  ): Subtypes {
+    return new Subtypes(
+      keys.map((key) => [key, fn(this.get(key), other.get(key))])
+    );
+  }
 }
 
 export interface IUnion extends IAny {
   kind: "union";
   type: true;
-  subtypes: { [K in TypeKey]?: IType<K> };
+  subtypes: Subtypes;
 }
 
 abstract class TypeBase<K extends TypeKey> implements IType<K> {
   abstract kind: K;
   abstract type: boolean;
-  abstract types: Set<K>;
-  abstract values: Set<TypeVal<K>>;
+  abstract types: Immutable.Set<K>;
+  abstract values: Immutable.Set<TypeVal<K>>;
 
   or(other: IAny): IAny {
     switch (other.kind) {
@@ -92,6 +140,10 @@ abstract class TypeBase<K extends TypeKey> implements IType<K> {
   protected abstract _and(other: IType<K>): IAny;
 }
 
+class Wrapped<T> {
+  constructor(public value: T, public toString: () => string) {}
+}
+
 // prim
 type PrimMap = {
   null: null;
@@ -100,34 +152,44 @@ type PrimMap = {
   boolean: boolean;
   date: L.DateTime;
   duration: L.Duration;
-  link: string;
+  link: URL;
 };
 type PrimKey = keyof PrimMap;
 
 class PrimType<K extends PrimKey> extends TypeBase<K> {
-  types: Set<K>;
+  types: Immutable.Set<K>;
 
   get type(): boolean {
     return this.values.size !== 1;
   }
 
-  constructor(public kind: K, public values: Set<TypeVal<K>> = new Set()) {
+  constructor(
+    public kind: K,
+    public wrapper?: (val: TypeVal<K>) => string,
+    public values: Immutable.Set<TypeVal<K>> = Immutable.Set()
+  ) {
     super();
-    this.types = new Set([this.kind]);
+    this.types = Immutable.Set([this.kind]);
   }
 
   from(val: TypeVal<K>, ...vals: TypeVal<K>[]): PrimType<K> {
-    return new PrimType(this.kind, new Set([val, ...vals]));
+    return new PrimType(this.kind, this.wrapper, Immutable.Set([val, ...vals]));
   }
 
   protected _or(other: IType<K>): IAny {
-    return new PrimType(this.kind, unionIter(this.values, other.values));
+    return new PrimType(
+      this.kind,
+      this.wrapper,
+      this.values.union(other.values)
+    );
   }
 
   protected _and(other: IType<K>): IAny {
-    const vals = intersectIter(this.values, other.values);
+    const vals = this.values.intersect(other.values);
 
-    return vals.size === 0 ? Never : new PrimType(this.kind, vals);
+    return vals.size === 0
+      ? Never
+      : new PrimType(this.kind, this.wrapper, vals);
   }
 }
 
@@ -135,33 +197,33 @@ export const Null = new PrimType("null");
 export const Number = new PrimType("number");
 export const String = new PrimType("string");
 export const Boolean = new PrimType("boolean");
-export const Date = new PrimType("date");
-export const Duration = new PrimType("duration");
-export const Link = new PrimType("link");
+export const Date = new PrimType("date", (date) => `${date.toMillis()}`);
+export const Duration = new PrimType("duration", (dur) => `${dur.toMillis()}`);
+export const Link = new PrimType("link", (url) => url.href);
 
 // union
 class Union implements IUnion {
   kind = "union" as const;
   type = true as const;
 
-  get values(): Set<TypeVal> {
-    return new Set(
-      Object.values(this.subtypes).flatMap((type) => [...type.values])
+  get values(): Immutable.Set<TypeVal> {
+    return Immutable.Set(
+      [...this.subtypes.values()].flatMap((type) => [...type.values])
     );
   }
 
-  get types(): Set<TypeKey> {
-    return new Set(Object.keys(this.subtypes) as TypeKey[]);
+  get types(): Immutable.Set<TypeKey> {
+    return Immutable.Set(this.subtypes.keys());
   }
 
-  private constructor(public subtypes: { [K in TypeKey]?: IType<K> }) {}
+  private constructor(public subtypes: Subtypes) {}
 
   static from(type: IAny, ...types: IAny[]): IUnion | INever {
     return types.reduce(
       (l, r) => l.or(r),
       ["union", "never"].includes(type.kind)
         ? type
-        : new Union({ [type.kind]: type })
+        : new Union(new Subtypes({ [type.kind]: type }))
     ) as IUnion | INever;
   }
 
@@ -170,21 +232,10 @@ class Union implements IUnion {
       return this;
     }
 
-    const that = Union.from(other) as Union;
-
     return new Union(
-      mergeObj(this.subtypes, that.subtypes, (key) => {
-        const l = this.subtypes[key];
-        const r = that.subtypes[key];
-
-        if (l && r) {
-          return l.or(r);
-        } else if (l) {
-          return l;
-        } else if (r) {
-          return r;
-        }
-      })
+      this.subtypes.mergeAll((Union.from(other) as Union).subtypes, (l, r) =>
+        l && r ? (l.or(r) as IType) : l ? l : r
+      )
     );
   }
 
@@ -193,18 +244,12 @@ class Union implements IUnion {
       return other;
     }
 
-    const that = Union.from(other) as Union;
+    const res = this.subtypes.mergeAll(
+      (Union.from(other) as Union).subtypes,
+      (l, r) => (l && r ? (l.and(r) as any) : undefined)
+    );
 
-    const res = mergeObj(this.subtypes, that.subtypes, (key) => {
-      const l = this.subtypes[key];
-      const r = that.subtypes[key];
-
-      if (l && r) {
-        return l.and(r);
-      }
-    });
-
-    const vals = Object.values(res);
+    const vals = [...res.values()];
 
     switch (vals.length) {
       case 0:
@@ -221,8 +266,8 @@ class Union implements IUnion {
 export const Never = {
   kind: "never" as const,
   type: true as const,
-  types: new Set<never>(),
-  values: new Set<never>(),
+  types: Immutable.Set<never>(),
+  values: Immutable.Set<never>(),
 
   or(other: IAny): IAny {
     return other;
@@ -237,13 +282,13 @@ export const Never = {
 class ObjectType extends TypeBase<"object"> {
   kind = "object" as const;
   type: boolean;
-  types = new Set<"object">(["object"]);
-  values: Set<Map<string, IAny>>;
+  types = Immutable.Set<"object">(["object"]);
+  values: Immutable.Set<Immutable.Map<string, IAny>>;
 
-  constructor(values?: Set<Map<string, IAny>>) {
+  constructor(values?: Immutable.Set<Immutable.Map<string, IAny>>) {
     super();
     this.type = !values;
-    this.values = values || new Set();
+    this.values = values || Immutable.Set();
   }
 
   protected _or(other: IType<"object">): IAny {
