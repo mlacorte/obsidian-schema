@@ -1,5 +1,15 @@
-import * as Immutable from "immutable";
-import * as L from "luxon";
+import {
+  hash,
+  is,
+  List as IList,
+  Map as IMap,
+  Seq,
+  Set as ISet,
+  ValueObject
+} from "immutable";
+import { DateTime as LDateTime, Duration as LDuration } from "luxon";
+
+const empty = ISet<any>();
 
 // any
 type AnyMap = TypeMap & {
@@ -7,113 +17,89 @@ type AnyMap = TypeMap & {
   never: never;
 };
 type AnyKey = keyof AnyMap;
+type AnyVal<K extends AnyKey> = AnyMap[K];
 
 // type
 type TypeMap = PrimMap & {
-  object: Immutable.Map<string, IAny>;
-  array: Immutable.List<IAny>;
-  tuple: Immutable.List<IAny>;
-  function: { args: Immutable.List<IAny>; return: IAny };
+  object: IMap<string, IAny>;
+  array: IList<IAny>;
+  tuple: IList<IAny>;
+  function: { args: IList<IAny>; return: IAny };
 };
 type TypeKey = keyof TypeMap;
 type TypeVal<K extends TypeKey = TypeKey> = TypeMap[K];
 
-export interface IAny extends Immutable.ValueObject {
+export interface IAny extends ValueObject {
   kind: AnyKey;
-  type: boolean;
-  types: Immutable.Set<TypeKey>;
-  values: Immutable.Set<TypeVal>;
+  types: ISet<ITypeOrValue>;
+  value?: TypeVal;
   or(other: IAny): IAny;
   and(other: IAny): IAny;
-}
-
-export interface INever extends IAny {
-  kind: "never";
-  type: true;
-  types: Immutable.Set<never>;
-  values: Immutable.Set<never>;
-}
-
-export interface IType<K extends TypeKey = TypeKey> extends IAny {
-  kind: K;
-  type: boolean;
-  types: Immutable.Set<K>;
-  values: Immutable.Set<TypeVal<K>>;
-}
-
-const keys = [
-  "null",
-  "number",
-  "string",
-  "boolean",
-  "date",
-  "duration",
-  "link",
-  "object",
-  "array",
-  "tuple",
-  "function"
-] as const;
-
-class Subtypes extends Immutable.Record<{
-  [K in TypeKey]: IType<K> | undefined;
-}>(Object.fromEntries(keys.map((key) => [key, undefined])) as any) {
-  *keys() {
-    for (const [key, _] of this.entries()) {
-      yield key;
-    }
-  }
-
-  *values() {
-    for (const [_, value] of this.entries()) {
-      yield value;
-    }
-  }
-
-  *entries() {
-    for (const key of keys) {
-      const value = this.get(key);
-
-      if (value !== undefined) {
-        yield [key, value] as const;
-      }
-    }
-  }
-
-  mergeAll(
-    other: Subtypes,
-    fn: (l?: IType, r?: IType) => IType | undefined
-  ): Subtypes {
-    return new Subtypes(
-      keys.map((key) => [key, fn(this.get(key), other.get(key))])
-    );
-  }
+  equals(other: unknown): boolean;
+  hashCode(): number;
+  toString(): string;
+  toJSON(): unknown;
+  isType(): this is IType | IUnion | INever;
+  isValue(): this is IValue;
 }
 
 export interface IUnion extends IAny {
   kind: "union";
-  type: true;
-  subtypes: Subtypes;
+  types: ISet<ITypeOrValue>;
+  value?: undefined;
+  isType(): true;
+  isValue(): false;
 }
 
-abstract class TypeBase<K extends TypeKey> implements IType<K> {
-  abstract kind: K;
-  abstract type: boolean;
-  abstract types: Immutable.Set<K>;
-  abstract values: Immutable.Set<TypeVal<K>>;
+export interface INever extends IAny {
+  kind: "never";
+  types: ISet<never>;
+  value?: undefined;
+  isType(): true;
+  isValue(): false;
+}
+
+export interface ITypeOrValue<K extends TypeKey = TypeKey> extends IAny {
+  kind: K;
+  type: IType<K>;
+  types: ISet<ITypeOrValue<K>>;
+  value?: TypeVal<K>;
+  isType(): this is IType<K>;
+  isValue(): this is IValue<K>;
+}
+
+export interface IType<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
+  value?: undefined;
+  isType(): true;
+  isValue(): false;
+}
+
+export interface IValue<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
+  value: AnyVal<K>;
+  isType(): false;
+  isValue(): true;
+}
+
+abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
+  types: ISet<ITypeOrValue<K>>;
+  abstract type: IType<K>;
+
+  constructor(public kind: K, public value?: TypeVal<K>) {
+    this.types = ISet([this as unknown as ITypeOrValue<K>]);
+  }
 
   or(other: IAny): IAny {
     switch (other.kind) {
       case "never":
-        return this;
+        return Never;
       case "union":
         return other.or(this);
       case this.kind:
-        return this.type
+        return this.isType()
           ? this
-          : other.type
+          : other.isType()
           ? other
-          : this._or(other as IType<K>);
+          : this._or(other as IValue<K>);
       default:
         return Union.from(this, other);
     }
@@ -126,29 +112,47 @@ abstract class TypeBase<K extends TypeKey> implements IType<K> {
       case "union":
         return other.and(this);
       case this.kind:
-        return this.type
+        return this.isType()
           ? other
-          : other.type
+          : other.isType()
           ? this
-          : this._and(other as IType<K>);
+          : this._and(other as IValue<K>);
       default:
         return Never;
     }
   }
 
-  protected abstract _or(other: IType<K>): IAny;
-  protected abstract _and(other: IType<K>): IAny;
+  protected abstract _or(other: IValue<K>): IAny;
+  protected abstract _and(other: IValue<K>): IAny;
 
   equals(other: unknown): boolean {
-    if (!(other instanceof TypeBase)) {
+    if (!(other instanceof TypeBase) || this.kind !== other.kind) {
       return false;
     }
 
-    return this.kind === other.kind && this.values.equals(other.values);
+    return is(this.value, other.value);
   }
 
   hashCode(): number {
-    return this.values.hashCode();
+    return hash(this.kind) ^ hash(this.value);
+  }
+
+  toString() {
+    return this.isType() ? `type(${this.kind})` : JSON.stringify(this.value);
+  }
+
+  toJSON() {
+    return this.isValue()
+      ? { kind: this.kind, value: this.value }
+      : { kind: this.kind };
+  }
+
+  isType() {
+    return this.value === undefined;
+  }
+
+  isValue() {
+    return this.value !== undefined;
   }
 }
 
@@ -158,108 +162,96 @@ type PrimMap = {
   number: number;
   string: string;
   boolean: boolean;
-  date: L.DateTime;
-  duration: L.Duration;
+  date: LDateTime;
+  duration: LDuration;
   link: string;
 };
 type PrimKey = keyof PrimMap;
 
 class PrimType<K extends PrimKey> extends TypeBase<K> {
-  types: Immutable.Set<K>;
+  type: IType<K>;
 
-  get type(): boolean {
-    return this.values.size !== 1;
+  constructor(kind: K, value?: TypeVal<K>) {
+    super(kind, value);
+
+    this.type = (this.isType() ? this : new PrimType(kind)) as IType<K>;
   }
 
-  constructor(
-    public kind: K,
-    public values: Immutable.Set<TypeVal<K>> = Immutable.Set()
-  ) {
-    super();
-    this.types = Immutable.Set([this.kind]);
+  from(val: TypeVal<K>): PrimType<K> {
+    return new PrimType(this.kind, val);
   }
 
-  from(val: TypeVal<K>, ...vals: TypeVal<K>[]): PrimType<K> {
-    return new PrimType(this.kind, Immutable.Set([val, ...vals]));
+  protected _or(other: IValue<K>): IAny {
+    return this.equals(other) ? this : Union.from(this, other);
   }
 
-  protected _or(other: IType<K>): IAny {
-    return new PrimType(this.kind, this.values.union(other.values));
-  }
-
-  protected _and(other: IType<K>): IAny {
-    const vals = this.values.intersect(other.values);
-
-    return vals.size === 0 ? Never : new PrimType(this.kind, vals);
+  protected _and(other: IValue<K>): IAny {
+    return this.equals(other) ? this : Never;
   }
 }
 
-export const Null = new PrimType("null");
-export const Number = new PrimType("number");
-export const String = new PrimType("string");
-export const Boolean = new PrimType("boolean");
-export const Date = new PrimType("date");
-export const Duration = new PrimType("duration");
-export const Link = new PrimType("link");
+const NullVal = new PrimType("null");
+const NumberVal = new PrimType("number");
+const StringVal = new PrimType("string");
+const BooleanVal = new PrimType("boolean");
+const DateVal = new PrimType("date");
+const DurationVal = new PrimType("duration");
+const LinkVal = new PrimType("link");
 
 // union
 class Union implements IUnion {
   kind = "union" as const;
-  type = true as const;
 
-  get values(): Immutable.Set<TypeVal> {
-    return Immutable.Set(
-      [...this.subtypes.values()].flatMap((type) => [...type.values])
-    );
-  }
+  private constructor(public types: ISet<ITypeOrValue>) {}
 
-  get types(): Immutable.Set<TypeKey> {
-    return Immutable.Set(this.subtypes.keys());
-  }
-
-  private constructor(public subtypes: Subtypes) {}
-
-  static from(type: IAny, ...types: IAny[]): IUnion | INever {
-    return types.reduce(
-      (l, r) => l.or(r),
-      ["union", "never"].includes(type.kind)
-        ? type
-        : new Union(new Subtypes({ [type.kind]: type }))
-    ) as IUnion | INever;
-  }
-
-  or(other: IAny): IAny {
-    if (other.kind === "never") {
-      return this;
-    }
-
-    return new Union(
-      this.subtypes.mergeAll((Union.from(other) as Union).subtypes, (l, r) =>
-        l && r ? (l.or(r) as IType) : l ? l : r
-      )
-    );
-  }
-
-  and<T extends IAny>(other: T): IAny {
-    if (other.kind === "never") {
-      return other;
-    }
-
-    const res = this.subtypes.mergeAll(
-      (Union.from(other) as Union).subtypes,
-      (l, r) => (l && r ? (l.and(r) as any) : undefined)
-    );
-
-    const vals = [...res.values()];
-
-    switch (vals.length) {
+  private static shrink(types: ISet<ITypeOrValue>): IAny {
+    switch (types.size) {
       case 0:
         return Never;
       case 1:
-        return vals[0];
+        return types.first() as ITypeOrValue;
       default:
-        return new Union(res);
+        return new Union(types);
     }
+  }
+
+  static from(...types: IAny[]): IAny {
+    return Union.shrink(
+      Seq(types)
+        .flatMap((type) => type.types)
+        .reduce(
+          (res, a) =>
+            (a.isType()
+              ? res.filter((b) => a.kind !== b.kind).asMutable()
+              : res
+            ).add(a),
+          ISet<ITypeOrValue>().asMutable()
+        )
+        .asImmutable()
+    );
+  }
+
+  or(other: IAny): IAny {
+    return Union.from(this, other);
+  }
+
+  and(other: IAny): IAny {
+    const types = this.types
+      .filter((a) => a.isType())
+      .intersect(other.types.filter((a) => a.isType()));
+
+    const values = this.types
+      .filter((a) => a.isValue())
+      .intersect(other.types.filter((a) => a.isValue()));
+
+    return Union.shrink(
+      this.types
+        .map((a) => a.type)
+        .intersect(other.types.map((a) => a.type))
+        .flatMap((a) =>
+          types.has(a) ? [a] : values.filter((b) => a.kind === b.kind)
+        )
+    );
   }
 
   equals(other: unknown): boolean {
@@ -267,20 +259,37 @@ class Union implements IUnion {
       return false;
     }
 
-    return this.values.equals(other.values);
+    return this.types.equals(other.types);
   }
 
   hashCode(): number {
-    return this.values.hashCode();
+    return this.types.hashCode();
+  }
+
+  toString() {
+    return this.types.map((val) => val.toString()).join(" or ");
+  }
+
+  toJSON() {
+    return {
+      kind: "union",
+      types: this.types.toJS()
+    };
+  }
+
+  isType(): true {
+    return true;
+  }
+
+  isValue(): false {
+    return false;
   }
 }
 
 // never
-export const Never = {
+const Never: INever = {
   kind: "never" as const,
-  type: true as const,
-  types: Immutable.Set<never>(),
-  values: Immutable.Set<never>(),
+  types: ISet<never>(),
 
   or(other: IAny): IAny {
     return other;
@@ -296,39 +305,27 @@ export const Never = {
 
   hashCode(): number {
     return 0x42108424;
+  },
+
+  toString(): string {
+    return "never";
+  },
+
+  toJSON(): unknown {
+    return "never";
+  },
+
+  isType() {
+    return true;
+  },
+
+  isValue() {
+    return false;
   }
 };
 
 // object
-class ObjectType extends TypeBase<"object"> {
-  kind = "object" as const;
-  types = Immutable.Set<"object">(["object"]);
-
-  get type() {
-    return this.values.size === 0;
-  }
-
-  from(...objs: Record<string, IAny>[]): IAny {
-    return new ObjectType(Immutable.Set(objs.map((obj) => Immutable.Map(obj))));
-  }
-
-  constructor(
-    public values: Immutable.Set<Immutable.Map<string, IAny>> = Immutable.Set()
-  ) {
-    super();
-  }
-
-  protected _or(other: IType<"object">): IAny {
-    return this.values.equals(other.values) ? this : Union.from(this, other);
-  }
-
-  protected _and(other: IType<"object">): IAny {
-    throw "todo";
-  }
-}
-
-const ObjectVal = new ObjectType();
-export { ObjectVal as Object };
+class ObjectType {} // map<string, type>
 
 // array
 class ArrayType {} // array<type>
@@ -338,3 +335,15 @@ class TupleType {} // array<type>
 
 // function
 class FunctionType {} // { args: tuple<any>, return: any }
+
+export {
+  NullVal as Null,
+  NumberVal as Number,
+  StringVal as String,
+  BooleanVal as Boolean,
+  DateVal as Date,
+  DurationVal as Duration,
+  LinkVal as Link,
+  Never as Never,
+  Union as Union
+};
