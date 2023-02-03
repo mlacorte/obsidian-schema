@@ -9,8 +9,6 @@ import {
 } from "immutable";
 import { DateTime as LDateTime, Duration as LDuration } from "luxon";
 
-const empty = ISet<any>();
-
 // any
 type AnyMap = TypeMap & {
   union: Union;
