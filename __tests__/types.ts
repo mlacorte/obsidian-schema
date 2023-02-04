@@ -1,4 +1,4 @@
-import { Always, IAny, Never, Number, String } from "../src/types";
+import { Always, IAny, Never, Number, Object, String } from "../src/types";
 
 function values(any: IAny): any[] {
   return any.types
@@ -80,5 +80,34 @@ describe("types", () => {
 
     expect(never.kind).toBe("never");
     expect(number.kind).toBe("number");
+  });
+
+  test("equality", () => {
+    const one = Number.from(1);
+    const two = Number.from(2);
+
+    expect(Number.equals(Number)).toBe(true);
+    expect(Number.equals(String)).toBe(false);
+    expect(one.or(two).equals(two.or(one))).toBe(true);
+    expect(Always.and(String).equals(String)).toBe(true);
+    expect(Number.and(String).equals(Never)).toBe(true);
+  });
+
+  test("objects", () => {
+    const one = Number.from(1);
+    const two = Number.from(2);
+
+    const a = Object.from({ a: one.or(two) });
+    const b = Object.from({ a: one });
+    const c = Object.from({ a: one, b: one });
+
+    expect(a.or(a).toJSON()).toEqual(a.toJSON());
+    expect(a.and(a).toJSON()).toEqual(a.toJSON());
+
+    expect(a.or(b).toJSON()).toEqual(a.toJSON());
+    expect(a.and(b).toJSON()).toEqual(b.toJSON());
+
+    expect(a.or(c).kind).toBe("union");
+    expect(a.and(c).toJSON()).toEqual(c.toJSON());
   });
 });

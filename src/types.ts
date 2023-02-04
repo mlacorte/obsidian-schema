@@ -46,7 +46,7 @@ export interface IUnion extends IAny {
   kind: "union";
   types: ISet<ITypeOrValue>;
   value?: undefined;
-  isType(): true;
+  isType(): this is IUnion;
   isValue(): false;
 }
 
@@ -54,7 +54,7 @@ export interface IAlways extends IAny {
   kind: "always";
   types: ISet<never>;
   value?: undefined;
-  isType(): true;
+  isType(): this is IAlways;
   isValue(): false;
 }
 
@@ -62,7 +62,7 @@ export interface INever extends IAny {
   kind: "never";
   types: ISet<never>;
   value?: undefined;
-  isType(): true;
+  isType(): this is INever;
   isValue(): false;
 }
 
@@ -77,15 +77,13 @@ export interface ITypeOrValue<K extends TypeKey = TypeKey> extends IAny {
 
 export interface IType<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
   value?: undefined;
-  isType(): true;
-  isValue(): false;
 }
 
 export interface IValue<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
   value: AnyVal<K>;
-  isType(): false;
-  isValue(): true;
 }
+
+export type IObject = ITypeOrValue<"object">;
 
 abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
   types: ISet<ITypeOrValue<K>>;
@@ -148,21 +146,14 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
     return hash(this.kind) ^ hash(this.value);
   }
 
-  toString() {
-    return this.isType() ? `type(${this.kind})` : JSON.stringify(this.value);
-  }
+  abstract toString(): string;
+  abstract toJSON(): unknown;
 
-  toJSON() {
-    return this.isValue()
-      ? { kind: this.kind, value: this.value }
-      : { kind: this.kind };
-  }
-
-  isType() {
+  isType(): this is IType<K> {
     return this.value === undefined;
   }
 
-  isValue() {
+  isValue(): this is IValue<K> {
     return this.value !== undefined;
   }
 }
@@ -198,6 +189,16 @@ class PrimType<K extends PrimKey> extends TypeBase<K> {
 
   protected _and(other: IValue<K>): IAny {
     return this.equals(other) ? this : Never;
+  }
+
+  toString() {
+    return this.isType() ? `type(${this.kind})` : JSON.stringify(this.value);
+  }
+
+  toJSON() {
+    return this.isValue()
+      ? { kind: this.kind, value: this.value }
+      : { kind: this.kind };
   }
 }
 
@@ -296,7 +297,7 @@ class Union implements IUnion {
     };
   }
 
-  isType(): true {
+  isType(): this is IUnion {
     return true;
   }
 
@@ -372,23 +373,17 @@ const Never: INever = {
     return "never";
   },
 
-  isType() {
+  isType(): true {
     return true;
   },
 
-  isValue() {
+  isValue(): false {
     return false;
   }
 };
 
-/*
-missing key = always
-union = l.sub(r) ? r : r.sub(l) ? l : union(l,r)
-intersect = l.sub(r) ? l : r.sub(l) ? r : never
-*/
-
 // object
-class ObjectType extends TypeBase<"object"> {
+class ObjectType extends TypeBase<"object"> implements IObject {
   type: IType<"object">;
 
   constructor(value?: IMap<string, IAny>) {
@@ -397,12 +392,67 @@ class ObjectType extends TypeBase<"object"> {
     this.type = (this.isType() ? this : new ObjectType()) as IType<"object">;
   }
 
-  protected _or(_other: IValue<"object">): IAny {
-    throw "todo";
+  from(value: Record<string, IAny>): IAny {
+    return new ObjectType(IMap(value));
   }
 
-  protected _and(_other: IValue<"object">): IAny {
-    throw "todo";
+  private shrink(other: IValue<"object">, def: IAny): [boolean, boolean] {
+    const lMap = this.value as IMap<string, IAny>;
+    const rMap = other.value;
+    const keys = ISet(lMap.keySeq().concat(rMap.keySeq()));
+
+    let lShrink = false;
+    let rShrink = false;
+
+    for (const key of keys.keys()) {
+      const l = lMap.get(key, def);
+      const r = rMap.get(key, def);
+      const s = l.and(r);
+
+      if (lShrink && rShrink) {
+        break;
+      }
+
+      if (!lShrink) {
+        lShrink = l.equals(s) && !r.equals(s);
+      }
+
+      if (!rShrink) {
+        rShrink = r.equals(s) && !l.equals(s);
+      }
+    }
+
+    return [lShrink, rShrink];
+  }
+
+  protected _or(other: IValue<"object">): IAny {
+    const [lShrink, rShrink] = this.shrink(other, Never);
+
+    return lShrink && rShrink
+      ? Union.from(this, other)
+      : rShrink
+      ? this
+      : other;
+  }
+
+  protected _and(other: IValue<"object">): IAny {
+    const [lShrink, rShrink] = this.shrink(other, Always);
+
+    return lShrink && rShrink
+      ? Union.from(this, other)
+      : lShrink
+      ? this
+      : other;
+  }
+
+  toString() {
+    return this.isValue() ? JSON.stringify(this.toJSON()) : `type(object)`;
+  }
+
+  toJSON() {
+    return this.isValue()
+      ? { kind: this.kind, value: this.value.map((v) => v.toJSON()).toObject() }
+      : { kind: this.kind };
   }
 }
 
