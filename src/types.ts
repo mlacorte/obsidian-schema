@@ -271,7 +271,7 @@ class Union implements IUnion {
   toJSON() {
     return {
       kind: "union",
-      types: this.types.toJS()
+      types: this.types.map((t) => t.toJSON()).toArray()
     };
   }
 
