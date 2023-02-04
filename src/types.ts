@@ -12,6 +12,7 @@ import { DateTime as LDateTime, Duration as LDuration } from "luxon";
 // any
 type AnyMap = TypeMap & {
   union: Union;
+  always: never;
   never: never;
 };
 type AnyKey = keyof AnyMap;
@@ -37,13 +38,21 @@ export interface IAny extends ValueObject {
   hashCode(): number;
   toString(): string;
   toJSON(): unknown;
-  isType(): this is IType | IUnion | INever;
+  isType(): this is IType | IUnion | IAlways | INever;
   isValue(): this is IValue;
 }
 
 export interface IUnion extends IAny {
   kind: "union";
   types: ISet<ITypeOrValue>;
+  value?: undefined;
+  isType(): true;
+  isValue(): false;
+}
+
+export interface IAlways extends IAny {
+  kind: "always";
+  types: ISet<never>;
   value?: undefined;
   isType(): true;
   isValue(): false;
@@ -88,8 +97,10 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
 
   or(other: IAny): IAny {
     switch (other.kind) {
+      case "always":
+        return Always;
       case "never":
-        return Never;
+        return this;
       case "union":
         return other.or(this);
       case this.kind:
@@ -105,6 +116,8 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
 
   and(other: IAny): IAny {
     switch (other.kind) {
+      case "always":
+        return this;
       case "never":
         return Never;
       case "union":
@@ -214,6 +227,10 @@ class Union implements IUnion {
   }
 
   static from(...types: IAny[]): IAny {
+    if (types.includes(Always)) {
+      return Always;
+    }
+
     return Union.shrink(
       Seq(types)
         .flatMap((type) => type.types)
@@ -234,6 +251,10 @@ class Union implements IUnion {
   }
 
   and(other: IAny): IAny {
+    if (other === Never) {
+      return Never;
+    }
+
     const types = this.types
       .filter((a) => a.isType())
       .intersect(other.types.filter((a) => a.isType()));
@@ -284,6 +305,44 @@ class Union implements IUnion {
   }
 }
 
+// always
+const Always: IAlways = {
+  kind: "always" as const,
+  types: ISet<never>(),
+
+  or(_other: IAny): IAny {
+    return Always;
+  },
+
+  and(other: IAny): IAny {
+    return other;
+  },
+
+  equals(other: unknown): boolean {
+    return other === Always;
+  },
+
+  hashCode(): number {
+    return 0x42108425;
+  },
+
+  toString(): string {
+    return "any";
+  },
+
+  toJSON(): unknown {
+    return "any";
+  },
+
+  isType(): true {
+    return true;
+  },
+
+  isValue(): false {
+    return false;
+  }
+};
+
 // never
 const Never: INever = {
   kind: "never" as const,
@@ -322,17 +381,47 @@ const Never: INever = {
   }
 };
 
+/*
+missing key = always
+union = l.sub(r) ? r : r.sub(l) ? l : union(l,r)
+intersect = l.sub(r) ? l : r.sub(l) ? r : never
+*/
+
 // object
-class ObjectType {} // map<string, type>
+class ObjectType extends TypeBase<"object"> {
+  type: IType<"object">;
+
+  constructor(value?: IMap<string, IAny>) {
+    super("object", value);
+
+    this.type = (this.isType() ? this : new ObjectType()) as IType<"object">;
+  }
+
+  protected _or(_other: IValue<"object">): IAny {
+    throw "todo";
+  }
+
+  protected _and(_other: IValue<"object">): IAny {
+    throw "todo";
+  }
+}
+
+const ObjectVal = new ObjectType();
 
 // array
 class ArrayType {} // array<type>
 
+const ArrayVal = new ArrayType();
+
 // tuple
 class TupleType {} // array<type>
 
+const TupleVal = new TupleType();
+
 // function
 class FunctionType {} // { args: tuple<any>, return: any }
+
+const FunctionVal = new FunctionType();
 
 export {
   NullVal as Null,
@@ -343,5 +432,10 @@ export {
   DurationVal as Duration,
   LinkVal as Link,
   Never as Never,
-  Union as Union
+  Always as Always,
+  Union as Union,
+  ObjectVal as Object,
+  ArrayVal as Array,
+  TupleVal as Tuple,
+  FunctionVal as Function
 };
