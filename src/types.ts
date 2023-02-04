@@ -1,13 +1,5 @@
-import {
-  hash,
-  is,
-  List as IList,
-  Map as IMap,
-  Seq,
-  Set as ISet,
-  ValueObject
-} from "immutable";
-import { DateTime as LDateTime, Duration as LDuration } from "luxon";
+import * as I from "immutable";
+import * as L from "luxon";
 
 // any
 type AnyMap = TypeMap & {
@@ -20,17 +12,17 @@ type AnyVal<K extends AnyKey> = AnyMap[K];
 
 // type
 type TypeMap = PrimMap & {
-  object: IMap<string, IAny>;
-  array: IList<IAny>;
-  tuple: IList<IAny>;
-  function: { args: IList<IAny>; return: IAny };
+  object: I.Map<string, IAny>;
+  array: I.List<IAny>;
+  tuple: I.List<IAny>;
+  function: { args: I.List<IAny>; return: IAny };
 };
 type TypeKey = keyof TypeMap;
 type TypeVal<K extends TypeKey = TypeKey> = TypeMap[K];
 
-export interface IAny extends ValueObject {
+export interface IAny extends I.ValueObject {
   kind: AnyKey;
-  types: ISet<ITypeOrValue>;
+  types: I.Set<ITypeOrValue>;
   value?: TypeVal;
   or(other: IAny): IAny;
   and(other: IAny): IAny;
@@ -44,7 +36,7 @@ export interface IAny extends ValueObject {
 
 export interface IUnion extends IAny {
   kind: "union";
-  types: ISet<ITypeOrValue>;
+  types: I.Set<ITypeOrValue>;
   value?: undefined;
   isType(): this is IUnion;
   isValue(): false;
@@ -52,7 +44,7 @@ export interface IUnion extends IAny {
 
 export interface IAlways extends IAny {
   kind: "always";
-  types: ISet<never>;
+  types: I.Set<never>;
   value?: undefined;
   isType(): this is IAlways;
   isValue(): false;
@@ -60,7 +52,7 @@ export interface IAlways extends IAny {
 
 export interface INever extends IAny {
   kind: "never";
-  types: ISet<never>;
+  types: I.Set<never>;
   value?: undefined;
   isType(): this is INever;
   isValue(): false;
@@ -69,7 +61,7 @@ export interface INever extends IAny {
 export interface ITypeOrValue<K extends TypeKey = TypeKey> extends IAny {
   kind: K;
   type: IType<K>;
-  types: ISet<ITypeOrValue<K>>;
+  types: I.Set<ITypeOrValue<K>>;
   value?: TypeVal<K>;
   isType(): this is IType<K>;
   isValue(): this is IValue<K>;
@@ -83,14 +75,12 @@ export interface IValue<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
   value: AnyVal<K>;
 }
 
-export type IObject = ITypeOrValue<"object">;
-
 abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
-  types: ISet<ITypeOrValue<K>>;
+  types: I.Set<ITypeOrValue<K>>;
   abstract type: IType<K>;
 
   constructor(public kind: K, public value?: TypeVal<K>) {
-    this.types = ISet([this as unknown as ITypeOrValue<K>]);
+    this.types = I.Set([this as unknown as ITypeOrValue<K>]);
   }
 
   or(other: IAny): IAny {
@@ -139,11 +129,11 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
       return false;
     }
 
-    return is(this.value, other.value);
+    return I.is(this.value, other.value);
   }
 
   hashCode(): number {
-    return hash(this.kind) ^ hash(this.value);
+    return I.hash(this.kind) ^ I.hash(this.value);
   }
 
   abstract toString(): string;
@@ -164,8 +154,8 @@ type PrimMap = {
   number: number;
   string: string;
   boolean: boolean;
-  date: LDateTime;
-  duration: LDuration;
+  date: L.DateTime;
+  duration: L.Duration;
   link: string;
 };
 type PrimKey = keyof PrimMap;
@@ -214,9 +204,9 @@ const LinkVal = new PrimType("link");
 class Union implements IUnion {
   kind = "union" as const;
 
-  private constructor(public types: ISet<ITypeOrValue>) {}
+  private constructor(public types: I.Set<ITypeOrValue>) {}
 
-  private static shrink(types: ISet<ITypeOrValue>): IAny {
+  private static shrink(types: I.Set<ITypeOrValue>): IAny {
     switch (types.size) {
       case 0:
         return Never;
@@ -233,7 +223,7 @@ class Union implements IUnion {
     }
 
     return Union.shrink(
-      Seq(types)
+      I.Seq(types)
         .flatMap((type) => type.types)
         .reduce(
           (res, a) =>
@@ -241,7 +231,7 @@ class Union implements IUnion {
               ? res.filter((b) => a.kind !== b.kind).asMutable()
               : res
             ).add(a),
-          ISet<ITypeOrValue>().asMutable()
+          I.Set<ITypeOrValue>().asMutable()
         )
         .asImmutable()
     );
@@ -309,7 +299,7 @@ class Union implements IUnion {
 // always
 const Always: IAlways = {
   kind: "always" as const,
-  types: ISet<never>(),
+  types: I.Set<never>(),
 
   or(_other: IAny): IAny {
     return Always;
@@ -347,7 +337,7 @@ const Always: IAlways = {
 // never
 const Never: INever = {
   kind: "never" as const,
-  types: ISet<never>(),
+  types: I.Set<never>(),
 
   or(other: IAny): IAny {
     return other;
@@ -382,31 +372,21 @@ const Never: INever = {
   }
 };
 
-// object
-class ObjectType extends TypeBase<"object"> implements IObject {
-  type: IType<"object">;
+abstract class CompositeBase<K extends TypeKey, S> extends TypeBase<K> {
+  protected abstract keys(obj: IValue<K>): I.Seq.Indexed<S>;
+  protected abstract get(obj: IValue<K>, key: S, def: IAny): IAny;
 
-  constructor(value?: IMap<string, IAny>) {
-    super("object", value);
-
-    this.type = (this.isType() ? this : new ObjectType()) as IType<"object">;
-  }
-
-  from(value: Record<string, IAny>): IAny {
-    return new ObjectType(IMap(value));
-  }
-
-  private shrink(other: IValue<"object">, def: IAny): [boolean, boolean] {
-    const lMap = this.value as IMap<string, IAny>;
-    const rMap = other.value;
-    const keys = ISet(lMap.keySeq().concat(rMap.keySeq()));
+  protected shrink(other: IValue<K>, def: IAny): [boolean, boolean] {
+    const keys = I.Set(
+      this.keys(this as unknown as IValue<K>).concat(this.keys(other))
+    );
 
     let lShrink = false;
     let rShrink = false;
 
     for (const key of keys.keys()) {
-      const l = lMap.get(key, def);
-      const r = rMap.get(key, def);
+      const l = this.get(this as unknown as IValue<K>, key, def);
+      const r = this.get(other, key, def);
       const s = l.and(r);
 
       if (lShrink && rShrink) {
@@ -423,6 +403,29 @@ class ObjectType extends TypeBase<"object"> implements IObject {
     }
 
     return [lShrink, rShrink];
+  }
+}
+
+// object
+class ObjectType extends CompositeBase<"object", string> {
+  type: IType<"object">;
+
+  get(obj: IValue<"object">, key: string, def: IAny): IAny {
+    return obj.value.get(key, def);
+  }
+
+  keys(obj: IValue<"object">): I.Seq.Indexed<string> {
+    return obj.isValue() ? obj.value.keySeq() : I.Seq.Indexed();
+  }
+
+  constructor(value?: I.Map<string, IAny>) {
+    super("object", value);
+
+    this.type = (this.isType() ? this : new ObjectType()) as IType<"object">;
+  }
+
+  from(value: Record<string, IAny>): IAny {
+    return new ObjectType(I.Map(value));
   }
 
   protected _or(other: IValue<"object">): IAny {
