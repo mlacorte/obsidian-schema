@@ -4,7 +4,7 @@ import * as L from "luxon";
 // any
 type AnyMap = TypeMap & {
   union: Union;
-  always: never;
+  any: never;
   never: never;
 };
 type AnyKey = keyof AnyMap;
@@ -13,8 +13,7 @@ type AnyVal<K extends AnyKey> = AnyMap[K];
 // type
 type TypeMap = PrimMap & {
   object: I.Map<string, IAny>;
-  array: I.List<IAny>;
-  tuple: I.List<IAny>;
+  list: I.List<IAny>;
   function: { args: I.List<IAny>; return: IAny };
 };
 type TypeKey = keyof TypeMap;
@@ -34,7 +33,7 @@ export interface IAny extends I.ValueObject {
   isValue(): this is IValue;
 }
 
-export interface IUnion extends IAny {
+interface IUnion extends IAny {
   kind: "union";
   types: I.Set<ITypeOrValue>;
   value?: undefined;
@@ -42,15 +41,15 @@ export interface IUnion extends IAny {
   isValue(): false;
 }
 
-export interface IAlways extends IAny {
-  kind: "always";
+interface IAlways extends IAny {
+  kind: "any";
   types: I.Set<never>;
   value?: undefined;
   isType(): this is IAlways;
   isValue(): false;
 }
 
-export interface INever extends IAny {
+interface INever extends IAny {
   kind: "never";
   types: I.Set<never>;
   value?: undefined;
@@ -58,7 +57,7 @@ export interface INever extends IAny {
   isValue(): false;
 }
 
-export interface ITypeOrValue<K extends TypeKey = TypeKey> extends IAny {
+interface ITypeOrValue<K extends TypeKey = TypeKey> extends IAny {
   kind: K;
   type: IType<K>;
   types: I.Set<ITypeOrValue<K>>;
@@ -67,11 +66,11 @@ export interface ITypeOrValue<K extends TypeKey = TypeKey> extends IAny {
   isValue(): this is IValue<K>;
 }
 
-export interface IType<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
+interface IType<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
   value?: undefined;
 }
 
-export interface IValue<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
+interface IValue<K extends TypeKey = TypeKey> extends ITypeOrValue<K> {
   value: AnyVal<K>;
 }
 
@@ -85,8 +84,8 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
 
   or(other: IAny): IAny {
     switch (other.kind) {
-      case "always":
-        return Always;
+      case "any":
+        return Any;
       case "never":
         return this;
       case "union":
@@ -104,7 +103,7 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
 
   and(other: IAny): IAny {
     switch (other.kind) {
-      case "always":
+      case "any":
         return this;
       case "never":
         return Never;
@@ -138,13 +137,10 @@ abstract class TypeBase<K extends TypeKey> implements ITypeOrValue<K> {
 
   abstract toString(): string;
   abstract toJSON(): unknown;
-
-  isType(): this is IType<K> {
-    return this.value === undefined;
-  }
+  abstract isType(): this is IType<K>;
 
   isValue(): this is IValue<K> {
-    return this.value !== undefined;
+    return !this.isType();
   }
 }
 
@@ -169,7 +165,7 @@ class PrimType<K extends PrimKey> extends TypeBase<K> {
     this.type = (this.isType() ? this : new PrimType(kind)) as IType<K>;
   }
 
-  from(val: TypeVal<K>): PrimType<K> {
+  from(val: TypeVal<K>): IAny {
     return new PrimType(this.kind, val);
   }
 
@@ -189,6 +185,10 @@ class PrimType<K extends PrimKey> extends TypeBase<K> {
     return this.isValue()
       ? { kind: this.kind, value: this.value }
       : { kind: this.kind };
+  }
+
+  isType(): this is IType<K> {
+    return this.value === undefined;
   }
 }
 
@@ -218,8 +218,8 @@ class Union implements IUnion {
   }
 
   static from(...types: IAny[]): IAny {
-    if (types.includes(Always)) {
-      return Always;
+    if (types.includes(Any)) {
+      return Any;
     }
 
     return Union.shrink(
@@ -296,13 +296,13 @@ class Union implements IUnion {
   }
 }
 
-// always
-const Always: IAlways = {
-  kind: "always" as const,
+// any
+const Any: IAlways = {
+  kind: "any" as const,
   types: I.Set<never>(),
 
   or(_other: IAny): IAny {
-    return Always;
+    return Any;
   },
 
   and(other: IAny): IAny {
@@ -310,7 +310,7 @@ const Always: IAlways = {
   },
 
   equals(other: unknown): boolean {
-    return other === Always;
+    return other === Any;
   },
 
   hashCode(): number {
@@ -318,7 +318,7 @@ const Always: IAlways = {
   },
 
   toString(): string {
-    return "any";
+    return "type(any)";
   },
 
   toJSON(): unknown {
@@ -356,7 +356,7 @@ const Never: INever = {
   },
 
   toString(): string {
-    return "never";
+    return "type(never)";
   },
 
   toJSON(): unknown {
@@ -372,21 +372,18 @@ const Never: INever = {
   }
 };
 
-abstract class CompositeBase<K extends TypeKey, S> extends TypeBase<K> {
-  protected abstract keys(obj: IValue<K>): I.Seq.Indexed<S>;
-  protected abstract get(obj: IValue<K>, key: S, def: IAny): IAny;
-
+abstract class CompositeBase<K extends "object" | "list"> extends TypeBase<K> {
   protected shrink(other: IValue<K>, def: IAny): [boolean, boolean] {
-    const keys = I.Set(
-      this.keys(this as unknown as IValue<K>).concat(this.keys(other))
-    );
+    const lCol = this.value as I.Map<string, IAny> & I.List<IAny>;
+    const rCol = other.value as I.Map<string, IAny> & I.List<IAny>;
+    const keys = I.Set(lCol.keySeq().concat(rCol.keySeq()));
 
     let lShrink = false;
     let rShrink = false;
 
     for (const key of keys.keys()) {
-      const l = this.get(this as unknown as IValue<K>, key, def);
-      const r = this.get(other, key, def);
+      const l = lCol.get(key, def);
+      const r = rCol.get(key, def);
       const s = l.and(r);
 
       if (lShrink && rShrink) {
@@ -404,31 +401,8 @@ abstract class CompositeBase<K extends TypeKey, S> extends TypeBase<K> {
 
     return [lShrink, rShrink];
   }
-}
 
-// object
-class ObjectType extends CompositeBase<"object", string> {
-  type: IType<"object">;
-
-  get(obj: IValue<"object">, key: string, def: IAny): IAny {
-    return obj.value.get(key, def);
-  }
-
-  keys(obj: IValue<"object">): I.Seq.Indexed<string> {
-    return obj.isValue() ? obj.value.keySeq() : I.Seq.Indexed();
-  }
-
-  constructor(value?: I.Map<string, IAny>) {
-    super("object", value);
-
-    this.type = (this.isType() ? this : new ObjectType()) as IType<"object">;
-  }
-
-  from(value: Record<string, IAny>): IAny {
-    return new ObjectType(I.Map(value));
-  }
-
-  protected _or(other: IValue<"object">): IAny {
+  protected _or(other: IValue<K>): IAny {
     const [lShrink, rShrink] = this.shrink(other, Never);
 
     return lShrink && rShrink
@@ -438,14 +412,33 @@ class ObjectType extends CompositeBase<"object", string> {
       : other;
   }
 
-  protected _and(other: IValue<"object">): IAny {
-    const [lShrink, rShrink] = this.shrink(other, Always);
+  protected _and(other: IValue<K>): IAny {
+    const [lShrink, rShrink] = this.shrink(other, Any);
 
     return lShrink && rShrink
       ? Union.from(this, other)
       : lShrink
       ? this
       : other;
+  }
+
+  isType(): this is IType<K> {
+    return this.value === undefined || this.value.some((v) => v.isType());
+  }
+}
+
+// object
+class ObjectType extends CompositeBase<"object"> {
+  type: IType<"object">;
+
+  constructor(value?: I.Map<string, IAny>) {
+    super("object", value);
+
+    this.type = (this.isType() ? this : new ObjectType()) as IType<"object">;
+  }
+
+  from(value: Record<string, IAny>): IAny {
+    return new ObjectType(I.Map(value));
   }
 
   toString() {
@@ -461,15 +454,41 @@ class ObjectType extends CompositeBase<"object", string> {
 
 const ObjectVal = new ObjectType();
 
-// array
-class ArrayType {} // array<type>
+// list
+class ListType<T extends IAny> extends CompositeBase<"list"> {
+  type: IType<"list">;
 
-const ArrayVal = new ArrayType();
+  constructor(public subtype: T, value?: I.List<T & IValue>) {
+    super("list", value);
 
-// tuple
-class TupleType {} // array<type>
+    this.type = (this.isType() ? this : new ObjectType()) as IType<"list">;
+  }
 
-const TupleVal = new TupleType();
+  from(value: IAny | IAny[]): IAny {
+    if (!Array.isArray(value)) {
+      return new ListType(value);
+    }
+
+    const subtype = Union.from(...value);
+    const vals = value.some((v) => v.isType()) ? undefined : I.List(value);
+
+    return new ListType(subtype, vals as any);
+  }
+
+  toString() {
+    return this.isValue()
+      ? JSON.stringify(this.toJSON())
+      : `type(list(${this.subtype}))`;
+  }
+
+  toJSON() {
+    return this.isValue()
+      ? { kind: this.kind, value: this.value.map((v) => v.toJSON()).toArray() }
+      : { kind: this.kind };
+  }
+}
+
+const ListVal = new ListType(Any);
 
 // function
 class FunctionType {} // { args: tuple<any>, return: any }
@@ -485,10 +504,9 @@ export {
   DurationVal as Duration,
   LinkVal as Link,
   Never as Never,
-  Always as Always,
+  Any as Any,
   Union as Union,
   ObjectVal as Object,
-  ArrayVal as Array,
-  TupleVal as Tuple,
+  ListVal as List,
   FunctionVal as Function
 };
