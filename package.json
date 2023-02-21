@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-wired",
+	"name": "obsidian-schema",
 	"version": "0.1.0",
 	"description": "Adds schema validation and frontmatter generation to notes",
 	"main": "main.js",
