@@ -229,13 +229,11 @@ class UnionType implements IType<"union"> {
       return this;
     }
 
-    return UnionType.shrink(
-      this._or(
+    return this._or(
         other.type === "union"
           ? (other as IType<"union">)
           : new UnionType(I.Map([[other.type, I.Set([other as IValue])]]))
-      )[0]
-    );
+    )[0];
   }
 
   and(other: IType<TypeKey>): IType<TypeKey> {
