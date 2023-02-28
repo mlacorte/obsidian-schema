@@ -3,94 +3,101 @@ import * as I from "immutable";
 type Id = string;
 type Value = number;
 
-type ValuePair = I.RecordOf<{ val: Value; conds: I.Set<ValueCond> }>;
-type ValueCond = I.RecordOf<{ ref: ValueSet; val: Value }>;
+class PossibleValue extends I.Record({
+  val: NaN as Value,
+  conds: I.Map<Id, Value>()
+}) {}
 
-const ValuePair = <T extends { val: Value; conds: I.Set<ValueCond> }>(arg: T) =>
-  I.Record(arg)() as unknown as ValuePair;
+let $id = 1;
 
-const ValueCond = <T extends { ref: ValueSet; val: Value }>(arg: T) =>
-  I.Record(arg)() as unknown as ValueCond;
-
-let id = 1;
-
-class ValueSet implements I.ValueObject {
+class ValueSet {
   private readonly _id: number;
-  private readonly vals: I.Set<ValuePair>;
+  private readonly vals: I.Set<PossibleValue>;
 
   get id(): Id {
-    return `<${this._id}>`;
+    return `<${this.name}:${this._id}>`;
   }
 
-  private constructor() {
-    this._id = id++;
+  private constructor(private readonly name: string) {
+    this._id = $id++;
   }
 
-  private static new(fn: (self: ValueSet) => I.Set<ValuePair>): ValueSet {
-    const valSet = new ValueSet();
-    (valSet.vals as I.Set<ValuePair>) = fn(valSet);
+  private static new(
+    name: string,
+    fn: (self: ValueSet) => I.Set<PossibleValue>
+  ): ValueSet {
+    const valSet = new ValueSet(name);
+    (valSet.vals as I.Set<PossibleValue>) = fn(valSet);
     return valSet;
   }
 
-  static val(vals: Value[]): ValueSet {
+  static val(name: string, vals: Value[]): ValueSet {
     if (vals.length === 0) {
       throw new Error("'vals' must not be empty");
     }
 
-    return ValueSet.new((ref) =>
+    return ValueSet.new(name, (ref) =>
       I.Set(
         vals.length === 1 // performance optimization
-          ? [ValuePair({ val: vals[0], conds: I.Set() })]
-          : vals.map((val) =>
-              ValuePair({ val, conds: I.Set([ValueCond({ ref, val })]) })
+          ? [new PossibleValue({ val: vals[0], conds: I.Map() })]
+          : vals.map(
+              (val) => new PossibleValue({ val, conds: I.Map([[ref.id, val]]) })
             )
       )
     );
   }
 
   static fn<Args extends ValueSet[]>(
+    name: string,
     args: [...Args],
     fn: (...vals: { [I in keyof Args]: Value }) => Value
   ): ValueSet {
     // performance optimization
     args = args.sort((a, b) => a.vals.size - b.vals.size);
 
-    return ValueSet.new(() =>
+    return ValueSet.new(name, () =>
       I.Set(
         args
           .reduce(
-            (acc, arg) =>
-              acc.flatMap(({ args, world, conds: lConds }) =>
-                arg.vals.toArray().flatMap(({ val, conds: rConds }) =>
-                  world.has(arg) && world.get(arg) !== val
-                    ? []
-                    : [
-                        {
-                          args: [...args, val],
-                          world: world.set(arg, val),
-                          conds: lConds
-                            .union(rConds)
-                            .filter(
-                              (cond) => arg !== cond.ref || val === cond.val
-                            )
-                        }
-                      ]
-                )
+            (acc, { id, vals }) =>
+              acc.flatMap(({ argVals, conds: oldConds }) =>
+                vals.toArray().flatMap(({ val: newVal, conds: newConds }) => {
+                  const conds = oldConds.asMutable();
+
+                  for (const [ref, val] of newConds.concat([[id, newVal]])) {
+                    const oldVal = conds.get(ref);
+
+                    if (oldVal !== undefined) {
+                      if (oldVal !== val) {
+                        return [];
+                      }
+                    } else {
+                      conds.set(ref, val);
+                    }
+                  }
+
+                  conds.asImmutable();
+
+                  return [{ argVals: [...argVals, newVal], conds }];
+                })
               ),
             [
               {
-                args: [] as Value[],
-                world: I.Map<ValueSet, Value>(),
-                conds: I.Set<ValueCond>()
+                argVals: [] as Value[],
+                conds: I.Map<Id, Value>()
               }
             ]
           )
-          .map(({ args, conds }) => {
-            const val = fn(...(args as any));
-            return ValuePair({ val, conds });
+          .map(({ argVals, conds }) => {
+            const val = fn(...(argVals as any));
+            return new PossibleValue({ val, conds });
           })
       )
     );
+  }
+
+  toJSON(): unknown {
+    return this.id;
   }
 
   toJS(): {
@@ -106,10 +113,9 @@ class ValueSet implements I.ValueObject {
           val: p.val,
           conds: p.conds
             .toArray()
-            .sort((l, r) =>
-              l.ref === r.ref ? l.val - r.val : l.ref._id - r.ref._id
+            .sort(([lRef, lVal], [rRef, rVal]) =>
+              lRef === rRef ? lVal - rVal : lRef.localeCompare(rRef)
             )
-            .map((c) => [c.ref.id, c.val])
         }))
     };
   }
@@ -121,15 +127,8 @@ class ValueSet implements I.ValueObject {
   conditions(): [Id, Value][][] {
     return this.toJS().vals.map((p) => p.conds);
   }
-
-  equals(other: unknown): boolean {
-    return this === other;
-  }
-
-  hashCode(): number {
-    return 0x42108426 ^ this.vals.hashCode();
-  }
 }
 
-export const fn = ValueSet.fn;
-export const val = ValueSet.val;
+const $fn = ValueSet.fn;
+const $val = ValueSet.val;
+export { $fn as fn, $val as val };
