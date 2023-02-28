@@ -2,22 +2,68 @@ import { fn, val } from "../src/valueset";
 
 describe("valueset", () => {
   test("valueset", () => {
-    const a = val("a", [-2, 2]);
+    const empty = fn([], () => 10);
 
-    expect(a.u.toString()).toEqual("a");
-    expect(a.R.map((p) => p.v).toArray()).toEqual([-2, 2]);
-    expect(a.R.map((p) => p.l.map((s) => s.toString())).toJS()).toEqual([
-      ["a[0]"],
-      ["a[1]"]
+    expect(empty.values()).toEqual([10]);
+    expect(empty.conditions()).toEqual([[]]);
+
+    const a = val([1, 2]);
+
+    expect(a.values()).toEqual([1, 2]);
+    expect(a.conditions()).toEqual([[[a.id, 1]], [[a.id, 2]]]);
+
+    const b = val([1, 2]);
+
+    expect(b.values()).toEqual([1, 2]);
+    expect(b.conditions()).toEqual([[[b.id, 1]], [[b.id, 2]]]);
+
+    const c = fn([a, b], (a, b) => a + b);
+
+    expect(c.values()).toEqual([2, 3, 3, 4]);
+    expect(c.conditions()).toEqual([
+      [
+        [a.id, 1],
+        [b.id, 1]
+      ],
+      [
+        [a.id, 1],
+        [b.id, 2]
+      ],
+      [
+        [a.id, 2],
+        [b.id, 1]
+      ],
+      [
+        [a.id, 2],
+        [b.id, 2]
+      ]
     ]);
 
-    const double = fn("double", [a, a], (l, r) => l + r);
+    const d = fn([a, a], (l, r) => l + r);
 
-    expect(double.u.toString()).toEqual("double");
-    expect(double.R.map((p) => p.v).toArray()).toEqual([-4, 4]);
-    expect(double.R.map((p) => p.l.map((s) => s.toString())).toJS()).toEqual([
-      ["a[0]"],
-      ["a[1]"]
+    expect(d.values()).toEqual([2, 4]);
+    expect(d.conditions()).toEqual([[[a.id, 1]], [[a.id, 2]]]);
+
+    const e = fn([c, a], (c, a) => c + a);
+
+    expect(e.values()).toEqual([3, 4, 5, 6]);
+    expect(e.conditions()).toEqual([
+      [
+        [a.id, 1],
+        [b.id, 1]
+      ],
+      [
+        [a.id, 1],
+        [b.id, 2]
+      ],
+      [
+        [a.id, 2],
+        [b.id, 1]
+      ],
+      [
+        [a.id, 2],
+        [b.id, 2]
+      ]
     ]);
   });
 });
