@@ -1,6 +1,10 @@
 import * as I from "immutable";
 import * as L from "luxon";
 
+type MappedVal<K extends "object" | "list"> = K extends "object"
+  ? I.Map<string, IType>
+  : I.List<IType>;
+
 type SimpleVals = {
   null: null;
   number: number | null;
@@ -11,14 +15,14 @@ type SimpleVals = {
   link: string | null;
 };
 type CompositeVals = {
-  object: I.RecordOf<{ mapped: I.Map<any, IType>; unmapped: IType }>;
-  list: I.RecordOf<{ mapped: I.Map<any, IType>; unmapped: IType }>;
+  object: I.RecordOf<{ mapped: MappedVal<"object">; unmapped: IType }>;
+  list: I.RecordOf<{ mapped: MappedVal<"list">; unmapped: IType }>;
   function: I.RecordOf<{ args: I.List<IType>; return: IType }>;
 };
 type SpecialVals = {
   union: I.Map<ValueKey, I.Set<IValue>>;
   any: null;
-  never: null;
+  error: I.Set<I.RecordOf<{ message: string; vars: I.Set<string> }>>;
 };
 type TypeVals = SimpleVals & CompositeVals & SpecialVals;
 
@@ -54,7 +58,7 @@ abstract class ValueBase<K extends ValueKey> implements IType<K> {
     switch (other.type) {
       case "any":
         return TAny;
-      case "never":
+      case "error":
         return this;
       case "union":
         return other.or(this);
@@ -69,14 +73,17 @@ abstract class ValueBase<K extends ValueKey> implements IType<K> {
     switch (other.type) {
       case "any":
         return this;
-      case "never":
-        return TNever;
+      case "error":
+        return other;
       case "union":
         return other.and(this);
       case this.type:
-        return UnionType.from(this._and(other as IType<K>));
+        return UnionType.from(
+          this._and(other as IType<K>),
+          twoValErrMsg(this, other)
+        );
       default:
-        return TNever;
+        return TError.addMessage(twoValErrMsg(this, other));
     }
   }
 
@@ -160,31 +167,35 @@ const TDate = new SimpleType("date");
 const TDuration = new SimpleType("duration");
 const TLink = new SimpleType("link");
 
+const twoValErrMsg = (a: IType, b: IType): string =>
+  `Can't combine '${a}' and '${b}'.`;
+
 // union
 class UnionType implements IType<"union"> {
   type = "union" as const;
 
   private constructor(public value: ValueOf<"union">) {}
 
-  static new(value: ValueOf<"union">): IType {
-    return UnionType.shrink(new UnionType(value));
+  private static new(value: ValueOf<"union">, errMsg?: string): IType {
+    return UnionType.shrink(new UnionType(value), errMsg);
   }
 
-  static from(values: IValue[]): IType {
+  static from(values: IValue[], errMsg?: string): IType {
     return UnionType.new(
       I.Seq(values)
         .groupBy((v) => v.type)
         .map((v) => v.toSet())
-        .toMap()
+        .toMap(),
+      errMsg
     );
   }
 
-  private static shrink(union: IType<"union">): IType {
+  private static shrink(union: IType<"union">, errMsg?: string): IType {
     const size = union.value.map((s) => s.size).reduce((l, r) => l + r, 0);
 
     switch (size) {
       case 0:
-        return TNever;
+        return TError.addMessage(errMsg);
       case 1:
         return union.value.first<I.Set<IValue>>().first<IValue>();
       default:
@@ -225,14 +236,14 @@ class UnionType implements IType<"union"> {
       return other;
     }
 
-    if (other.type === "never") {
+    if (other.type === "error") {
       return this;
     }
 
     return this._or(
-        other.type === "union"
-          ? (other as IType<"union">)
-          : new UnionType(I.Map([[other.type, I.Set([other as IValue])]]))
+      other.type === "union"
+        ? (other as IType<"union">)
+        : new UnionType(I.Map([[other.type, I.Set([other as IValue])]]))
     )[0];
   }
 
@@ -241,7 +252,7 @@ class UnionType implements IType<"union"> {
       return this;
     }
 
-    if (other.type === "never") {
+    if (other.type === "error") {
       return other;
     }
 
@@ -250,7 +261,8 @@ class UnionType implements IType<"union"> {
         other.type === "union"
           ? (other as IType<"union">)
           : new UnionType(I.Map([[other.type, I.Set([other as IValue])]]))
-      )[0]
+      )[0],
+      twoValErrMsg(this, other)
     );
   }
 
@@ -295,6 +307,7 @@ class UnionType implements IType<"union"> {
   }
 }
 
+// any
 class AnyType implements IType<"any"> {
   type = "any" as const;
   value = null;
@@ -342,29 +355,43 @@ class AnyType implements IType<"any"> {
 
 const TAny = new AnyType();
 
-// never
-class NeverType implements IType<"never"> {
-  type = "never" as const;
-  value = null;
+const ErrorVal = I.Record({
+  message: "",
+  vars: I.Set<string>()
+});
+
+// error
+class ErrorType implements IType<"error"> {
+  type = "error" as const;
+
+  constructor(public value: ValueOf<"error"> = I.Set()) {}
+
+  addMessage(message?: string, vars?: string[]): IType<"error"> {
+    return message === undefined
+      ? TError
+      : new ErrorType(
+          this.value.add(ErrorVal({ message, vars: I.Set(vars || []) }))
+        );
+  }
 
   or(other: IType): IType {
     return other;
   }
 
   and(_other: IType): IType {
-    return TNever;
+    return this;
   }
 
-  _or(_other: IType<"never">): [IType<"never">] {
-    return [TNever];
+  _or(other: IType<"error">): [IType<"error">] {
+    return [new ErrorType(this.value.union(other.value))];
   }
 
-  _and(_other: IType<"never">): [IType<"never">] {
-    return [TNever];
+  _and(other: IType<"error">): [IType<"error">] {
+    return [new ErrorType(this.value.union(other.value))];
   }
 
   equals(other: unknown): boolean {
-    return other instanceof NeverType;
+    return other instanceof ErrorType && this.value.equals(other.value);
   }
 
   hashCode(): number {
@@ -372,11 +399,27 @@ class NeverType implements IType<"never"> {
   }
 
   toString(): string {
-    return "never";
+    if (this.value.size === 0) {
+      return "error";
+    }
+
+    return this.value
+      .toSeq()
+      .map((v) => {
+        const message = JSON.stringify(v.message);
+        const vars = v.vars.isEmpty() ? `, [${v.vars.join(", ")}]` : "";
+        return `error(${message}${vars})`;
+      })
+      .join(" and ");
   }
 
   toJSON(): unknown {
-    return { type: "never" };
+    return {
+      type: "error",
+      value: this.value
+        .toArray()
+        .map((v) => ({ message: v.message, vars: v.vars.toArray() }))
+    };
   }
 
   isType(): true {
@@ -388,11 +431,16 @@ class NeverType implements IType<"never"> {
   }
 }
 
-const TNever = new NeverType();
+const TError = new ErrorType();
 
-const CompositeVal = I.Record({
+const ObjectVal = I.Record({
   mapped: I.Map<any, IType>(),
-  unmapped: TNever as IType
+  unmapped: TError as IType
+});
+
+const ListVal = I.Record({
+  mapped: I.List<IType>(),
+  unmapped: TError as IType
 });
 
 abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
@@ -421,7 +469,7 @@ abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
       return [this, other];
     }
 
-    const nm = lm.mergeWith((l, r) => l.or(r), rm);
+    const nm = this.mappedOr(lm as any, rm as any);
 
     if (nm.size === 1) {
       return [this.new(nu, nm)];
@@ -429,12 +477,16 @@ abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
 
     grew =
       grew |
-      (nm.some((nv, k) => !nv.equals(lm.get(k, TNever)))
+      (nm.some(
+        (nv, k) => !nv.equals((lm as I.Collection<any, IType>).get(k, TError))
+      )
         ? Grew.Left
         : Grew.None);
     grew =
       grew |
-      (nm.some((nv, k) => !nv.equals(rm.get(k, TNever)))
+      (nm.some(
+        (nv, k) => !nv.equals((rm as I.Collection<any, IType>).get(k, TError))
+      )
         ? Grew.Right
         : Grew.None);
 
@@ -454,13 +506,11 @@ abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
     const { unmapped: ru, mapped: rm } = other.value;
 
     const nu = lu.and(ru);
-    const nm = I.Set.union<any>([lm.keys(), rm.keys()])
-      .toMap()
-      .map((k) => lm.get(k, TAny).and(rm.get(k, TAny)));
+    const nm = this.mappedAnd(lm as any, rm as any);
 
     if (
-      (nu.type === "never" && nm.isEmpty()) ||
-      nm.some((v) => v.type === "never")
+      (nu.type === "error" && nm.isEmpty()) ||
+      nm.some((v) => v.type === "error")
     ) {
       return [];
     }
@@ -470,25 +520,31 @@ abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
 
   protected abstract new(
     unmapped: IType,
-    mapped: I.Map<any, IType>
+    mapped: MappedVal<K>
   ): CompositeBase<K>;
+
+  protected abstract mappedAnd(
+    lm: MappedVal<K>,
+    rm: MappedVal<K>
+  ): MappedVal<K>;
+  protected abstract mappedOr(lm: MappedVal<K>, rm: MappedVal<K>): MappedVal<K>;
 
   isType(): boolean {
     return (
-      !this.value.unmapped.equals(TNever) ||
+      !(this.value.unmapped.type === "error") ||
       this.value.mapped.some((t) => t.isType())
     );
   }
 
   toString(): string {
     const { mapped: m, unmapped: u } = this.value;
-    const typeStr = u.equals(TAny) ? this.type : `${this.type}(${u})`;
+    const typeStr = u.type === "any" ? this.type : `${this.type}(${u})`;
 
     if (m.isEmpty()) {
       return typeStr;
     }
 
-    const appendStr = m.equals(TNever) ? "" : `, ...${u}`;
+    const appendStr = m.isEmpty() ? "" : `, ...${u}`;
 
     return `${this.litWrap[0]}${m
       .map((v, k) => `${k}: ${v}`)
@@ -503,7 +559,7 @@ abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
       value.mapped = this.toLit();
     }
 
-    if (!u.equals(TNever)) {
+    if (!(u.type === "error")) {
       value.unmapped = u.toJSON();
     }
 
@@ -516,20 +572,39 @@ class ObjectType extends CompositeBase<"object"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toMap();
   protected litWrap: [string, string] = ["{ ", " }"];
 
-  constructor(value: ValueOf<"object"> = CompositeVal({ unmapped: TAny })) {
+  constructor(value: ValueOf<"object"> = ObjectVal({ unmapped: TAny })) {
     super("object", value);
   }
 
   protected new(unmapped: IType, mapped: I.Map<any, IType>): ObjectType {
-    return new ObjectType(CompositeVal({ unmapped, mapped }));
+    return new ObjectType(ObjectVal({ unmapped, mapped }));
+  }
+
+  protected mappedOr(
+    lm: MappedVal<"object">,
+    rm: MappedVal<"object">
+  ): MappedVal<"object"> {
+    return lm.mergeWith((l, r) => l.or(r), rm);
+  }
+
+  protected mappedAnd(
+    lm: MappedVal<"object">,
+    rm: MappedVal<"object">
+  ): MappedVal<"object"> {
+    return I.Map(
+      I.Set.union<string>([lm.keys(), rm.keys()]).flatMap((key) => {
+        const val = lm.get(key, TAny).and(rm.get(key, TAny));
+        return val.type === "error" ? [] : [[key, val]];
+      })
+    );
   }
 
   record(value: Record<string, IType>): IType {
-    return new ObjectType(CompositeVal({ mapped: I.Map(value) }));
+    return new ObjectType(ObjectVal({ mapped: I.Map(value) }));
   }
 
   map(value: IType): IType {
-    return new ObjectType(CompositeVal({ unmapped: value }));
+    return new ObjectType(ObjectVal({ unmapped: value }));
   }
 }
 
@@ -540,20 +615,41 @@ class ListType extends CompositeBase<"list"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toArray();
   protected litWrap: [string, string] = ["[", "]"];
 
-  constructor(value: ValueOf<"list"> = CompositeVal({ unmapped: TAny })) {
+  constructor(value: ValueOf<"list"> = ListVal({ unmapped: TAny })) {
     super("list", value);
   }
 
-  protected new(unmapped: IType, mapped: I.Map<any, IType>): ListType {
-    return new ListType(CompositeVal({ unmapped, mapped }));
+  protected new(unmapped: IType, mapped: I.List<IType>): ListType {
+    return new ListType(ListVal({ unmapped, mapped }));
+  }
+
+  protected mappedOr(
+    lm: MappedVal<"list">,
+    rm: MappedVal<"list">
+  ): MappedVal<"list"> {
+    return lm
+      .zipAll(rm)
+      .map(([l, r]) => (l || TError).or((r || TError) as IType));
+  }
+
+  protected mappedAnd(
+    lm: MappedVal<"list">,
+    rm: MappedVal<"list">
+  ): MappedVal<"list"> {
+    return I.Range(0, Math.max(lm.size, rm.size))
+      .flatMap((key) => {
+        const val = lm.get(key, TAny).and(rm.get(key, TAny));
+        return val.type === "error" ? [] : [val];
+      })
+      .toList();
   }
 
   list(value: IType): IType {
-    return new ListType(CompositeVal({ unmapped: value }));
+    return new ListType(ListVal({ unmapped: value }));
   }
 
   tuple(value: IType[]): IType {
-    return new ListType(CompositeVal({ mapped: I.List(value).toMap() }));
+    return new ListType(ListVal({ mapped: I.List(value) }));
   }
 }
 
@@ -572,9 +668,52 @@ export {
   TDate as Date,
   TDuration as Duration,
   TLink as Link,
-  TNever as Never,
+  TError as Error,
   TAny as Any,
   TObject as Object,
   TList as List,
   TFunction as Function
+};
+
+// utility
+export const _ = (
+  arg:
+    | null
+    | number
+    | string
+    | boolean
+    | L.DateTime
+    | L.Duration
+    | Record<string, IType>
+    | IType[]
+): IType => {
+  if (arg === null) {
+    return TNull;
+  }
+
+  if (typeof arg === "number") {
+    return TNumber.literal(arg);
+  }
+
+  if (typeof arg === "string") {
+    return TString.literal(arg);
+  }
+
+  if (typeof arg === "boolean") {
+    return TBoolean.literal(arg);
+  }
+
+  if (arg instanceof L.DateTime) {
+    return TDate.literal(arg);
+  }
+
+  if (arg instanceof L.Duration) {
+    return TDuration.literal(arg);
+  }
+
+  if (Array.isArray(arg)) {
+    return TList.tuple(arg);
+  }
+
+  return TObject.record(arg);
 };

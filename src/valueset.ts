@@ -18,7 +18,7 @@ class ValueSet {
     return `<${this.name}:${this._id}>`;
   }
 
-  private constructor(private readonly name: string) {
+  private constructor(public readonly name: string) {
     this._id = $id++;
   }
 
