@@ -586,17 +586,12 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   }
 }
 
+// object
 class ObjectVal extends I.Record({
   mapped: I.Map<string, Type>(),
   unmapped: $Error as Type
 }) {}
 
-class ListVal extends I.Record({
-  mapped: I.List<Type>(),
-  unmapped: $Error as Type
-}) {}
-
-// object
 class ObjectType extends CompositeBase<"object"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toMap();
   protected litWrap: [string, string] = ["{ ", " }"];
@@ -640,6 +635,11 @@ class ObjectType extends CompositeBase<"object"> {
 const $Object = new ObjectType();
 
 // list
+class ListVal extends I.Record({
+  mapped: I.List<Type>(),
+  unmapped: $Error as Type
+}) {}
+
 class ListType extends CompositeBase<"list"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toArray();
   protected litWrap: [string, string] = ["[", "]"];
@@ -684,12 +684,12 @@ class ListType extends CompositeBase<"list"> {
 
 const $List = new ListType();
 
+// function
 class FunctionVal extends I.Record({
   args: I.List<Type>(),
   return: $Error as Type
 }) {}
 
-// function
 class FunctionType extends TypeBase<"function"> {
   constructor(value: FunctionVal = new FunctionVal()) {
     super("function", value);
@@ -720,25 +720,8 @@ class FunctionType extends TypeBase<"function"> {
 
 const $Function = new FunctionType();
 
-export type IType = Type;
-
-export {
-  $Null as Null,
-  $Number as Number,
-  $String as String,
-  $Boolean as Boolean,
-  $Date as Date,
-  $Duration as Duration,
-  $Link as Link,
-  $Error as Error,
-  $Any as Any,
-  $Object as Object,
-  $List as List,
-  $Function as Function
-};
-
 // utility
-export function $(
+function literal(
   arg:
     | null
     | number
@@ -779,3 +762,22 @@ export function $(
 
   return $Object.record(arg);
 }
+
+// exports
+export {
+  $Null as Null,
+  $Number as Number,
+  $String as String,
+  $Boolean as Boolean,
+  $Date as Date,
+  $Duration as Duration,
+  $Link as Link,
+  $Error as Error,
+  $Any as Any,
+  $Object as Object,
+  $List as List,
+  $Function as Function,
+  literal as $
+};
+
+export type IType = Type;
