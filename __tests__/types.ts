@@ -13,7 +13,7 @@ describe("types", () => {
     expect(two.type).toBe("number");
     expect(two.value).toBe(2);
     expect(number.type).toBe("number");
-    expect(number.value).toBe(null);
+    expect(number.value).toBe(T.Any);
     expect(error.type).toBe("error");
     expect((error.value as any).toJS()).toEqual([
       {

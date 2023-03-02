@@ -2,12 +2,9 @@ import * as I from "immutable";
 
 import * as T from "./types";
 
-type Id = string;
-type Value = T.IType;
-
 class PossibleValue extends I.Record({
-  val: T.Error.addMessage("ValueSet incorrectly initialized.") as Value,
-  conds: I.Map<Id, Value>()
+  val: T.Error.addMessage("ValueSet incorrectly initialized.") as T.IType,
+  conds: I.Map<string, T.IType>()
 }) {}
 
 let $id = 1;
@@ -16,7 +13,7 @@ class ValueSet {
   private readonly _id: number;
   private readonly vals: I.Set<PossibleValue>;
 
-  get id(): Id {
+  get id(): string {
     return `<${this.name}:${this._id}>`;
   }
 
@@ -33,7 +30,7 @@ class ValueSet {
     return valSet;
   }
 
-  static val(name: string, vals: Value[]): ValueSet {
+  static val(name: string, vals: T.IType[]): ValueSet {
     if (vals.length === 0) {
       throw new Error("'vals' must not be empty");
     }
@@ -52,7 +49,7 @@ class ValueSet {
   static fn<Args extends ValueSet[]>(
     name: string,
     args: [...Args],
-    fn: (...vals: { [I in keyof Args]: Value }) => Value
+    fn: (...vals: { [I in keyof Args]: T.IType }) => T.IType
   ): ValueSet {
     // performance optimization
     args = args.sort((a, b) => a.vals.size - b.vals.size);
@@ -85,8 +82,8 @@ class ValueSet {
               ),
             [
               {
-                argVals: [] as Value[],
-                conds: I.Map<Id, Value>()
+                argVals: [] as T.IType[],
+                conds: I.Map<string, T.IType>()
               }
             ]
           )
@@ -103,8 +100,8 @@ class ValueSet {
   }
 
   toJS(): {
-    id: Id;
-    vals: Array<{ val: Value; conds: Array<[Id, Value]> }>;
+    id: string;
+    vals: Array<{ val: T.IType; conds: Array<[string, T.IType]> }>;
   } {
     return {
       id: this.id,
@@ -124,11 +121,11 @@ class ValueSet {
     };
   }
 
-  values(): Value[] {
+  values(): T.IType[] {
     return this.toJS().vals.map((p) => p.val);
   }
 
-  conditions(): [Id, Value][][] {
+  conditions(): [string, T.IType][][] {
     return this.toJS().vals.map((p) => p.conds);
   }
 }
