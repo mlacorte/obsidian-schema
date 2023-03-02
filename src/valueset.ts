@@ -1,10 +1,12 @@
 import * as I from "immutable";
 
+import * as T from "./types";
+
 type Id = string;
-type Value = number;
+type Value = T.IType;
 
 class PossibleValue extends I.Record({
-  val: NaN as Value,
+  val: T.Error.addMessage("ValueSet incorrectly initialized.") as Value,
   conds: I.Map<Id, Value>()
 }) {}
 
@@ -108,13 +110,15 @@ class ValueSet {
       id: this.id,
       vals: this.vals
         .toArray()
-        .sort((l, r) => l.val - r.val)
+        .sort((l, r) => `${l.val}`.localeCompare(`${r.val}`))
         .map((p) => ({
           val: p.val,
           conds: p.conds
             .toArray()
             .sort(([lRef, lVal], [rRef, rVal]) =>
-              lRef === rRef ? lVal - rVal : lRef.localeCompare(rRef)
+              lRef === rRef
+                ? `${lVal}`.localeCompare(`${rVal}`)
+                : lRef.localeCompare(rRef)
             )
         }))
     };

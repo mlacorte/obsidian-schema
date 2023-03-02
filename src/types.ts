@@ -676,17 +676,17 @@ export {
 };
 
 // utility
-export const _ = (
-  arg:
-    | null
-    | number
-    | string
-    | boolean
-    | L.DateTime
-    | L.Duration
-    | Record<string, IType>
-    | IType[]
-): IType => {
+type Prim =
+  | null
+  | number
+  | string
+  | boolean
+  | L.DateTime
+  | L.Duration
+  | Record<string, IType>
+  | IType[];
+
+export function $(arg: Prim): IType {
   if (arg === null) {
     return TNull;
   }
@@ -716,4 +716,16 @@ export const _ = (
   }
 
   return TObject.record(arg);
-};
+}
+
+export function $$(...args: Prim[]): IType[] {
+  return args.map((arg) => $(arg));
+}
+
+export function _(arg: Prim): unknown {
+  return $(arg).toJSON();
+}
+
+export function __(...args: Prim[]): unknown[] {
+  return args.map((arg) => $(arg).toJSON());
+}
