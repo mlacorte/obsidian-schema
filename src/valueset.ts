@@ -3,8 +3,8 @@ import * as I from "immutable";
 import * as T from "./types";
 
 class PossibleValue extends I.Record({
-  val: T.Error.addMessage("ValueSet incorrectly initialized.") as T.IType,
-  conds: I.Map<string, T.IType>()
+  val: T.Error.addMessage("ValueSet incorrectly initialized.") as T.Type,
+  conds: I.Map<string, T.Type>()
 }) {}
 
 let $id = 1;
@@ -30,7 +30,7 @@ class ValueSet {
     return valSet;
   }
 
-  static val(name: string, vals: T.IType[]): ValueSet {
+  static val(name: string, vals: T.Type[]): ValueSet {
     if (vals.length === 0) {
       throw new Error("'vals' must not be empty");
     }
@@ -49,7 +49,7 @@ class ValueSet {
   static fn<Args extends ValueSet[]>(
     name: string,
     args: [...Args],
-    fn: (...vals: { [I in keyof Args]: T.IType }) => T.IType
+    fn: (...vals: { [I in keyof Args]: T.Type }) => T.Type
   ): ValueSet {
     // performance optimization
     args = args.sort((a, b) => a.vals.size - b.vals.size);
@@ -82,8 +82,8 @@ class ValueSet {
               ),
             [
               {
-                argVals: [] as T.IType[],
-                conds: I.Map<string, T.IType>()
+                argVals: [] as T.Type[],
+                conds: I.Map<string, T.Type>()
               }
             ]
           )
@@ -101,7 +101,7 @@ class ValueSet {
 
   toJS(): {
     id: string;
-    vals: Array<{ val: T.IType; conds: Array<[string, T.IType]> }>;
+    vals: Array<{ val: T.Type; conds: Array<[string, T.Type]> }>;
   } {
     return {
       id: this.id,
@@ -121,11 +121,11 @@ class ValueSet {
     };
   }
 
-  values(): T.IType[] {
+  values(): T.Type[] {
     return this.toJS().vals.map((p) => p.val);
   }
 
-  conditions(): [string, T.IType][][] {
+  conditions(): [string, T.Type][][] {
     return this.toJS().vals.map((p) => p.conds);
   }
 }

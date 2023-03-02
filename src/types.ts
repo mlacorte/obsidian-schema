@@ -1,16 +1,18 @@
 import * as I from "immutable";
 import * as L from "luxon";
+import { Link, Widget } from "obsidian-dataview";
 
 type TypeMap = {
-  null: { type: NullType; value: AnyType };
+  null: { type: NullType; value: null };
   number: { type: NumberType; value: number | AnyType };
   string: { type: StringType; value: string | AnyType };
   boolean: { type: BooleanType; value: boolean | AnyType };
   date: { type: DateType; value: L.DateTime | AnyType };
   duration: { type: DurationType; value: L.Duration | AnyType };
-  link: { type: LinkType; value: string | AnyType };
+  link: { type: LinkType; value: Link | AnyType };
+  widget: { type: WidgetType; value: Widget | AnyType };
   object: { type: ObjectType; value: ObjectVal };
-  list: { type: ListType; value: ListVal };
+  array: { type: ArrayType; value: ArrayVal };
   function: { type: FunctionType; value: FunctionVal };
   union: { type: UnionType; value: I.Map<ValueKey, I.Set<ValueType>> };
   any: { type: AnyType; value: "*" };
@@ -24,35 +26,39 @@ type SimpleKey =
   | "boolean"
   | "date"
   | "duration"
-  | "link";
-type CompositeKey = "object" | "list";
+  | "link"
+  | "widget";
+type CompositeKey = "object" | "array";
 type ValueKey = SimpleKey | CompositeKey | "function";
 type TypeKey = keyof TypeMap;
 
-type Type<K extends TypeKey = TypeKey> = TypeMap[K]["type"];
-type Value<K extends TypeKey = TypeKey> = TypeMap[K]["value"];
+type TypeOf<K extends TypeKey = TypeKey> = TypeMap[K]["type"];
+type ValueOf<K extends TypeKey> = TypeMap[K]["value"];
 
-type ValueType = Type<ValueKey>;
+export type Type = TypeOf<TypeKey>;
+type ValueType = TypeOf<ValueKey>;
 
 abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
   static andErrMsg(a: Type, b: Type): string {
     return `Can't combine '${a}' and '${b}'.`;
   }
 
-  constructor(public type: K, public value: Value<K>) {}
+  constructor(public type: K, public value: ValueOf<K>) {}
 
   abstract or(other: Type): Type;
   abstract and(other: Type): Type;
-  abstract _or(other: Type<K>): Type<K>[];
-  abstract _and(other: Type<K>): Type<K>[];
+  protected abstract _or(other: TypeOf<K>): TypeOf<K>[];
+  protected abstract _and(other: TypeOf<K>): TypeOf<K>[];
 
   equals(other: unknown): boolean {
     return (
       other instanceof TypeBase &&
       this.type === other.type &&
-      I.is(this.value.valueOf(), other.value.valueOf())
+      this._equals(other as TypeOf<K>)
     );
   }
+
+  abstract _equals(other: TypeOf<K>): boolean;
 
   hashCode(): number {
     return 0x42108460 ^ I.hash(this.type) ^ I.hash(this.value);
@@ -81,12 +87,16 @@ class AnyType extends TypeBase<"any"> {
     return other;
   }
 
-  _or(_other: Type<"any">): [Type<"any">] {
+  _or(_other: AnyType): [AnyType] {
     return [$Any];
   }
 
-  _and(_other: Type<"any">): [Type<"any">] {
+  _and(_other: AnyType): [AnyType] {
     return [$Any];
+  }
+
+  _equals(_other: AnyType): boolean {
+    return true;
   }
 
   toString(): string {
@@ -111,11 +121,11 @@ class ErrorVal extends I.Record({
 }) {}
 
 class ErrorType extends TypeBase<"error"> {
-  constructor(value: Value<"error"> = I.Set()) {
+  constructor(value: ValueOf<"error"> = I.Set()) {
     super("error", value);
   }
 
-  addMessage(message?: string, vars?: string[]): Type<"error"> {
+  addMessage(message?: string, vars?: string[]): TypeOf<"error"> {
     return message === undefined
       ? $Error
       : new ErrorType(
@@ -131,12 +141,16 @@ class ErrorType extends TypeBase<"error"> {
     return this;
   }
 
-  _or(other: Type<"error">): [Type<"error">] {
+  _or(other: ErrorType): [ErrorType] {
     return [new ErrorType(this.value.union(other.value))];
   }
 
-  _and(other: Type<"error">): [Type<"error">] {
+  _and(other: ErrorType): [ErrorType] {
     return [new ErrorType(this.value.union(other.value))];
+  }
+
+  _equals(other: ErrorType): boolean {
+    return this.value.equals(other.value);
   }
 
   toString(): string {
@@ -175,7 +189,7 @@ class ErrorType extends TypeBase<"error"> {
 const $Error = new ErrorType();
 
 abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
-  constructor(type: K, value: Value<K>) {
+  constructor(type: K, value: ValueOf<K>) {
     super(type, value);
   }
 
@@ -184,46 +198,46 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
       case "any":
         return $Any;
       case "error":
-        return this as Type<K>;
+        return this as TypeOf<K>;
       case "union":
-        return other.or(this as Type<K>);
+        return other.or(this as TypeOf<K>);
       case this.type:
         return UnionType.from(this._or(other));
       default:
-        return UnionType.from([this as Type<K>, other]);
+        return UnionType.from([this as TypeOf<K>, other]);
     }
   }
 
   and(other: Type): Type {
     switch (other.type) {
       case "any":
-        return this as Type<K>;
+        return this as TypeOf<K>;
       case "error":
         return other;
       case "union":
-        return other.and(this as Type<K>);
+        return other.and(this as TypeOf<K>);
       case this.type:
         return UnionType.from(
-          this._and(other as Type<K>),
-          TypeBase.andErrMsg(this as Type<K>, other)
+          this._and(other as TypeOf<K>),
+          TypeBase.andErrMsg(this as TypeOf<K>, other)
         );
       default:
-        return $Error.addMessage(TypeBase.andErrMsg(this as Type<K>, other));
+        return $Error.addMessage(TypeBase.andErrMsg(this as TypeOf<K>, other));
     }
   }
 
-  abstract _or(other: Type<K>): [Type<K>] | [Type<K>, Type<K>];
-  abstract _and(other: Type<K>): [] | [Type<K>];
+  abstract _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>];
+  abstract _and(other: TypeOf<K>): [] | [TypeOf<K>];
 }
 
 abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
-  constructor(type: K, value?: Value<K>) {
+  constructor(type: K, value?: ValueOf<K>) {
     super(type, value === undefined ? $Any : value);
   }
 
-  _or(other: Type<K>): [Type<K>] | [Type<K>, Type<K>] {
+  _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
     if (this.isType()) {
-      return [this as Type<K>];
+      return [this as TypeOf<K>];
     }
 
     if (other.isType()) {
@@ -231,20 +245,38 @@ abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
     }
 
     return I.is(this.value, other.value)
-      ? [this as Type<K>]
-      : [this as Type<K>, other];
+      ? [this as TypeOf<K>]
+      : [this as TypeOf<K>, other];
   }
 
-  _and(other: Type<K>): [] | [Type<K>] {
+  _and(other: TypeOf<K>): [] | [TypeOf<K>] {
     if (this.isType()) {
       return [other];
     }
 
     if (other.isType()) {
-      return [this as Type<K>];
+      return [this as TypeOf<K>];
     }
 
-    return I.is(this.value, other.value) ? [this as Type<K>] : [];
+    return I.is(this.value, other.value) ? [this as TypeOf<K>] : [];
+  }
+
+  protected literalEquals(
+    other: TypeOf<K>,
+    fn: (
+      a: Exclude<ValueOf<K>, AnyType>,
+      b: Exclude<ValueOf<K>, AnyType>
+    ) => boolean
+  ): boolean {
+    if (this.value instanceof AnyType && other.value instanceof AnyType) {
+      return true;
+    }
+
+    if (this.value instanceof AnyType || other.value instanceof AnyType) {
+      return false;
+    }
+
+    return fn(this.value as any, other.value as any);
   }
 
   toString() {
@@ -258,77 +290,123 @@ abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
   }
 
   isType(): boolean {
-    return this.value === $Any;
+    return this.value instanceof AnyType;
   }
 }
 
 class NullType extends SimpleBase<"null"> {
   constructor() {
-    super("null");
+    super("null", null);
+  }
+
+  _equals(_other: NullType): boolean {
+    return true;
+  }
+
+  isValue(): boolean {
+    return true;
   }
 
   isType(): boolean {
-    return false;
+    return true;
   }
 }
 
 class NumberType extends SimpleBase<"number"> {
-  constructor(value?: Value<"number">) {
+  constructor(value?: ValueOf<"number">) {
     super("number", value);
   }
 
   literal(value: number): NumberType {
     return new NumberType(value);
   }
+
+  _equals(other: NumberType): boolean {
+    return this.literalEquals(other, (a, b) => a === b);
+  }
 }
 
 class StringType extends SimpleBase<"string"> {
-  constructor(value?: Value<"string">) {
+  constructor(value?: ValueOf<"string">) {
     super("string", value);
   }
 
   literal(value: string): StringType {
     return new StringType(value);
   }
+
+  _equals(other: StringType): boolean {
+    return this.literalEquals(other, (a, b) => a === b);
+  }
 }
 
 class BooleanType extends SimpleBase<"boolean"> {
-  constructor(value?: Value<"boolean">) {
+  constructor(value?: ValueOf<"boolean">) {
     super("boolean", value);
   }
 
   literal(value: boolean): BooleanType {
     return new BooleanType(value);
   }
+
+  _equals(other: BooleanType): boolean {
+    return this.literalEquals(other, (a, b) => a === b);
+  }
 }
 
 class DateType extends SimpleBase<"date"> {
-  constructor(value?: Value<"date">) {
+  constructor(value?: ValueOf<"date">) {
     super("date", value);
   }
 
   literal(value: L.DateTime): DateType {
     return new DateType(value);
   }
+
+  _equals(other: DateType): boolean {
+    return this.literalEquals(other, (a, b) => a === b);
+  }
 }
 
 class DurationType extends SimpleBase<"duration"> {
-  constructor(value?: Value<"duration">) {
+  constructor(value?: ValueOf<"duration">) {
     super("duration", value);
   }
 
   literal(value: L.Duration): DurationType {
     return new DurationType(value);
   }
+
+  _equals(other: DurationType): boolean {
+    return this.literalEquals(other, (a, b) => a.equals(b));
+  }
 }
 
 class LinkType extends SimpleBase<"link"> {
-  constructor(value?: Value<"link">) {
+  constructor(value?: ValueOf<"link">) {
     super("link", value);
   }
 
-  literal(value: string): LinkType {
+  literal(value: Link): LinkType {
     return new LinkType(value);
+  }
+
+  _equals(other: LinkType): boolean {
+    return this.literalEquals(other, (a, b) => a.equals(b));
+  }
+}
+
+class WidgetType extends SimpleBase<"widget"> {
+  constructor(value?: ValueOf<"widget">) {
+    super("widget", value);
+  }
+
+  literal(value: Widget): WidgetType {
+    return new WidgetType(value);
+  }
+
+  _equals(other: WidgetType): boolean {
+    return this.literalEquals(other, (a, b) => a.$widget === b.$widget);
   }
 }
 
@@ -339,14 +417,15 @@ const $Boolean = new BooleanType();
 const $Date = new DateType();
 const $Duration = new DurationType();
 const $Link = new LinkType();
+const $Widget = new WidgetType();
 
 // union
 class UnionType extends TypeBase<"union"> {
-  private constructor(value: Value<"union">) {
+  private constructor(value: ValueOf<"union">) {
     super("union", value);
   }
 
-  private static new(value: Value<"union">, errMsg?: string): Type {
+  private static new(value: ValueOf<"union">, errMsg?: string): Type {
     return UnionType.shrink(new UnionType(value), errMsg);
   }
 
@@ -360,7 +439,7 @@ class UnionType extends TypeBase<"union"> {
     );
   }
 
-  private static shrink(union: Type<"union">, errMsg?: string): Type {
+  private static shrink(union: TypeOf<"union">, errMsg?: string): Type {
     const size = union.value.map((s) => s.size).reduce((l, r) => l + r, 0);
 
     switch (size) {
@@ -373,7 +452,7 @@ class UnionType extends TypeBase<"union"> {
     }
   }
 
-  _or(other: Type<"union">): [Type<"union">] {
+  _or(other: TypeOf<"union">): [TypeOf<"union">] {
     return [
       new UnionType(
         this.value.mergeWith(
@@ -384,7 +463,7 @@ class UnionType extends TypeBase<"union"> {
     ];
   }
 
-  _and(other: Type<"union">): [Type<"union">] {
+  _and(other: TypeOf<"union">): [TypeOf<"union">] {
     return [
       new UnionType(
         I.Set.union<ValueKey>([this.value.keys(), other.value.keys()])
@@ -399,6 +478,10 @@ class UnionType extends TypeBase<"union"> {
           })
       )
     ];
+  }
+
+  _equals(other: UnionType): boolean {
+    return this.value.equals(other.value);
   }
 
   or(other: Type): Type {
@@ -417,7 +500,7 @@ class UnionType extends TypeBase<"union"> {
     )[0];
   }
 
-  and(other: Type<TypeKey>): Type<TypeKey> {
+  and(other: Type): Type {
     if (other.type === "any") {
       return this;
     }
@@ -447,7 +530,7 @@ class UnionType extends TypeBase<"union"> {
         .map((s) =>
           s
             .flatMap((v) =>
-              v.value === $Any ? [] : [(v.toJSON() as any).value]
+              v.value instanceof AnyType ? [] : [(v.toJSON() as any).value]
             )
             .toArray()
             .sort()
@@ -465,7 +548,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract toLit: () => unknown;
   protected abstract litWrap: [string, string];
 
-  _or(other: Type<K>): [Type<K>] | [Type<K>, Type<K>] {
+  _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
     const enum Grew {
       None = 0,
       Left = 1,
@@ -484,7 +567,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     grew = grew | (!nu.equals(ru) ? Grew.Right : Grew.None);
 
     if (grew === Grew.Both) {
-      return [this as unknown as Type<K>, other];
+      return [this as unknown as TypeOf<K>, other];
     }
 
     const nm = this.mappedOr(lm, rm);
@@ -513,13 +596,13 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
       case Grew.Left:
         return [other];
       case Grew.Right:
-        return [this as unknown as Type<K>];
+        return [this as unknown as TypeOf<K>];
       case Grew.Both:
-        return [this as unknown as Type<K>, other];
+        return [this as unknown as TypeOf<K>, other];
     }
   }
 
-  _and(other: Type<K>): [] | [Type<K>] {
+  _and(other: TypeOf<K>): [] | [TypeOf<K>] {
     const { unmapped: lu, mapped: lm } = this.value;
     const { unmapped: ru, mapped: rm } = other.value;
 
@@ -536,17 +619,24 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     return [this.new(nu, nm)];
   }
 
-  protected abstract new(unmapped: Type, mapped: Value<K>["mapped"]): Type<K>;
+  _equals(other: TypeOf<K>): boolean {
+    return this.value.equals(other.value);
+  }
+
+  protected abstract new(
+    unmapped: Type,
+    mapped: ValueOf<K>["mapped"]
+  ): TypeOf<K>;
 
   protected abstract mappedAnd(
-    lm: Value<K>["mapped"],
-    rm: Value<K>["mapped"]
-  ): Value<K>["mapped"];
+    lm: ValueOf<K>["mapped"],
+    rm: ValueOf<K>["mapped"]
+  ): ValueOf<K>["mapped"];
 
   protected abstract mappedOr(
-    lm: Value<K>["mapped"],
-    rm: Value<K>["mapped"]
-  ): Value<K>["mapped"];
+    lm: ValueOf<K>["mapped"],
+    rm: ValueOf<K>["mapped"]
+  ): ValueOf<K>["mapped"];
 
   isType(): boolean {
     return (
@@ -596,7 +686,7 @@ class ObjectType extends CompositeBase<"object"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toMap();
   protected litWrap: [string, string] = ["{ ", " }"];
 
-  constructor(value: Value<"object"> = new ObjectVal({ unmapped: $Any })) {
+  constructor(value: ValueOf<"object"> = new ObjectVal({ unmapped: $Any })) {
     super("object", value);
   }
 
@@ -605,16 +695,16 @@ class ObjectType extends CompositeBase<"object"> {
   }
 
   protected mappedOr(
-    lm: Value<"object">["mapped"],
-    rm: Value<"object">["mapped"]
-  ): Value<"object">["mapped"] {
+    lm: ValueOf<"object">["mapped"],
+    rm: ValueOf<"object">["mapped"]
+  ): ValueOf<"object">["mapped"] {
     return lm.mergeWith((l, r) => l.or(r), rm);
   }
 
   protected mappedAnd(
-    lm: Value<"object">["mapped"],
-    rm: Value<"object">["mapped"]
-  ): Value<"object">["mapped"] {
+    lm: ValueOf<"object">["mapped"],
+    rm: ValueOf<"object">["mapped"]
+  ): ValueOf<"object">["mapped"] {
     return I.Map(
       I.Set.union<string>([lm.keys(), rm.keys()]).flatMap((key) => {
         const val = lm.get(key, $Any).and(rm.get(key, $Any));
@@ -623,48 +713,48 @@ class ObjectType extends CompositeBase<"object"> {
     );
   }
 
-  record(value: Record<string, Type>): Type {
+  object(value: Record<string, Type>): Type {
     return new ObjectType(new ObjectVal({ mapped: I.Map(value) }));
   }
 
-  map(value: Type): Type {
+  objectOf(value: Type): Type {
     return new ObjectType(new ObjectVal({ unmapped: value }));
   }
 }
 
 const $Object = new ObjectType();
 
-// list
-class ListVal extends I.Record({
+// array
+class ArrayVal extends I.Record({
   mapped: I.List<Type>(),
   unmapped: $Error as Type
 }) {}
 
-class ListType extends CompositeBase<"list"> {
+class ArrayType extends CompositeBase<"array"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toArray();
   protected litWrap: [string, string] = ["[", "]"];
 
-  constructor(value: Value<"list"> = new ListVal({ unmapped: $Any })) {
-    super("list", value);
+  constructor(value: ValueOf<"array"> = new ArrayVal({ unmapped: $Any })) {
+    super("array", value);
   }
 
-  protected new(unmapped: Type, mapped: I.List<Type>): ListType {
-    return new ListType(new ListVal({ unmapped, mapped }));
+  protected new(unmapped: Type, mapped: I.List<Type>): ArrayType {
+    return new ArrayType(new ArrayVal({ unmapped, mapped }));
   }
 
   protected mappedOr(
-    lm: Value<"list">["mapped"],
-    rm: Value<"list">["mapped"]
-  ): Value<"list">["mapped"] {
+    lm: ValueOf<"array">["mapped"],
+    rm: ValueOf<"array">["mapped"]
+  ): ValueOf<"array">["mapped"] {
     return lm
       .zipAll(rm)
       .map(([l, r]) => (l || $Error).or((r || $Error) as Type));
   }
 
   protected mappedAnd(
-    lm: Value<"list">["mapped"],
-    rm: Value<"list">["mapped"]
-  ): Value<"list">["mapped"] {
+    lm: ValueOf<"array">["mapped"],
+    rm: ValueOf<"array">["mapped"]
+  ): ValueOf<"array">["mapped"] {
     return I.Range(0, Math.max(lm.size, rm.size))
       .flatMap((key) => {
         const val = lm.get(key, $Any).and(rm.get(key, $Any));
@@ -673,16 +763,16 @@ class ListType extends CompositeBase<"list"> {
       .toList();
   }
 
-  list(value: Type): Type {
-    return new ListType(new ListVal({ unmapped: value }));
+  list(value: Type[]): Type {
+    return new ArrayType(new ArrayVal({ mapped: I.List(value) }));
   }
 
-  tuple(value: Type[]): Type {
-    return new ListType(new ListVal({ mapped: I.List(value) }));
+  listOf(value: Type): Type {
+    return new ArrayType(new ArrayVal({ unmapped: value }));
   }
 }
 
-const $List = new ListType();
+const $Array = new ArrayType();
 
 // function
 class FunctionVal extends I.Record({
@@ -695,16 +785,19 @@ class FunctionType extends TypeBase<"function"> {
     super("function", value);
   }
 
-  or(_other: Type<TypeKey>): Type<TypeKey> {
+  or(_other: Type): Type {
     throw new Error("Method not implemented.");
   }
-  and(_other: Type<TypeKey>): Type<TypeKey> {
+  and(_other: Type): Type {
     throw new Error("Method not implemented.");
   }
-  _or(_other: Type<"function">): Type<"function">[] {
+  _or(_other: TypeOf<"function">): TypeOf<"function">[] {
     throw new Error("Method not implemented.");
   }
-  _and(_other: Type<"function">): Type<"function">[] {
+  _and(_other: TypeOf<"function">): TypeOf<"function">[] {
+    throw new Error("Method not implemented.");
+  }
+  _equals(_other: FunctionType): boolean {
     throw new Error("Method not implemented.");
   }
   toString(): string {
@@ -757,10 +850,10 @@ function literal(
   }
 
   if (Array.isArray(arg)) {
-    return $List.tuple(arg);
+    return $Array.list(arg);
   }
 
-  return $Object.record(arg);
+  return $Object.object(arg);
 }
 
 // exports
@@ -772,12 +865,11 @@ export {
   $Date as Date,
   $Duration as Duration,
   $Link as Link,
+  $Widget as Widget,
   $Error as Error,
   $Any as Any,
   $Object as Object,
-  $List as List,
+  $Array as Array,
   $Function as Function,
   literal as $
 };
-
-export type IType = Type;

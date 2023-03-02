@@ -68,10 +68,10 @@ describe("types", () => {
     const two = T.Number.literal(2);
     const three = T.Number.literal(3);
 
-    const a = T.Object.record({ a: one.or(two) });
-    const b = T.Object.record({ a: one });
-    const c = T.Object.record({ a: one, b: one });
-    const d = T.Object.record({ a: two.or(three) });
+    const a = T.Object.object({ a: one.or(two) });
+    const b = T.Object.object({ a: one });
+    const c = T.Object.object({ a: one, b: one });
+    const d = T.Object.object({ a: two.or(three) });
 
     expect(a.or(a).toJSON()).toEqual(a.toJSON());
     expect(a.and(a).toJSON()).toEqual(a.toJSON());
@@ -83,7 +83,7 @@ describe("types", () => {
     expect(a.and(c).toJSON()).toEqual(c.toJSON());
 
     expect(a.or(d).toJSON()).toEqual(
-      T.Object.record({ a: one.or(two).or(three) }).toJSON()
+      T.Object.object({ a: one.or(two).or(three) }).toJSON()
     );
   });
 
@@ -92,10 +92,10 @@ describe("types", () => {
     const two = T.Number.literal(2);
     const three = T.Number.literal(3);
 
-    const a = T.List.tuple([one.or(two)]);
-    const b = T.List.tuple([one]);
-    const c = T.List.tuple([one, two]);
-    const d = T.List.tuple([two.or(three)]);
+    const a = T.Array.list([one.or(two)]);
+    const b = T.Array.list([one]);
+    const c = T.Array.list([one, two]);
+    const d = T.Array.list([two.or(three)]);
 
     expect(a.or(a).toJSON()).toEqual(a.toJSON());
     expect(a.and(a).toJSON()).toEqual(a.toJSON());
@@ -107,7 +107,7 @@ describe("types", () => {
     expect(a.and(c).toJSON()).toEqual(c.toJSON());
 
     expect(a.or(d).toJSON()).toEqual(
-      T.List.tuple([one.or(two).or(three)]).toJSON()
+      T.Array.list([one.or(two).or(three)]).toJSON()
     );
   });
 });
