@@ -15,14 +15,14 @@ type SimpleVals = {
   link: string | null;
 };
 type CompositeVals = {
-  object: I.RecordOf<{ mapped: MappedVal<"object">; unmapped: IType }>;
-  list: I.RecordOf<{ mapped: MappedVal<"list">; unmapped: IType }>;
-  function: I.RecordOf<{ args: I.List<IType>; return: IType }>;
+  object: ObjectVal;
+  list: ListVal;
+  function: FunctionVal;
 };
 type SpecialVals = {
   union: I.Map<ValueKey, I.Set<IValue>>;
   any: null;
-  error: I.Set<I.RecordOf<{ message: string; vars: I.Set<string> }>>;
+  error: I.Set<ErrorVal>;
 };
 type TypeVals = SimpleVals & CompositeVals & SpecialVals;
 
@@ -355,10 +355,10 @@ class AnyType implements IType<"any"> {
 
 const TAny = new AnyType();
 
-const ErrorVal = I.Record({
+class ErrorVal extends I.Record({
   message: "",
   vars: I.Set<string>()
-});
+}) {}
 
 // error
 class ErrorType implements IType<"error"> {
@@ -370,7 +370,7 @@ class ErrorType implements IType<"error"> {
     return message === undefined
       ? TError
       : new ErrorType(
-          this.value.add(ErrorVal({ message, vars: I.Set(vars || []) }))
+          this.value.add(new ErrorVal({ message, vars: I.Set(vars || []) }))
         );
   }
 
@@ -433,15 +433,15 @@ class ErrorType implements IType<"error"> {
 
 const TError = new ErrorType();
 
-const ObjectVal = I.Record({
-  mapped: I.Map<any, IType>(),
+class ObjectVal extends I.Record({
+  mapped: I.Map<string, IType>(),
   unmapped: TError as IType
-});
+}) {}
 
-const ListVal = I.Record({
+class ListVal extends I.Record({
   mapped: I.List<IType>(),
   unmapped: TError as IType
-});
+}) {}
 
 abstract class CompositeBase<K extends "object" | "list"> extends ValueBase<K> {
   protected abstract toLit: () => unknown;
@@ -572,12 +572,12 @@ class ObjectType extends CompositeBase<"object"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toMap();
   protected litWrap: [string, string] = ["{ ", " }"];
 
-  constructor(value: ValueOf<"object"> = ObjectVal({ unmapped: TAny })) {
+  constructor(value: ValueOf<"object"> = new ObjectVal({ unmapped: TAny })) {
     super("object", value);
   }
 
   protected new(unmapped: IType, mapped: I.Map<any, IType>): ObjectType {
-    return new ObjectType(ObjectVal({ unmapped, mapped }));
+    return new ObjectType(new ObjectVal({ unmapped, mapped }));
   }
 
   protected mappedOr(
@@ -600,11 +600,11 @@ class ObjectType extends CompositeBase<"object"> {
   }
 
   record(value: Record<string, IType>): IType {
-    return new ObjectType(ObjectVal({ mapped: I.Map(value) }));
+    return new ObjectType(new ObjectVal({ mapped: I.Map(value) }));
   }
 
   map(value: IType): IType {
-    return new ObjectType(ObjectVal({ unmapped: value }));
+    return new ObjectType(new ObjectVal({ unmapped: value }));
   }
 }
 
@@ -615,12 +615,12 @@ class ListType extends CompositeBase<"list"> {
   protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toArray();
   protected litWrap: [string, string] = ["[", "]"];
 
-  constructor(value: ValueOf<"list"> = ListVal({ unmapped: TAny })) {
+  constructor(value: ValueOf<"list"> = new ListVal({ unmapped: TAny })) {
     super("list", value);
   }
 
   protected new(unmapped: IType, mapped: I.List<IType>): ListType {
-    return new ListType(ListVal({ unmapped, mapped }));
+    return new ListType(new ListVal({ unmapped, mapped }));
   }
 
   protected mappedOr(
@@ -645,15 +645,20 @@ class ListType extends CompositeBase<"list"> {
   }
 
   list(value: IType): IType {
-    return new ListType(ListVal({ unmapped: value }));
+    return new ListType(new ListVal({ unmapped: value }));
   }
 
   tuple(value: IType[]): IType {
-    return new ListType(ListVal({ mapped: I.List(value) }));
+    return new ListType(new ListVal({ mapped: I.List(value) }));
   }
 }
 
 const TList = new ListType();
+
+export class FunctionVal extends I.Record({
+  args: I.List<IType>(),
+  return: TError as IType
+}) {}
 
 // function
 class FunctionType {} // { args: tuple<any>, return: any }
@@ -676,17 +681,17 @@ export {
 };
 
 // utility
-type Prim =
-  | null
-  | number
-  | string
-  | boolean
-  | L.DateTime
-  | L.Duration
-  | Record<string, IType>
-  | IType[];
-
-export function $(arg: Prim): IType {
+export function $(
+  arg:
+    | null
+    | number
+    | string
+    | boolean
+    | L.DateTime
+    | L.Duration
+    | Record<string, IType>
+    | IType[]
+): IType {
   if (arg === null) {
     return TNull;
   }
@@ -716,16 +721,4 @@ export function $(arg: Prim): IType {
   }
 
   return TObject.record(arg);
-}
-
-export function $$(...args: Prim[]): IType[] {
-  return args.map((arg) => $(arg));
-}
-
-export function _(arg: Prim): unknown {
-  return $(arg).toJSON();
-}
-
-export function __(...args: Prim[]): unknown[] {
-  return args.map((arg) => $(arg).toJSON());
 }
