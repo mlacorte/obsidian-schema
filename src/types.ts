@@ -180,10 +180,6 @@ class ErrorType extends TypeBase<"error"> {
   isType(): true {
     return true;
   }
-
-  isValue(): false {
-    return false;
-  }
 }
 
 const $Error = new ErrorType();
@@ -291,8 +287,12 @@ abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
       : { type: this.type };
   }
 
-  isType(): boolean {
+  isType(): this is this & { value: AnyType } {
     return this.value instanceof AnyType;
+  }
+
+  isValue(): this is this & { value: Exclude<TypeOf<K>, AnyType> } {
+    return !this.isType();
   }
 }
 
@@ -546,9 +546,23 @@ class UnionType extends TypeBase<"union"> {
   }
 }
 
+type KeyOf<K extends CompositeKey> = K extends "object" ? string : number;
+
 abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract toLit: () => unknown;
   protected abstract litWrap: [string, string];
+
+  get unmapped(): Type {
+    return this.value.unmapped;
+  }
+
+  get mapped(): I.Collection<KeyOf<K>, Type> {
+    return this.value.mapped as any;
+  }
+
+  get(key: KeyOf<K>): Type {
+    return this.mapped.get(key, this.unmapped.or($Null));
+  }
 
   _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
     const enum Grew {
@@ -816,7 +830,17 @@ class FunctionType extends TypeBase<"function"> {
 const $Function = new FunctionType();
 
 // utility
-function literal(
+function $(arg: null): NullType;
+function $(arg: number): NumberType;
+function $(arg: string): StringType;
+function $(arg: boolean): BooleanType;
+function $(arg: L.DateTime): DateType;
+function $(arg: L.Duration): DurationType;
+function $(arg: Link): LinkType;
+function $(arg: Widget): WidgetType;
+function $(arg: Record<string | number, Type>): ObjectType;
+function $(arg: Type[]): ArrayType;
+function $(
   arg:
     | null
     | number
@@ -824,6 +848,8 @@ function literal(
     | boolean
     | L.DateTime
     | L.Duration
+    | Link
+    | Widget
     | Record<string, Type>
     | Type[]
 ): Type {
@@ -851,6 +877,14 @@ function literal(
     return $Duration.literal(arg);
   }
 
+  if (arg instanceof Link) {
+    return $Link.literal(arg);
+  }
+
+  if (arg instanceof Widget) {
+    return $Widget.literal(arg);
+  }
+
   if (Array.isArray(arg)) {
     return $Array.list(arg);
   }
@@ -873,5 +907,5 @@ export {
   $Object as Object,
   $Array as Array,
   $Function as Function,
-  literal as $
+  $ as $
 };
