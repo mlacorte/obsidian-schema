@@ -198,31 +198,33 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
       case "any":
         return $Any;
       case "error":
-        return this as TypeOf<K>;
+        return this as unknown as TypeOf<K>;
       case "union":
-        return other.or(this as TypeOf<K>);
+        return other.or(this as unknown as TypeOf<K>);
       case this.type:
         return UnionType.from(this._or(other));
       default:
-        return UnionType.from([this as TypeOf<K>, other]);
+        return UnionType.from([this as unknown as TypeOf<K>, other]);
     }
   }
 
   and(other: Type): Type {
     switch (other.type) {
       case "any":
-        return this as TypeOf<K>;
+        return this as unknown as TypeOf<K>;
       case "error":
         return other;
       case "union":
-        return other.and(this as TypeOf<K>);
+        return other.and(this as unknown as TypeOf<K>);
       case this.type:
         return UnionType.from(
           this._and(other as TypeOf<K>),
-          TypeBase.andErrMsg(this as TypeOf<K>, other)
+          TypeBase.andErrMsg(this as unknown as TypeOf<K>, other)
         );
       default:
-        return $Error.addMessage(TypeBase.andErrMsg(this as TypeOf<K>, other));
+        return $Error.addMessage(
+          TypeBase.andErrMsg(this as unknown as TypeOf<K>, other)
+        );
     }
   }
 
