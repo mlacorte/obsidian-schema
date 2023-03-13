@@ -549,9 +549,6 @@ class UnionType extends TypeBase<"union"> {
 type KeyOf<K extends CompositeKey> = K extends "object" ? string : number;
 
 abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
-  protected abstract toLit: () => unknown;
-  protected abstract litWrap: [string, string];
-
   get unmapped(): Type {
     return this.value.unmapped;
   }
@@ -579,8 +576,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
     const nu = lu.or(ru);
 
-    grew = grew | (!nu.equals(lu) ? Grew.Left : Grew.None);
-    grew = grew | (!nu.equals(ru) ? Grew.Right : Grew.None);
+    grew |= !nu.equals(lu) ? Grew.Left : Grew.None;
+    grew |= !nu.equals(ru) ? Grew.Right : Grew.None;
 
     if (grew === Grew.Both) {
       return [this as unknown as TypeOf<K>, other];
@@ -592,20 +589,16 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
       return [this.new(nu, nm)];
     }
 
-    grew =
-      grew |
-      (nm.some(
+    grew |= nm.some(
         (nv, k) => !nv.equals((lm as I.Collection<any, Type>).get(k, $Never))
       )
         ? Grew.Left
-        : Grew.None);
-    grew =
-      grew |
-      (nm.some(
+      : Grew.None;
+    grew |= nm.some(
         (nv, k) => !nv.equals((rm as I.Collection<any, Type>).get(k, $Never))
       )
         ? Grew.Right
-        : Grew.None);
+      : Grew.None;
 
     switch (grew) {
       case Grew.None:
@@ -626,6 +619,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     const nm = this.mappedAnd(lm, rm);
 
     if (
+      nm instanceof NeverType ||
       (nu.type === "never" && nm.isEmpty()) ||
       nm.some((v) => v.type === "never")
     ) {
@@ -647,7 +641,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract mappedAnd(
     lm: ValueOf<K>["mapped"],
     rm: ValueOf<K>["mapped"]
-  ): ValueOf<K>["mapped"];
+  ): ValueOf<K>["mapped"] | NeverType;
 
   protected abstract mappedOr(
     lm: ValueOf<K>["mapped"],
@@ -660,36 +654,6 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
       this.value.mapped.some((t) => t.isType())
     );
   }
-
-  toString(): string {
-    const { mapped: m, unmapped: u } = this.value;
-    const typeStr = u.type === "any" ? this.type : `${this.type}(${u})`;
-
-    if (m.isEmpty()) {
-      return typeStr;
-    }
-
-    const appendStr = m.isEmpty() ? "" : `, ...${u}`;
-
-    return `${this.litWrap[0]}${m
-      .map((v, k) => `${k}: ${v}`)
-      .join(", ")}${appendStr}${this.litWrap[1]}`;
-  }
-
-  toJSON() {
-    const { mapped: m, unmapped: u } = this.value;
-    const value: Record<string, unknown> = {};
-
-    if (!m.isEmpty()) {
-      value.mapped = this.toLit();
-    }
-
-    if (!(u.type === "never")) {
-      value.unmapped = u.toJSON();
-    }
-
-    return { type: this.type, value };
-  }
 }
 
 // object
@@ -699,9 +663,6 @@ class ObjectVal extends I.Record({
 }) {}
 
 class ObjectType extends CompositeBase<"object"> {
-  protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toMap();
-  protected litWrap: [string, string] = ["{ ", " }"];
-
   constructor(value: ValueOf<"object"> = new ObjectVal({ unmapped: $Any })) {
     super("object", value);
   }
@@ -720,13 +681,22 @@ class ObjectType extends CompositeBase<"object"> {
   protected mappedAnd(
     lm: ValueOf<"object">["mapped"],
     rm: ValueOf<"object">["mapped"]
-  ): ValueOf<"object">["mapped"] {
-    return I.Map(
-      I.Set.union<string>([lm.keys(), rm.keys()]).flatMap((key) => {
-        const val = lm.get(key, $Any).and(rm.get(key, $Any));
-        return val.type === "never" ? [] : [[key, val]];
-      })
-    );
+  ): ValueOf<"object">["mapped"] | NeverType {
+    const res: [string, Type][] = [];
+
+    for (const key of I.Set.union<string>([lm.keys(), rm.keys()])) {
+      const l = lm.get(key, $Any);
+      const r = rm.get(key, $Any);
+      const val = l.and(r);
+
+      if (val.type === "never") {
+        return $Never.addMessage(TypeBase.andErrMsg(l, r));
+      }
+
+      res.push([key, val]);
+    }
+
+    return I.Map(res);
   }
 
   object(value: Record<string, Type>): Type {
@@ -735,6 +705,34 @@ class ObjectType extends CompositeBase<"object"> {
 
   objectOf(value: Type): Type {
     return new ObjectType(new ObjectVal({ unmapped: value }));
+  }
+
+  toString(): string {
+    const { mapped: m, unmapped: u } = this.value;
+    const typeStr = u instanceof AnyType ? this.type : `${this.type}(${u})`;
+
+    if (m.isEmpty()) {
+      return typeStr;
+    }
+
+    const appendStr = u instanceof NeverType ? "" : `, ...${u}`;
+
+    return `{ ${m.map((v, k) => `${k}: ${v}`).join(", ")}${appendStr} }`;
+  }
+
+  toJSON() {
+    const { mapped: m, unmapped: u } = this.value;
+    const value: Record<string, unknown> = {};
+
+    if (!m.isEmpty()) {
+      value.mapped = m.map((v) => v.toJSON()).toObject();
+    }
+
+    if (!(u instanceof NeverType)) {
+      value.unmapped = u.toJSON();
+    }
+
+    return { type: this.type, value };
   }
 }
 
@@ -747,9 +745,6 @@ class ArrayVal extends I.Record({
 }) {}
 
 class ArrayType extends CompositeBase<"array"> {
-  protected toLit = () => this.value.mapped.map((v) => v.toJSON()).toArray();
-  protected litWrap: [string, string] = ["[", "]"];
-
   constructor(value: ValueOf<"array"> = new ArrayVal({ unmapped: $Any })) {
     super("array", value);
   }
@@ -770,13 +765,22 @@ class ArrayType extends CompositeBase<"array"> {
   protected mappedAnd(
     lm: ValueOf<"array">["mapped"],
     rm: ValueOf<"array">["mapped"]
-  ): ValueOf<"array">["mapped"] {
-    return I.Range(0, Math.max(lm.size, rm.size))
-      .flatMap((key) => {
-        const val = lm.get(key, $Any).and(rm.get(key, $Any));
-        return val.type === "never" ? [] : [val];
-      })
-      .toList();
+  ): ValueOf<"array">["mapped"] | NeverType {
+    const res: Type[] = [];
+
+    for (const n of I.Range(0, Math.max(lm.size, rm.size))) {
+      const l = lm.get(n, $Any);
+      const r = rm.get(n, $Any);
+      const val = l.and(r);
+
+      if (val.type === "never") {
+        return $Never.addMessage(TypeBase.andErrMsg(l, r));
+      }
+
+      res.push(val);
+    }
+
+    return I.List(res);
   }
 
   list(value: Type[]): Type {
@@ -785,6 +789,34 @@ class ArrayType extends CompositeBase<"array"> {
 
   listOf(value: Type): Type {
     return new ArrayType(new ArrayVal({ unmapped: value }));
+  }
+
+  toString(): string {
+    const { mapped: m, unmapped: u } = this.value;
+    const typeStr = u instanceof AnyType ? this.type : `${this.type}(${u})`;
+
+    if (m.isEmpty()) {
+      return typeStr;
+    }
+
+    const appendStr = u instanceof NeverType ? "" : `, ...${u}`;
+
+    return `[${m.map((v) => `${v}`).join(", ")}${appendStr}]`;
+  }
+
+  toJSON() {
+    const { mapped: m, unmapped: u } = this.value;
+    const value: Record<string, unknown> = {};
+
+    if (!m.isEmpty()) {
+      value.mapped = m.map((v) => v.toJSON()).toArray();
+    }
+
+    if (!(u instanceof NeverType)) {
+      value.unmapped = u.toJSON();
+    }
+
+    return { type: this.type, value };
   }
 }
 

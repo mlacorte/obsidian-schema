@@ -109,5 +109,13 @@ describe("types", () => {
     expect(a.or(d).toJSON()).toEqual(
       T.Array.list([one.or(two).or(three)]).toJSON()
     );
+
+    const unique1 = T.Array.list([T.String, T.String]);
+    const unique2 = T.Array.list([T.String, T.Null]);
+    const shared1 = T.Array.list([T.String, T.Any]);
+
+    expect(unique1.and(unique2).type).toBe(T.Never.type);
+    expect(unique1.and(shared1).type).toBe(T.Array.type);
+    expect(unique2.and(shared1).type).toBe(T.Array.type);
   });
 });
