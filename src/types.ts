@@ -557,6 +557,12 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     return this.value.mapped as any;
   }
 
+  get size(): NumberType {
+    return this.value.mapped instanceof NeverType
+      ? $Number.literal((this.value as any).size)
+      : $Number;
+  }
+
   get(key: KeyOf<K>): Type {
     return this.mapped.get(key, this.unmapped.or($Null));
   }
@@ -590,14 +596,14 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     }
 
     grew |= nm.some(
-        (nv, k) => !nv.equals((lm as I.Collection<any, Type>).get(k, $Never))
-      )
-        ? Grew.Left
+      (nv, k) => !nv.equals((lm as I.Collection<any, Type>).get(k, $Never))
+    )
+      ? Grew.Left
       : Grew.None;
     grew |= nm.some(
-        (nv, k) => !nv.equals((rm as I.Collection<any, Type>).get(k, $Never))
-      )
-        ? Grew.Right
+      (nv, k) => !nv.equals((rm as I.Collection<any, Type>).get(k, $Never))
+    )
+      ? Grew.Right
       : Grew.None;
 
     switch (grew) {
@@ -699,11 +705,11 @@ class ObjectType extends CompositeBase<"object"> {
     return I.Map(res);
   }
 
-  object(value: Record<string, Type>): Type {
+  object(value: Record<string, Type>): ObjectType {
     return new ObjectType(new ObjectVal({ mapped: I.Map(value) }));
   }
 
-  objectOf(value: Type): Type {
+  objectOf(value: Type): ObjectType {
     return new ObjectType(new ObjectVal({ unmapped: value }));
   }
 
@@ -715,7 +721,7 @@ class ObjectType extends CompositeBase<"object"> {
       return typeStr;
     }
 
-    const appendStr = u instanceof NeverType ? "" : `, ...${u}`;
+    const appendStr = u instanceof NeverType ? "" : `, ...objectOf(${u})`;
 
     return `{ ${m.map((v, k) => `${k}: ${v}`).join(", ")}${appendStr} }`;
   }
@@ -783,11 +789,11 @@ class ArrayType extends CompositeBase<"array"> {
     return I.List(res);
   }
 
-  list(value: Type[]): Type {
+  list(value: Type[]): ArrayType {
     return new ArrayType(new ArrayVal({ mapped: I.List(value) }));
   }
 
-  listOf(value: Type): Type {
+  listOf(value: Type): ArrayType {
     return new ArrayType(new ArrayVal({ unmapped: value }));
   }
 
@@ -799,7 +805,7 @@ class ArrayType extends CompositeBase<"array"> {
       return typeStr;
     }
 
-    const appendStr = u instanceof NeverType ? "" : `, ...${u}`;
+    const appendStr = u instanceof NeverType ? "" : `, ...listOf(${u})`;
 
     return `[${m.map((v) => `${v}`).join(", ")}${appendStr}]`;
   }
@@ -822,15 +828,72 @@ class ArrayType extends CompositeBase<"array"> {
 
 const $Array = new ArrayType();
 
+/*
+FunctionType.define:
+- Propagates errors
+- Handles vectorization
+- Splits on unions
+- Provides utilities and context
+- Returns error if match not found
+- Fails to build if construction overlap is found
+
+const elink: FunctionType = $Function
+  .define("elink", [0])
+  .add([$String, $String], $Link, [0, 1], (a: string, d: string) =>
+    $Widget.literal(Widgets.externalLink(a, d))
+  )
+  .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
+  .add([$Null, [$Any]], $Null)
+  .build();
+*/
+
 // function
+type FunctionBuilderArgs =
+  | [Type[] | [...Type[], [Type]], Type]
+  | [Type[] | [...Type[], [Type]], (...args: any[]) => Type]
+  | [Type[] | [...Type[], [Type]], Type, number[], (...args: any[]) => Type];
+
+type FunctionBuilderVal = [ArrayType, (...args: Type[]) => Type][];
+
+class FunctionBuilder {
+  value: FunctionBuilderVal;
+
+  constructor(public name = "", public vectorize: number[] = []) {}
+
+  add(...args: FunctionBuilderArgs): FunctionBuilder {
+    throw "TODO";
+  }
+
+  var(...args: FunctionBuilderArgs): FunctionBuilder {
+    throw "TODO";
+  }
+
+  build(): FunctionType {
+    throw "TODO";
+  }
+}
+
 class FunctionVal extends I.Record({
-  args: I.List<Type>(),
-  return: $Error as Type
+  args: I.List<ArrayType>(),
+  fn: (() => $Never) as (...args: Type[]) => Type
 }) {}
 
 class FunctionType extends TypeBase<"function"> {
-  constructor(value: FunctionVal = new FunctionVal()) {
+  constructor(
+    value: FunctionVal = new FunctionVal({
+      args: I.List([$Array.listOf($Any)]),
+      fn: () => $Any
+    })
+  ) {
     super("function", value);
+  }
+
+  define(name: string, vectorize: number[]): FunctionBuilder {
+    throw "TODO";
+  }
+
+  eval(...args: Type[]): Type {
+    throw "TODO";
   }
 
   or(_other: Type): Type {
