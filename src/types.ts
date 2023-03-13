@@ -16,7 +16,7 @@ type TypeMap = {
   function: { type: FunctionType; value: FunctionVal };
   union: { type: UnionType; value: I.Map<ValueKey, I.Set<ValueType>> };
   any: { type: AnyType; value: "*" };
-  error: { type: ErrorType; value: I.Set<ErrorVal> };
+  never: { type: NeverType; value: I.Set<NeverVal> };
 };
 
 type SimpleKey =
@@ -114,22 +114,22 @@ class AnyType extends TypeBase<"any"> {
 
 const $Any = new AnyType();
 
-// error
-class ErrorVal extends I.Record({
+// never
+class NeverVal extends I.Record({
   message: "",
   vars: I.Set<string>()
 }) {}
 
-class ErrorType extends TypeBase<"error"> {
-  constructor(value: ValueOf<"error"> = I.Set()) {
-    super("error", value);
+class NeverType extends TypeBase<"never"> {
+  constructor(value: ValueOf<"never"> = I.Set()) {
+    super("never", value);
   }
 
-  addMessage(message?: string, vars?: string[]): TypeOf<"error"> {
+  addMessage(message?: string, vars?: string[]): TypeOf<"never"> {
     return message === undefined
-      ? $Error
-      : new ErrorType(
-          this.value.add(new ErrorVal({ message, vars: I.Set(vars || []) }))
+      ? $Never
+      : new NeverType(
+          this.value.add(new NeverVal({ message, vars: I.Set(vars || []) }))
         );
   }
 
@@ -141,21 +141,21 @@ class ErrorType extends TypeBase<"error"> {
     return this;
   }
 
-  _or(other: ErrorType): [ErrorType] {
-    return [new ErrorType(this.value.union(other.value))];
+  _or(other: NeverType): [NeverType] {
+    return [new NeverType(this.value.union(other.value))];
   }
 
-  _and(other: ErrorType): [ErrorType] {
-    return [new ErrorType(this.value.union(other.value))];
+  _and(other: NeverType): [NeverType] {
+    return [new NeverType(this.value.union(other.value))];
   }
 
-  _equals(other: ErrorType): boolean {
+  _equals(other: NeverType): boolean {
     return this.value.equals(other.value);
   }
 
   toString(): string {
     if (this.value.size === 0) {
-      return "error";
+      return "never";
     }
 
     return this.value
@@ -170,7 +170,7 @@ class ErrorType extends TypeBase<"error"> {
 
   toJSON(): unknown {
     return {
-      type: "error",
+      type: "never",
       value: this.value
         .toArray()
         .map((v) => ({ message: v.message, vars: v.vars.toArray() }))
@@ -182,7 +182,7 @@ class ErrorType extends TypeBase<"error"> {
   }
 }
 
-const $Error = new ErrorType();
+const $Never = new NeverType();
 
 abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
   constructor(type: K, value: ValueOf<K>) {
@@ -193,7 +193,7 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
     switch (other.type) {
       case "any":
         return $Any;
-      case "error":
+      case "never":
         return this as unknown as TypeOf<K>;
       case "union":
         return other.or(this as unknown as TypeOf<K>);
@@ -208,7 +208,7 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
     switch (other.type) {
       case "any":
         return this as unknown as TypeOf<K>;
-      case "error":
+      case "never":
         return other;
       case "union":
         return other.and(this as unknown as TypeOf<K>);
@@ -218,7 +218,7 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
           TypeBase.andErrMsg(this as unknown as TypeOf<K>, other)
         );
       default:
-        return $Error.addMessage(
+        return $Never.addMessage(
           TypeBase.andErrMsg(this as unknown as TypeOf<K>, other)
         );
     }
@@ -446,7 +446,7 @@ class UnionType extends TypeBase<"union"> {
 
     switch (size) {
       case 0:
-        return $Error.addMessage(errMsg);
+        return $Never.addMessage(errMsg);
       case 1:
         return union.value.first<I.Set<ValueType>>().first<ValueType>();
       default:
@@ -491,7 +491,7 @@ class UnionType extends TypeBase<"union"> {
       return other;
     }
 
-    if (other.type === "error") {
+    if (other.type === "never") {
       return this;
     }
 
@@ -507,7 +507,7 @@ class UnionType extends TypeBase<"union"> {
       return this;
     }
 
-    if (other.type === "error") {
+    if (other.type === "never") {
       return other;
     }
 
@@ -595,14 +595,14 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     grew =
       grew |
       (nm.some(
-        (nv, k) => !nv.equals((lm as I.Collection<any, Type>).get(k, $Error))
+        (nv, k) => !nv.equals((lm as I.Collection<any, Type>).get(k, $Never))
       )
         ? Grew.Left
         : Grew.None);
     grew =
       grew |
       (nm.some(
-        (nv, k) => !nv.equals((rm as I.Collection<any, Type>).get(k, $Error))
+        (nv, k) => !nv.equals((rm as I.Collection<any, Type>).get(k, $Never))
       )
         ? Grew.Right
         : Grew.None);
@@ -626,8 +626,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     const nm = this.mappedAnd(lm, rm);
 
     if (
-      (nu.type === "error" && nm.isEmpty()) ||
-      nm.some((v) => v.type === "error")
+      (nu.type === "never" && nm.isEmpty()) ||
+      nm.some((v) => v.type === "never")
     ) {
       return [];
     }
@@ -656,7 +656,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
   isType(): boolean {
     return (
-      !(this.value.unmapped.type === "error") ||
+      !(this.value.unmapped.type === "never") ||
       this.value.mapped.some((t) => t.isType())
     );
   }
@@ -684,7 +684,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
       value.mapped = this.toLit();
     }
 
-    if (!(u.type === "error")) {
+    if (!(u.type === "never")) {
       value.unmapped = u.toJSON();
     }
 
@@ -695,7 +695,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 // object
 class ObjectVal extends I.Record({
   mapped: I.Map<string, Type>(),
-  unmapped: $Error as Type
+  unmapped: $Never as Type
 }) {}
 
 class ObjectType extends CompositeBase<"object"> {
@@ -724,7 +724,7 @@ class ObjectType extends CompositeBase<"object"> {
     return I.Map(
       I.Set.union<string>([lm.keys(), rm.keys()]).flatMap((key) => {
         const val = lm.get(key, $Any).and(rm.get(key, $Any));
-        return val.type === "error" ? [] : [[key, val]];
+        return val.type === "never" ? [] : [[key, val]];
       })
     );
   }
@@ -743,7 +743,7 @@ const $Object = new ObjectType();
 // array
 class ArrayVal extends I.Record({
   mapped: I.List<Type>(),
-  unmapped: $Error as Type
+  unmapped: $Never as Type
 }) {}
 
 class ArrayType extends CompositeBase<"array"> {
@@ -764,7 +764,7 @@ class ArrayType extends CompositeBase<"array"> {
   ): ValueOf<"array">["mapped"] {
     return lm
       .zipAll(rm)
-      .map(([l, r]) => (l || $Error).or((r || $Error) as Type));
+      .map(([l, r]) => (l || $Never).or((r || $Never) as Type));
   }
 
   protected mappedAnd(
@@ -774,7 +774,7 @@ class ArrayType extends CompositeBase<"array"> {
     return I.Range(0, Math.max(lm.size, rm.size))
       .flatMap((key) => {
         const val = lm.get(key, $Any).and(rm.get(key, $Any));
-        return val.type === "error" ? [] : [val];
+        return val.type === "never" ? [] : [val];
       })
       .toList();
   }
@@ -902,7 +902,7 @@ export {
   $Duration as Duration,
   $Link as Link,
   $Widget as Widget,
-  $Error as Error,
+  $Never as Never,
   $Any as Any,
   $Object as Object,
   $Array as Array,

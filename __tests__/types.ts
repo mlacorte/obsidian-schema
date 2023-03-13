@@ -5,7 +5,7 @@ describe("types", () => {
     const one = T.Number.literal(1);
     const two = T.Number.literal(2);
     const number = one.or(T.Number);
-    const error = one.and(two);
+    const never = one.and(two);
     const oneOrTwo = one.or(two);
 
     expect(one.type).toBe("number");
@@ -14,8 +14,8 @@ describe("types", () => {
     expect(two.value).toBe(2);
     expect(number.type).toBe("number");
     expect(number.value).toBe(T.Any);
-    expect(error.type).toBe("error");
-    expect((error.value as any).toJS()).toEqual([
+    expect(never.type).toBe("never");
+    expect((never.value as any).toJS()).toEqual([
       {
         message: "Can't combine '1' and '2'.",
         vars: []
@@ -27,12 +27,12 @@ describe("types", () => {
   test("unions", () => {
     const a = T.String.literal("a");
     const union = T.Number.or(a);
-    const error = T.Number.and(a);
+    const never = T.Number.and(a);
     const number = union.and(T.Number);
 
     expect(a.type).toBe("string");
     expect(union.type).toBe("union");
-    expect(error.type).toBe("error");
+    expect(never.type).toBe("never");
     expect(number.type).toBe("number");
   });
 
@@ -44,11 +44,11 @@ describe("types", () => {
     expect(string.type).toBe("string");
   });
 
-  test("error", () => {
-    const error = T.Number.and(T.Error);
-    const number = T.Number.or(T.Error);
+  test("never", () => {
+    const never = T.Number.and(T.Never);
+    const number = T.Number.or(T.Never);
 
-    expect(error.type).toBe("error");
+    expect(never.type).toBe("never");
     expect(number.type).toBe("number");
   });
 
@@ -60,7 +60,7 @@ describe("types", () => {
     expect(T.Number.equals(T.String)).toBe(false);
     expect(one.or(two).equals(two.or(one))).toBe(true);
     expect(T.Any.and(T.String).equals(T.String)).toBe(true);
-    expect(T.Number.and(T.String).type).toBe("error");
+    expect(T.Number.and(T.String).type).toBe("never");
   });
 
   test("objects", () => {

@@ -3,7 +3,7 @@ import * as I from "immutable";
 import * as T from "./types";
 
 class PossibleValue extends I.Record({
-  val: T.Error.addMessage("ValueSet incorrectly initialized.") as T.Type,
+  val: T.Never.addMessage("ValueSet incorrectly initialized.") as T.Type,
   conds: I.Map<string, T.Type>()
 }) {}
 
