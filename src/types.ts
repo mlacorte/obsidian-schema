@@ -1,6 +1,10 @@
 import * as I from "immutable";
 import * as L from "luxon";
-import { Link, Widget } from "obsidian-dataview";
+import { Link, Widget, Widgets } from "obsidian-dataview";
+
+declare module "obsidian-dataview" {
+  const Widgets: typeof import("obsidian-dataview/lib/data-model/value").Widgets;
+}
 
 type TypeMap = {
   null: { type: NullType; value: null };
@@ -836,16 +840,20 @@ FunctionType.define:
 - Provides utilities and context
 - Returns error if match not found
 - Fails to build if construction overlap is found
-
-const elink: FunctionType = $Function
-  .define("elink", [0])
-  .add([$String, $String], $Link, [0, 1], (a: string, d: string) =>
-    $Widget.literal(Widgets.externalLink(a, d))
-  )
-  .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
-  .add([$Null, [$Any]], $Null)
-  .build();
 */
+
+const example = () => {
+  const elink: FunctionType = $Function
+    .define("elink", [0])
+    .add([$String, $String], $Link, [0, 1], (a: string, d: string) =>
+      $Widget.literal(Widgets.externalLink(a, d))
+    )
+    .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
+    .add([$Null, [$Any]], $Null)
+    .build();
+
+  return elink;
+};
 
 // function
 type FunctionBuilderArgs =
