@@ -622,21 +622,18 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   }
 
   _and(other: TypeOf<K>): [] | [TypeOf<K>] {
-    const { unmapped: lu, mapped: lm } = this.value;
-    const { unmapped: ru, mapped: rm } = other.value;
-
-    const nu = lu.and(ru);
-    const nm = this.mappedAnd(lm, rm);
+    const unmapped = this.unmapped.and(other.unmapped);
+    const mapped = this.mappedAnd(other);
 
     if (
-      nm instanceof NeverType ||
-      (nu.type === "never" && nm.isEmpty()) ||
-      nm.some((v) => v.type === "never")
+      mapped instanceof NeverType ||
+      (unmapped.type === "never" && mapped.isEmpty()) ||
+      mapped.some((v) => v.type === "never")
     ) {
       return [];
     }
 
-    return [this.new(nu, nm)];
+    return [this.new(unmapped, mapped)];
   }
 
   _equals(other: TypeOf<K>): boolean {
@@ -648,10 +645,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     mapped: ValueOf<K>["mapped"]
   ): TypeOf<K>;
 
-  protected abstract mappedAnd(
-    lm: ValueOf<K>["mapped"],
-    rm: ValueOf<K>["mapped"]
-  ): ValueOf<K>["mapped"] | NeverType;
+  protected abstract mappedAnd(lm: TypeOf<K>): ValueOf<K>["mapped"] | NeverType;
 
   protected abstract mappedOr(
     lm: ValueOf<K>["mapped"],
@@ -689,14 +683,16 @@ class ObjectType extends CompositeBase<"object"> {
   }
 
   protected mappedAnd(
-    lm: ValueOf<"object">["mapped"],
-    rm: ValueOf<"object">["mapped"]
+    other: ObjectType
   ): ValueOf<"object">["mapped"] | NeverType {
     const res: [string, Type][] = [];
 
-    for (const key of I.Set.union<string>([lm.keys(), rm.keys()])) {
-      const l = lm.get(key, $Any);
-      const r = rm.get(key, $Any);
+    for (const key of I.Set.union<string>([
+      this.mapped.keys(),
+      other.mapped.keys()
+    ])) {
+      const l = this.get(key);
+      const r = other.get(key);
       const val = l.and(r);
 
       if (val.type === "never") {
@@ -709,12 +705,16 @@ class ObjectType extends CompositeBase<"object"> {
     return I.Map(res);
   }
 
+  literal(value: Record<string, Type>): ObjectType {
+    return this.new($Never, I.Map(value));
+  }
+
   object(value: Record<string, Type>): ObjectType {
-    return new ObjectType(new ObjectVal({ mapped: I.Map(value) }));
+    return this.new($Any, I.Map(value));
   }
 
   objectOf(value: Type): ObjectType {
-    return new ObjectType(new ObjectVal({ unmapped: value }));
+    return this.new(value, I.Map());
   }
 
   toString(): string {
@@ -773,14 +773,16 @@ class ArrayType extends CompositeBase<"array"> {
   }
 
   protected mappedAnd(
-    lm: ValueOf<"array">["mapped"],
-    rm: ValueOf<"array">["mapped"]
+    other: ArrayType
   ): ValueOf<"array">["mapped"] | NeverType {
     const res: Type[] = [];
 
-    for (const n of I.Range(0, Math.max(lm.size, rm.size))) {
-      const l = lm.get(n, $Any);
-      const r = rm.get(n, $Any);
+    for (const key of I.Set.union<number>([
+      this.mapped.keys(),
+      other.mapped.keys()
+    ])) {
+      const l = this.get(key);
+      const r = other.get(key);
       const val = l.and(r);
 
       if (val.type === "never") {
@@ -793,12 +795,16 @@ class ArrayType extends CompositeBase<"array"> {
     return I.List(res);
   }
 
+  literal(value: Type[]): ArrayType {
+    return this.new($Never, I.List(value));
+  }
+
   list(value: Type[]): ArrayType {
-    return new ArrayType(new ArrayVal({ mapped: I.List(value) }));
+    return this.new($Any, I.List(value));
   }
 
   listOf(value: Type): ArrayType {
-    return new ArrayType(new ArrayVal({ unmapped: value }));
+    return this.new(value, I.List());
   }
 
   toString(): string {
