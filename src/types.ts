@@ -42,39 +42,36 @@ type ValueOf<K extends TypeKey> = TypeMap[K]["value"];
 export type Type = TypeOf<TypeKey>;
 type ValueType = TypeOf<ValueKey>;
 
-abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
-  static andErrMsg(a: Type, b: Type): string {
-    return `Can't combine '${a}' and '${b}'.`;
+export const enum Cmp {
+  Equal = 0b00,
+  Subset = 0b01,
+  Superset = 0b10,
+  Disjoint = 0b11
   }
 
+abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
   constructor(public type: K, public value: ValueOf<K>) {}
-
-  abstract or(other: Type): Type;
-  abstract and(other: Type): Type;
-  protected abstract _or(other: TypeOf<K>): TypeOf<K>[];
-  protected abstract _and(other: TypeOf<K>): TypeOf<K>[];
 
   equals(other: unknown): boolean {
     return (
-      other instanceof TypeBase &&
-      this.type === other.type &&
-      this._equals(other as TypeOf<K>)
+      other instanceof TypeBase && this.cmp(other as TypeOf<K>) === Cmp.Equal
     );
   }
-
-  abstract _equals(other: TypeOf<K>): boolean;
 
   hashCode(): number {
     return 0x42108460 ^ I.hash(this.type) ^ I.hash(this.value);
   }
 
-  abstract toString(): string;
-  abstract toJSON(): unknown;
-  abstract isType(): boolean;
-
   isValue(): boolean {
     return !this.isType();
   }
+
+  abstract or(other: Type): Type;
+  abstract and(other: Type): Type;
+  abstract cmp(other: Type): Cmp;
+  abstract toString(): string;
+  abstract toJSON(): unknown;
+  abstract isType(): boolean;
 }
 
 // any
@@ -91,16 +88,8 @@ class AnyType extends TypeBase<"any"> {
     return other;
   }
 
-  _or(_other: AnyType): [AnyType] {
-    return [$Any];
-  }
-
-  _and(_other: AnyType): [AnyType] {
-    return [$Any];
-  }
-
-  _equals(_other: AnyType): boolean {
-    return true;
+  cmp(other: Type): Cmp {
+    return other instanceof AnyType ? Cmp.Equal : Cmp.Superset;
   }
 
   toString(): string {
@@ -129,32 +118,36 @@ class NeverType extends TypeBase<"never"> {
     super("never", value);
   }
 
-  addMessage(message?: string, vars?: string[]): TypeOf<"never"> {
+  error(message: string, vars: string[] = []): NeverType {
     return message === undefined
       ? $Never
       : new NeverType(
-          this.value.add(new NeverVal({ message, vars: I.Set(vars || []) }))
+          this.value.add(new NeverVal({ message, vars: I.Set(vars) }))
         );
   }
 
+  andError(a: Type, b: Type): NeverType {
+    return $Never.error(`Can't combine '${a}' and '${b}'.`);
+  }
+
   or(other: Type): Type {
-    return other;
+    return other instanceof NeverType
+      ? new NeverType(this.value.union(other.value))
+      : other;
   }
 
-  and(_other: Type): Type {
-    return this;
+  and(other: Type): Type {
+    return other instanceof NeverType
+      ? new NeverType(this.value.intersect(other.value))
+      : this;
   }
 
-  _or(other: NeverType): [NeverType] {
-    return [new NeverType(this.value.union(other.value))];
-  }
-
-  _and(other: NeverType): [NeverType] {
-    return [new NeverType(this.value.union(other.value))];
-  }
-
-  _equals(other: NeverType): boolean {
-    return this.value.equals(other.value);
+  cmp(other: Type): Cmp {
+    return other instanceof NeverType
+      ? this.value.equals(other.value)
+        ? Cmp.Equal
+        : Cmp.Disjoint
+      : Cmp.Subset;
   }
 
   toString(): string {
@@ -194,91 +187,59 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
   }
 
   or(other: Type): Type {
-    switch (other.type) {
-      case "any":
-        return $Any;
-      case "never":
-        return this as unknown as TypeOf<K>;
-      case "union":
-        return other.or(this as unknown as TypeOf<K>);
-      case this.type:
-        return UnionType.from(this._or(other));
-      default:
-        return UnionType.from([this as unknown as TypeOf<K>, other]);
-    }
+    return other instanceof AnyType
+      ? other
+      : other instanceof NeverType
+      ? (this as unknown as TypeOf<K>)
+      : UnionType.or(this as unknown as TypeOf<K>, other);
   }
 
   and(other: Type): Type {
-    switch (other.type) {
-      case "any":
-        return this as unknown as TypeOf<K>;
-      case "never":
-        return other;
-      case "union":
-        return other.and(this as unknown as TypeOf<K>);
-      case this.type:
-        return UnionType.from(
-          this._and(other as TypeOf<K>),
-          TypeBase.andErrMsg(this as unknown as TypeOf<K>, other)
-        );
-      default:
-        return $Never.addMessage(
-          TypeBase.andErrMsg(this as unknown as TypeOf<K>, other)
-        );
+    return other instanceof AnyType
+      ? (this as unknown as TypeOf<K>)
+      : other instanceof NeverType
+      ? other
+      : UnionType.and(this as unknown as TypeOf<K>, other);
     }
+
+  cmp(other: Type): Cmp {
+    return other instanceof AnyType
+      ? Cmp.Subset
+      : other instanceof NeverType
+      ? Cmp.Superset
+      : UnionType.cmp(this as unknown as TypeOf<K>, other);
   }
 
-  abstract _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>];
-  abstract _and(other: TypeOf<K>): [] | [TypeOf<K>];
+  protected abstract _or(
+    other: TypeOf<K>
+  ): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>];
+  protected abstract _and(other: TypeOf<K>): [] | [TypeOf<K>];
+  protected abstract _cmp(other: TypeOf<K>): Cmp;
 }
 
-abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
+abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
   constructor(type: K, value?: ValueOf<K>) {
     super(type, value === undefined ? $Any : value);
   }
 
   _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
-    if (this.isType()) {
-      return [this as TypeOf<K>];
-    }
+    const cmp = this.cmp(other);
 
-    if (other.isType()) {
-      return [other];
-    }
-
-    return I.is(this.value, other.value)
-      ? [this as TypeOf<K>]
-      : [this as TypeOf<K>, other];
+    return cmp === Cmp.Disjoint
+      ? [this as unknown as TypeOf<K>, other]
+      : cmp === Cmp.Subset
+      ? [other]
+      : [this as unknown as TypeOf<K>];
   }
 
   _and(other: TypeOf<K>): [] | [TypeOf<K>] {
-    if (this.isType()) {
-      return [other];
-    }
+    const cmp = this.cmp(other);
 
-    if (other.isType()) {
-      return [this as TypeOf<K>];
-    }
-
-    return I.is(this.value, other.value) ? [this as TypeOf<K>] : [];
-  }
-
-  protected literalEquals(
-    other: TypeOf<K>,
-    fn: (
-      a: Exclude<ValueOf<K>, AnyType>,
-      b: Exclude<ValueOf<K>, AnyType>
-    ) => boolean
-  ): boolean {
-    if (this.value instanceof AnyType && other.value instanceof AnyType) {
-      return true;
-    }
-
-    if (this.value instanceof AnyType || other.value instanceof AnyType) {
-      return false;
-    }
-
-    return fn(this.value as any, other.value as any);
+    return cmp === Cmp.Disjoint
+      ? []
+      : cmp === Cmp.Subset
+      ? [this as unknown as TypeOf<K>]
+      : [other];
   }
 
   toString() {
@@ -291,6 +252,21 @@ abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
       : { type: this.type };
   }
 
+  _cmp(other: TypeOf<K>): Cmp {
+    const ltype = this.isType();
+    const rtype = other.isType();
+
+    return ltype && rtype
+      ? Cmp.Equal
+      : ltype
+      ? Cmp.Superset
+      : rtype
+      ? Cmp.Subset
+      : this._equals(this.value as any, other.value as any)
+      ? Cmp.Equal
+      : Cmp.Disjoint;
+  }
+
   isType(): this is this & { value: AnyType } {
     return this.value instanceof AnyType;
   }
@@ -298,27 +274,26 @@ abstract class SimpleBase<K extends SimpleKey> extends ValueBase<K> {
   isValue(): this is this & { value: Exclude<TypeOf<K>, AnyType> } {
     return !this.isType();
   }
+
+  protected _equals(
+    a: Exclude<ValueOf<K>, AnyType>,
+    b: Exclude<ValueOf<K>, AnyType>
+  ): boolean {
+    return a === b;
+  }
 }
 
-class NullType extends SimpleBase<"null"> {
+class NullType extends UnitBase<"null"> {
   constructor() {
     super("null", null);
   }
 
-  _equals(_other: NullType): boolean {
+  protected override _equals(_a: null, _b: null): boolean {
     return true;
   }
-
-  isValue(): boolean {
-    return true;
   }
 
-  isType(): boolean {
-    return true;
-  }
-}
-
-class NumberType extends SimpleBase<"number"> {
+class NumberType extends UnitBase<"number"> {
   constructor(value?: ValueOf<"number">) {
     super("number", value);
   }
@@ -326,13 +301,9 @@ class NumberType extends SimpleBase<"number"> {
   literal(value: number): NumberType {
     return new NumberType(value);
   }
-
-  _equals(other: NumberType): boolean {
-    return this.literalEquals(other, (a, b) => a === b);
-  }
 }
 
-class StringType extends SimpleBase<"string"> {
+class StringType extends UnitBase<"string"> {
   constructor(value?: ValueOf<"string">) {
     super("string", value);
   }
@@ -340,13 +311,9 @@ class StringType extends SimpleBase<"string"> {
   literal(value: string): StringType {
     return new StringType(value);
   }
-
-  _equals(other: StringType): boolean {
-    return this.literalEquals(other, (a, b) => a === b);
-  }
 }
 
-class BooleanType extends SimpleBase<"boolean"> {
+class BooleanType extends UnitBase<"boolean"> {
   constructor(value?: ValueOf<"boolean">) {
     super("boolean", value);
   }
@@ -354,13 +321,9 @@ class BooleanType extends SimpleBase<"boolean"> {
   literal(value: boolean): BooleanType {
     return new BooleanType(value);
   }
-
-  _equals(other: BooleanType): boolean {
-    return this.literalEquals(other, (a, b) => a === b);
-  }
 }
 
-class DateType extends SimpleBase<"date"> {
+class DateType extends UnitBase<"date"> {
   constructor(value?: ValueOf<"date">) {
     super("date", value);
   }
@@ -368,13 +331,9 @@ class DateType extends SimpleBase<"date"> {
   literal(value: L.DateTime): DateType {
     return new DateType(value);
   }
-
-  _equals(other: DateType): boolean {
-    return this.literalEquals(other, (a, b) => a === b);
-  }
 }
 
-class DurationType extends SimpleBase<"duration"> {
+class DurationType extends UnitBase<"duration"> {
   constructor(value?: ValueOf<"duration">) {
     super("duration", value);
   }
@@ -383,12 +342,12 @@ class DurationType extends SimpleBase<"duration"> {
     return new DurationType(value);
   }
 
-  _equals(other: DurationType): boolean {
-    return this.literalEquals(other, (a, b) => a.equals(b));
+  protected override _equals(a: L.Duration, b: L.Duration): boolean {
+    return a.equals(b);
   }
 }
 
-class LinkType extends SimpleBase<"link"> {
+class LinkType extends UnitBase<"link"> {
   constructor(value?: ValueOf<"link">) {
     super("link", value);
   }
@@ -397,12 +356,12 @@ class LinkType extends SimpleBase<"link"> {
     return new LinkType(value);
   }
 
-  _equals(other: LinkType): boolean {
-    return this.literalEquals(other, (a, b) => a.equals(b));
+  protected override _equals(a: Link, b: Link): boolean {
+    return a.equals(b);
   }
 }
 
-class WidgetType extends SimpleBase<"widget"> {
+class WidgetType extends UnitBase<"widget"> {
   constructor(value?: ValueOf<"widget">) {
     super("widget", value);
   }
@@ -411,8 +370,8 @@ class WidgetType extends SimpleBase<"widget"> {
     return new WidgetType(value);
   }
 
-  _equals(other: WidgetType): boolean {
-    return this.literalEquals(other, (a, b) => a.$widget === b.$widget);
+  protected override _equals(a: Widget, b: Widget): boolean {
+    return a.$widget === b.$widget;
   }
 }
 
@@ -431,102 +390,135 @@ class UnionType extends TypeBase<"union"> {
     super("union", value);
   }
 
-  private static new(value: ValueOf<"union">, errMsg?: string): Type {
-    return UnionType.shrink(new UnionType(value), errMsg);
+  private static vals(val: ValueType | UnionType): ValueOf<"union"> {
+    return val instanceof UnionType
+      ? val.value
+      : I.Map([[val.type, I.Set([val])]]);
   }
 
-  static from(values: ValueType[], errMsg?: string): Type {
-    return UnionType.new(
-      I.Seq(values)
-        .groupBy((v) => v.type)
-        .map((v) => v.toSet())
-        .toMap(),
-      errMsg
-    );
-  }
-
-  private static shrink(union: TypeOf<"union">, errMsg?: string): Type {
-    const size = union.value.map((s) => s.size).reduce((l, r) => l + r, 0);
+  private static shrink(vals: ValueOf<"union">, def: Type): Type {
+    const size = vals.map((s) => s.size).reduce((l, r) => l + r, 0);
 
     switch (size) {
       case 0:
-        return $Never.addMessage(errMsg);
+        return def;
       case 1:
-        return union.value.first<I.Set<ValueType>>().first<ValueType>();
+        return vals.first<I.Set<ValueType>>().first<ValueType>();
       default:
-        return union;
+        return new UnionType(vals);
     }
   }
 
-  _or(other: TypeOf<"union">): [TypeOf<"union">] {
-    return [
-      new UnionType(
-        this.value.mergeWith(
-          (ls, rs) => ls.flatMap((l: any) => rs.flatMap((r) => l._or(r))),
-          other.value
-        )
-      )
-    ];
-  }
-
-  _and(other: TypeOf<"union">): [TypeOf<"union">] {
-    return [
-      new UnionType(
-        I.Set.union<ValueKey>([this.value.keys(), other.value.keys()])
-          .toMap()
-          .flatMap((k) => {
-            const res = this.value
-              .get(k, I.Set<ValueType>())
-              .flatMap((l: any) =>
-                other.value.get(k, I.Set<ValueType>()).flatMap((r) => l._and(r))
-              );
-            return res.isEmpty() ? [] : [[k, res as any]];
-          })
-      )
-    ];
-  }
-
-  _equals(other: UnionType): boolean {
-    return this.value.equals(other.value);
-  }
-
-  or(other: Type): Type {
-    if (other.type === "any") {
-      return other;
-    }
-
-    if (other.type === "never") {
-      return this;
-    }
-
-    return this._or(
-      other.type === "union"
-        ? other
-        : new UnionType(I.Map([[other.type, I.Set([other])]]))
-    )[0];
-  }
-
-  and(other: Type): Type {
-    if (other.type === "any") {
-      return this;
-    }
-
-    if (other.type === "never") {
-      return other;
-    }
-
+  static or(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Type {
     return UnionType.shrink(
-      this._and(
-        other.type === "union"
-          ? other
-          : new UnionType(I.Map([[other.type, I.Set([other])]]))
-      )[0],
-      TypeBase.andErrMsg(this, other)
+      UnionType.vals(ltype).mergeWith(
+        (
+          ls: I.Set<NumberType /* ValueType */>,
+          rs: I.Set<NumberType /* ValueType */>
+        ) => ls.flatMap((l) => rs.flatMap((r) => l._or(r))),
+        UnionType.vals(rtype)
+      ),
+      $Never
     );
   }
 
+  static and(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Type {
+    const lvals = UnionType.vals(ltype);
+    const rvals = UnionType.vals(rtype);
+
+    return UnionType.shrink(
+      I.Set.union<ValueKey>([lvals.keys(), rvals.keys()])
+          .toMap()
+          .flatMap((k) => {
+          const res: I.Set<ValueType> = (
+            lvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
+          ).flatMap((l) =>
+            (
+              rvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
+            ).flatMap((r) => l._and(r))
+              );
+          return res.isEmpty() ? [] : [[k, res]];
+        }),
+      $Never.andError(ltype, rtype)
+    );
+  }
+
+  static cmp(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Cmp {
+    const lvals = UnionType.vals(ltype);
+    const rvals = UnionType.vals(rtype);
+    const keys = I.Set.intersect<ValueKey>([lvals.keys(), rvals.keys()]);
+
+    let res =
+      (keys.size < rvals.size ? Cmp.Subset : Cmp.Equal) |
+      (keys.size < lvals.size ? Cmp.Superset : Cmp.Equal);
+
+    if (res === Cmp.Disjoint) {
+      return Cmp.Disjoint;
+  }
+
+    for (const key of keys) {
+      const lval = lvals.get(key) as I.Set<NumberType /* ValueType */>;
+      const rval = rvals.get(key) as I.Set<NumberType /* ValueType */>;
+
+      for (const l of lval) {
+        let curr = Cmp.Disjoint;
+
+        for (const r of rval) {
+          const next = l._cmp(r);
+
+          if (next === Cmp.Disjoint) {
+            continue;
+    }
+
+          if (curr === Cmp.Disjoint) {
+            curr = next;
+            continue;
+    }
+
+          curr |= next;
+
+          if (curr === Cmp.Disjoint) {
+            return Cmp.Disjoint;
+          }
+  }
+
+        res |= curr;
+
+        if (res === Cmp.Disjoint) {
+          return Cmp.Disjoint;
+        }
+      }
+    }
+
+    return res;
+    }
+
+  or(other: Type): Type {
+    return other instanceof AnyType
+          ? other
+      : other instanceof NeverType
+      ? this
+      : UnionType.or(this, other);
+  }
+
+  and(other: Type): Type {
+    return other instanceof AnyType
+      ? this
+      : other instanceof NeverType
+      ? other
+      : UnionType.and(this, other);
+  }
+
+  cmp(other: Type): Cmp {
+    return other instanceof AnyType
+      ? Cmp.Subset
+      : other instanceof NeverType
+      ? Cmp.Superset
+      : UnionType.cmp(this, other);
+  }
+
   toString() {
-    return this.value.map((val) => val.toString()).join(" or ");
+    return this.value.map((t) => `${t}`).join(" or ");
   }
 
   toJSON() {
@@ -551,158 +543,187 @@ class UnionType extends TypeBase<"union"> {
 }
 
 type KeyOf<K extends CompositeKey> = K extends "object" ? string : number;
+type KnownVal<K extends CompositeKey> = ValueOf<K>["known"];
 
 abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
-  get unmapped(): Type {
-    return this.value.unmapped;
-  }
-
-  get mapped(): I.Collection<KeyOf<K>, Type> {
-    return this.value.mapped as any;
-  }
-
-  get size(): NumberType {
-    return this.value.mapped instanceof NeverType
-      ? $Number.literal((this.value as any).size)
-      : $Number;
+  constructor(type: K, value: ValueOf<K>) {
+    super(type, value);
   }
 
   get(key: KeyOf<K>): Type {
-    return this.mapped.get(key, this.unmapped.or($Null));
+    const _this = this as unknown as ObjectType; /* CompositeType */
+    const _key = key as string; /* CompositeKey */
+
+    return _this.value.known.get(_key, _this.value.unknown.or($Null));
   }
 
-  _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
-    const enum Grew {
-      None = 0,
-      Left = 1,
-      Right = 2,
-      Both = 3
+  protected _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
+    const _this = this as unknown as ObjectType; /* CompositeType */
+    const _other = other as unknown as ObjectType; /* CompositeType */
+
+    const [cmp, canNormalize] = _this.cmpAndCheckNormalize(_other);
+
+    const normalize = () =>
+      this.new(
+        this.value.unknown.or(other.value.unknown),
+        this.mergeKnown(this.value.known, other.value.known)
+      );
+
+    return cmp === Cmp.Disjoint
+      ? canNormalize
+        ? [normalize()]
+        : [_this, _other]
+      : cmp === Cmp.Subset
+      ? [_other]
+      : [_this];
     }
 
-    const { unmapped: lu, mapped: lm } = this.value;
-    const { unmapped: ru, mapped: rm } = other.value;
+  protected _and(other: TypeOf<K>): [] | [TypeOf<K>] {
+    const _this = this as unknown as ObjectType; /* CompositeType */
+    const _other = other as unknown as ObjectType; /* CompositeType */
 
-    let grew = Grew.None;
+    const isError = (a: Type, b: Type, res: Type): boolean =>
+      res instanceof NeverType &&
+      !(a instanceof NeverType || b instanceof NeverType);
 
-    const nu = lu.or(ru);
+    const unknown = _this.value.unknown.and(_other.value.unknown);
 
-    grew |= !nu.equals(lu) ? Grew.Left : Grew.None;
-    grew |= !nu.equals(ru) ? Grew.Right : Grew.None;
-
-    if (grew === Grew.Both) {
-      return [this as unknown as TypeOf<K>, other];
-    }
-
-    const nm = this.mappedOr(lm, rm);
-
-    if (nm.size === 1) {
-      return [this.new(nu, nm)];
-    }
-
-    grew |= nm.some(
-      (nv, k) => !nv.equals((lm as I.Collection<any, Type>).get(k, $Never))
-    )
-      ? Grew.Left
-      : Grew.None;
-    grew |= nm.some(
-      (nv, k) => !nv.equals((rm as I.Collection<any, Type>).get(k, $Never))
-    )
-      ? Grew.Right
-      : Grew.None;
-
-    switch (grew) {
-      case Grew.None:
-      case Grew.Left:
-        return [other];
-      case Grew.Right:
-        return [this as unknown as TypeOf<K>];
-      case Grew.Both:
-        return [this as unknown as TypeOf<K>, other];
-    }
-  }
-
-  _and(other: TypeOf<K>): [] | [TypeOf<K>] {
-    const unmapped = this.unmapped.and(other.unmapped);
-    const mapped = this.mappedAnd(other);
-
-    if (
-      mapped instanceof NeverType ||
-      (unmapped.type === "never" && mapped.isEmpty()) ||
-      mapped.some((v) => v.type === "never")
-    ) {
+    if (isError(_this.value.unknown, _other.value.unknown, unknown)) {
       return [];
     }
 
-    return [this.new(unmapped, mapped)];
+    let known = this.emptyKnown().asMutable();
+
+    for (const key of this.knownKeys(this.value.known, other.value.known)) {
+      const _key = key as string; /* CompositeKey */
+
+      const l = _this.get(_key);
+      const r = _other.get(_key);
+      const val = l.and(r);
+
+      if (isError(l, r, val)) {
+        return [];
+    }
+
+      this.appendKnown(known, key, val);
   }
 
-  _equals(other: TypeOf<K>): boolean {
-    return this.value.equals(other.value);
+    known = known.asImmutable();
+
+    return [this.new(unknown, known)];
+    }
+
+  protected _cmp(other: TypeOf<K>): Cmp {
+    return this.cmpAndCheckNormalize(other)[0];
   }
 
-  protected abstract new(
-    unmapped: Type,
-    mapped: ValueOf<K>["mapped"]
-  ): TypeOf<K>;
+  protected cmpAndCheckNormalize(other: TypeOf<K>): [Cmp, boolean] {
+    const _this = this as unknown as ObjectType; /* CompositeType */
+    const _other = other as unknown as ObjectType; /* CompositeType */
 
-  protected abstract mappedAnd(lm: TypeOf<K>): ValueOf<K>["mapped"] | NeverType;
+    const knownSizes = (l: number): boolean =>
+      this.value.known.size === l && other.value.known.size === l;
 
-  protected abstract mappedOr(
-    lm: ValueOf<K>["mapped"],
-    rm: ValueOf<K>["mapped"]
-  ): ValueOf<K>["mapped"];
+    let res = this.value.unknown.cmp(other.value.unknown);
+
+    if (res === Cmp.Disjoint) {
+      return [Cmp.Disjoint, knownSizes(0)];
+  }
+
+    const canNormalize = res === Cmp.Equal && knownSizes(1);
+
+    for (const key of this.knownKeys(this.value.known, other.value.known)) {
+      const _key = key as string; /* CompositeKey */
+
+      res |= _this.get(_key).cmp(_other.get(_key));
+
+      if (res === Cmp.Disjoint) {
+        return [Cmp.Disjoint, canNormalize];
+      }
+    }
+
+    return [res, false];
+  }
 
   isType(): boolean {
     return (
-      !(this.value.unmapped.type === "never") ||
-      this.value.mapped.some((t) => t.isType())
+      !(this.value.unknown.type === "never") ||
+      this.value.known.some((t) => t.isType())
     );
   }
-}
+
+  protected mergeKnown(as: KnownVal<K>, bs: KnownVal<K>): KnownVal<K> {
+    const _as = as as KnownVal<"object" /* CompositeKey */>;
+    const _bs = bs as KnownVal<"object" /* CompositeKey */>;
+
+    const res = this.emptyKnown().asMutable();
+
+    for (const key of this.knownKeys(_as, _bs)) {
+      const _key = key as string; /* KeyOf<K> */
+
+      const a = _as.get(_key, $Never);
+      const b = _bs.get(_key, $Never);
+
+      this.appendKnown(res, key, a.or(b));
+  }
+
+    return res.asImmutable();
+  }
+
+  toJSON(): unknown {
+    const known = this.value.known.isEmpty()
+      ? {}
+      : { known: this.knownToJSON() };
+
+    const unknown =
+      this.value.unknown instanceof NeverType
+        ? {}
+        : { unknown: this.value.unknown.toJSON() };
+
+    return { type: this.type, value: { ...known, ...unknown } };
+  }
+
+  toString(): string {
+    const { known, unknown } = this.value;
+
+    return known.isEmpty()
+      ? `${this.type}<${unknown}>`
+      : `[${known.map((t, k) => this.toStringIndexed(k as any, t)).join(", ")}${
+          unknown instanceof NeverType ? "" : `, ...${this.type}<${unknown}>`
+        }]`;
+  }
+
+  protected abstract new(unknown: Type, known: KnownVal<K>): TypeOf<K>;
+  protected abstract emptyKnown(): KnownVal<K>;
+  protected abstract appendKnown(
+    known: KnownVal<K>,
+    key: KeyOf<K>,
+    val: Type
+  ): KnownVal<K>;
+  protected abstract knownKeys(
+    as: KnownVal<K>,
+    bs: KnownVal<K>
+  ): Iterable<KeyOf<K>>;
+  protected abstract knownToJSON(): unknown;
+  protected abstract literals: [string, string];
+  protected abstract toStringIndexed(key: KeyOf<K>, type: Type): string;
+      }
+
+// TODO: prevent compsite unknowns from containing parent type
 
 // object
 class ObjectVal extends I.Record({
-  mapped: I.Map<string, Type>(),
-  unmapped: $Never as Type
+  known: I.Map<string, Type>(),
+  unknown: $Never as Type
 }) {}
 
 class ObjectType extends CompositeBase<"object"> {
-  constructor(value: ValueOf<"object"> = new ObjectVal({ unmapped: $Any })) {
+  constructor(value: ValueOf<"object"> = new ObjectVal({ unknown: $Any })) {
     super("object", value);
-  }
-
-  protected new(unmapped: Type, mapped: I.Map<any, Type>): ObjectType {
-    return new ObjectType(new ObjectVal({ unmapped, mapped }));
-  }
-
-  protected mappedOr(
-    lm: ValueOf<"object">["mapped"],
-    rm: ValueOf<"object">["mapped"]
-  ): ValueOf<"object">["mapped"] {
-    return lm.mergeWith((l, r) => l.or(r), rm);
-  }
-
-  protected mappedAnd(
-    other: ObjectType
-  ): ValueOf<"object">["mapped"] | NeverType {
-    const res: [string, Type][] = [];
-
-    for (const key of I.Set.union<string>([
-      this.mapped.keys(),
-      other.mapped.keys()
-    ])) {
-      const l = this.get(key);
-      const r = other.get(key);
-      const val = l.and(r);
-
-      if (val.type === "never") {
-        return $Never.addMessage(TypeBase.andErrMsg(l, r));
-      }
-
-      res.push([key, val]);
     }
 
-    return I.Map(res);
+  protected new(unknown: Type, known: I.Map<any, Type>): ObjectType {
+    return new ObjectType(new ObjectVal({ unknown, known }));
   }
 
   literal(value: Record<string, Type>): ObjectType {
@@ -717,32 +738,33 @@ class ObjectType extends CompositeBase<"object"> {
     return this.new(value, I.Map());
   }
 
-  toString(): string {
-    const { mapped: m, unmapped: u } = this.value;
-    const typeStr = u instanceof AnyType ? this.type : `${this.type}(${u})`;
-
-    if (m.isEmpty()) {
-      return typeStr;
+  protected emptyKnown(): I.Map<string, Type> {
+    return I.Map();
     }
 
-    const appendStr = u instanceof NeverType ? "" : `, ...objectOf(${u})`;
-
-    return `{ ${m.map((v, k) => `${k}: ${v}`).join(", ")}${appendStr} }`;
+  protected appendKnown(
+    known: I.Map<string, Type>,
+    key: string,
+    val: Type
+  ): I.Map<string, Type> {
+    return known.set(key, val);
   }
 
-  toJSON() {
-    const { mapped: m, unmapped: u } = this.value;
-    const value: Record<string, unknown> = {};
-
-    if (!m.isEmpty()) {
-      value.mapped = m.map((v) => v.toJSON()).toObject();
+  protected knownKeys(
+    as: I.Map<string, Type>,
+    bs: I.Map<string, Type>
+  ): Iterable<string> {
+    return I.Set.union([as.keys(), bs.keys()]);
     }
 
-    if (!(u instanceof NeverType)) {
-      value.unmapped = u.toJSON();
+  protected knownToJSON(): unknown {
+    return this.value.known.map((v) => v.toJSON()).toObject();
     }
 
-    return { type: this.type, value };
+  protected literals: [string, string] = ["{ ", " }"];
+
+  protected toStringIndexed(key: string, type: Type): string {
+    return `${key}: ${type}`;
   }
 }
 
@@ -750,49 +772,17 @@ const $Object = new ObjectType();
 
 // array
 class ArrayVal extends I.Record({
-  mapped: I.List<Type>(),
-  unmapped: $Never as Type
+  known: I.List<Type>(),
+  unknown: $Never as Type
 }) {}
 
 class ArrayType extends CompositeBase<"array"> {
-  constructor(value: ValueOf<"array"> = new ArrayVal({ unmapped: $Any })) {
+  constructor(value: ValueOf<"array"> = new ArrayVal({ unknown: $Any })) {
     super("array", value);
   }
 
-  protected new(unmapped: Type, mapped: I.List<Type>): ArrayType {
-    return new ArrayType(new ArrayVal({ unmapped, mapped }));
-  }
-
-  protected mappedOr(
-    lm: ValueOf<"array">["mapped"],
-    rm: ValueOf<"array">["mapped"]
-  ): ValueOf<"array">["mapped"] {
-    return lm
-      .zipAll(rm)
-      .map(([l, r]) => (l || $Never).or((r || $Never) as Type));
-  }
-
-  protected mappedAnd(
-    other: ArrayType
-  ): ValueOf<"array">["mapped"] | NeverType {
-    const res: Type[] = [];
-
-    for (const key of I.Set.union<number>([
-      this.mapped.keys(),
-      other.mapped.keys()
-    ])) {
-      const l = this.get(key);
-      const r = other.get(key);
-      const val = l.and(r);
-
-      if (val.type === "never") {
-        return $Never.addMessage(TypeBase.andErrMsg(l, r));
-      }
-
-      res.push(val);
-    }
-
-    return I.List(res);
+  protected new(unknown: Type, known: I.List<Type>): ArrayType {
+    return new ArrayType(new ArrayVal({ unknown, known }));
   }
 
   literal(value: Type[]): ArrayType {
@@ -807,32 +797,30 @@ class ArrayType extends CompositeBase<"array"> {
     return this.new(value, I.List());
   }
 
-  toString(): string {
-    const { mapped: m, unmapped: u } = this.value;
-    const typeStr = u instanceof AnyType ? this.type : `${this.type}(${u})`;
-
-    if (m.isEmpty()) {
-      return typeStr;
+  protected emptyKnown(): I.List<Type> {
+    return I.List();
     }
 
-    const appendStr = u instanceof NeverType ? "" : `, ...listOf(${u})`;
-
-    return `[${m.map((v) => `${v}`).join(", ")}${appendStr}]`;
+  protected appendKnown(
+    known: I.List<Type>,
+    _key: number,
+    val: Type
+  ): I.List<Type> {
+    return known.push(val);
   }
 
-  toJSON() {
-    const { mapped: m, unmapped: u } = this.value;
-    const value: Record<string, unknown> = {};
-
-    if (!m.isEmpty()) {
-      value.mapped = m.map((v) => v.toJSON()).toArray();
+  protected knownKeys(as: I.List<Type>, bs: I.List<Type>): Iterable<number> {
+    return as.size > bs.size ? as.keys() : bs.keys();
     }
 
-    if (!(u instanceof NeverType)) {
-      value.unmapped = u.toJSON();
+  protected knownToJSON(): unknown {
+    return this.value.known.map((v) => v.toJSON()).toArray();
     }
 
-    return { type: this.type, value };
+  protected literals: [string, string] = ["[", "]"];
+
+  protected toStringIndexed(_key: number, type: Type): string {
+    return `${type}`;
   }
 }
 
