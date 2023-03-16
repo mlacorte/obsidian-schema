@@ -321,6 +321,16 @@ class BooleanType extends UnitBase<"boolean"> {
   literal(value: boolean): BooleanType {
     return new BooleanType(value);
   }
+
+  override _or(other: BooleanType): [BooleanType] {
+    const cmp = this.cmp(other);
+
+    return cmp === Cmp.Disjoint
+      ? [$Boolean] // true | false = boolean
+      : cmp === Cmp.Subset
+      ? [other]
+      : [this];
+  }
 }
 
 class DateType extends UnitBase<"date"> {
@@ -1056,6 +1066,9 @@ function $(
   return $Object.object(arg);
 }
 
+const $True = $Boolean.literal(true);
+const $False = $Boolean.literal(false);
+
 // exports
 export {
   $Null as Null,
@@ -1071,5 +1084,7 @@ export {
   $Object as Object,
   $Array as Array,
   $Function as Function,
+  $True as True,
+  $False as False,
   $ as $
 };

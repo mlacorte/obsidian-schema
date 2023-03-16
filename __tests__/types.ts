@@ -24,6 +24,10 @@ describe("types", () => {
     expect(oneOrTwo.type).toBe("union");
   });
 
+  test("boolean", () => {
+    expect(T.True.or(T.False)).toEqual(T.Boolean);
+  });
+
   test("unions", () => {
     const a = T.String.literal("a");
     const union = T.Number.or(a);
@@ -73,18 +77,16 @@ describe("types", () => {
     const c = T.Object.object({ a: one, b: one });
     const d = T.Object.object({ a: two.or(three) });
 
-    expect(a.or(a).toJSON()).toEqual(a.toJSON());
-    expect(a.and(a).toJSON()).toEqual(a.toJSON());
+    expect(a.or(a)).toEqual(a);
+    expect(a.and(a)).toEqual(a);
 
-    expect(a.or(b).toJSON()).toEqual(a.toJSON());
-    expect(a.and(b).toJSON()).toEqual(b.toJSON());
+    expect(a.or(b)).toEqual(a);
+    expect(a.and(b)).toEqual(b);
 
     expect(a.or(c).type).toBe("union");
-    expect(a.and(c).toJSON()).toEqual(c.toJSON());
+    expect(a.and(c)).toEqual(c);
 
-    expect(a.or(d).toJSON()).toEqual(
-      T.Object.object({ a: one.or(two).or(three) }).toJSON()
-    );
+    expect(a.or(d)).toEqual(T.Object.object({ a: one.or(two).or(three) }));
   });
 
   test("lists", () => {
@@ -97,18 +99,16 @@ describe("types", () => {
     const c = T.Array.list([one, two]);
     const d = T.Array.list([two.or(three)]);
 
-    expect(a.or(a).toJSON()).toEqual(a.toJSON());
-    expect(a.and(a).toJSON()).toEqual(a.toJSON());
+    expect(a.or(a)).toEqual(a);
+    expect(a.and(a)).toEqual(a);
 
-    expect(a.or(b).toJSON()).toEqual(a.toJSON());
-    expect(a.and(b).toJSON()).toEqual(b.toJSON());
+    expect(a.or(b)).toEqual(a);
+    expect(a.and(b)).toEqual(b);
 
     expect(a.or(c).type).toBe("union");
-    expect(a.and(c).toJSON()).toEqual(c.toJSON());
+    expect(a.and(c)).toEqual(c);
 
-    expect(a.or(d).toJSON()).toEqual(
-      T.Array.list([one.or(two).or(three)]).toJSON()
-    );
+    expect(a.or(d)).toEqual(T.Array.list([one.or(two).or(three)]));
 
     const unique1 = T.Array.list([T.String, T.String]);
     const unique2 = T.Array.list([T.String, T.Null]);
