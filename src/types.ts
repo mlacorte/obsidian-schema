@@ -47,7 +47,7 @@ export const enum Cmp {
   Subset = 0b01,
   Superset = 0b10,
   Disjoint = 0b11
-  }
+}
 
 abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
   constructor(public type: K, public value: ValueOf<K>) {}
@@ -200,7 +200,7 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
       : other instanceof NeverType
       ? other
       : UnionType.and(this as unknown as TypeOf<K>, other);
-    }
+  }
 
   cmp(other: Type): Cmp {
     return other instanceof AnyType
@@ -291,7 +291,7 @@ class NullType extends UnitBase<"null"> {
   protected override _equals(_a: null, _b: null): boolean {
     return true;
   }
-  }
+}
 
 class NumberType extends UnitBase<"number"> {
   constructor(value?: ValueOf<"number">) {
@@ -428,15 +428,15 @@ class UnionType extends TypeBase<"union"> {
 
     return UnionType.shrink(
       I.Set.union<ValueKey>([lvals.keys(), rvals.keys()])
-          .toMap()
-          .flatMap((k) => {
+        .toMap()
+        .flatMap((k) => {
           const res: I.Set<ValueType> = (
             lvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
           ).flatMap((l) =>
             (
               rvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
             ).flatMap((r) => l._and(r))
-              );
+          );
           return res.isEmpty() ? [] : [[k, res]];
         }),
       $Never.andError(ltype, rtype)
@@ -454,7 +454,7 @@ class UnionType extends TypeBase<"union"> {
 
     if (res === Cmp.Disjoint) {
       return Cmp.Disjoint;
-  }
+    }
 
     for (const key of keys) {
       const lval = lvals.get(key) as I.Set<NumberType /* ValueType */>;
@@ -468,19 +468,19 @@ class UnionType extends TypeBase<"union"> {
 
           if (next === Cmp.Disjoint) {
             continue;
-    }
+          }
 
           if (curr === Cmp.Disjoint) {
             curr = next;
             continue;
-    }
+          }
 
           curr |= next;
 
           if (curr === Cmp.Disjoint) {
             return Cmp.Disjoint;
           }
-  }
+        }
 
         res |= curr;
 
@@ -491,11 +491,11 @@ class UnionType extends TypeBase<"union"> {
     }
 
     return res;
-    }
+  }
 
   or(other: Type): Type {
     return other instanceof AnyType
-          ? other
+      ? other
       : other instanceof NeverType
       ? this
       : UnionType.or(this, other);
@@ -576,7 +576,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
       : cmp === Cmp.Subset
       ? [_other]
       : [_this];
-    }
+  }
 
   protected _and(other: TypeOf<K>): [] | [TypeOf<K>] {
     const _this = this as unknown as ObjectType; /* CompositeType */
@@ -603,15 +603,15 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
       if (isError(l, r, val)) {
         return [];
-    }
+      }
 
       this.appendKnown(known, key, val);
-  }
+    }
 
     known = known.asImmutable();
 
     return [this.new(unknown, known)];
-    }
+  }
 
   protected _cmp(other: TypeOf<K>): Cmp {
     return this.cmpAndCheckNormalize(other)[0];
@@ -628,7 +628,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
     if (res === Cmp.Disjoint) {
       return [Cmp.Disjoint, knownSizes(0)];
-  }
+    }
 
     const canNormalize = res === Cmp.Equal && knownSizes(1);
 
@@ -665,7 +665,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
       const b = _bs.get(_key, $Never);
 
       this.appendKnown(res, key, a.or(b));
-  }
+    }
 
     return res.asImmutable();
   }
@@ -707,7 +707,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract knownToJSON(): unknown;
   protected abstract literals: [string, string];
   protected abstract toStringIndexed(key: KeyOf<K>, type: Type): string;
-      }
+}
 
 // TODO: prevent compsite unknowns from containing parent type
 
@@ -720,7 +720,7 @@ class ObjectVal extends I.Record({
 class ObjectType extends CompositeBase<"object"> {
   constructor(value: ValueOf<"object"> = new ObjectVal({ unknown: $Any })) {
     super("object", value);
-    }
+  }
 
   protected new(unknown: Type, known: I.Map<any, Type>): ObjectType {
     return new ObjectType(new ObjectVal({ unknown, known }));
@@ -740,7 +740,7 @@ class ObjectType extends CompositeBase<"object"> {
 
   protected emptyKnown(): I.Map<string, Type> {
     return I.Map();
-    }
+  }
 
   protected appendKnown(
     known: I.Map<string, Type>,
@@ -755,11 +755,11 @@ class ObjectType extends CompositeBase<"object"> {
     bs: I.Map<string, Type>
   ): Iterable<string> {
     return I.Set.union([as.keys(), bs.keys()]);
-    }
+  }
 
   protected knownToJSON(): unknown {
     return this.value.known.map((v) => v.toJSON()).toObject();
-    }
+  }
 
   protected literals: [string, string] = ["{ ", " }"];
 
@@ -799,7 +799,7 @@ class ArrayType extends CompositeBase<"array"> {
 
   protected emptyKnown(): I.List<Type> {
     return I.List();
-    }
+  }
 
   protected appendKnown(
     known: I.List<Type>,
@@ -811,11 +811,11 @@ class ArrayType extends CompositeBase<"array"> {
 
   protected knownKeys(as: I.List<Type>, bs: I.List<Type>): Iterable<number> {
     return as.size > bs.size ? as.keys() : bs.keys();
-    }
+  }
 
   protected knownToJSON(): unknown {
     return this.value.known.map((v) => v.toJSON()).toArray();
-    }
+  }
 
   protected literals: [string, string] = ["[", "]"];
 
@@ -831,9 +831,8 @@ FunctionType.define:
 - Propagates errors
 - Handles vectorization
 - Splits on unions
-- Provides utilities and context
+- Provides utilities and context (?)
 - Returns error if match not found
-- Fails to build if construction overlap is found
 */
 
 const example = () => {
@@ -843,35 +842,102 @@ const example = () => {
       $Widget.literal(Widgets.externalLink(a, d))
     )
     .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
-    .add([$Null, [$Any]], $Null)
+    .add([$Null, [$Any]], () => $Null)
     .build();
 
   return elink;
 };
 
 // function
-type FunctionBuilderArgs =
-  | [Type[] | [...Type[], [Type]], Type]
-  | [Type[] | [...Type[], [Type]], (...args: any[]) => Type]
-  | [Type[] | [...Type[], [Type]], Type, number[], (...args: any[]) => Type];
+type Vararg = [Type];
+type Optional = Type[] | [...Type[], Vararg];
+type Required = Type[] | [...Type[], Optional];
+type Fn = (...args: any[]) => Type;
+type Valufy = number[];
+type FunctionBuilderArgs = [Required, Fn] | [Required, Type, Valufy, Fn];
 
 type FunctionBuilderVal = [ArrayType, (...args: Type[]) => Type][];
 
 class FunctionBuilder {
-  value: FunctionBuilderVal;
+  value: FunctionBuilderVal = [];
 
-  constructor(public name = "", public vectorize: number[] = []) {}
+  constructor(public name = "<lambda>", public vectorize: number[] = []) {}
 
   add(...args: FunctionBuilderArgs): FunctionBuilder {
-    throw "TODO";
-  }
+    const { required, optional, vararg } = this.splitArgs(args[0]);
 
-  var(...args: FunctionBuilderArgs): FunctionBuilder {
-    throw "TODO";
+    const fn =
+      typeof args[1] === "function"
+        ? args[1]
+        : this.valufyFn(args[1], args[2] as Valufy, args[3] as Fn);
+
+    const types = $Array.list(required);
+
+    // TODO: handle vectorization
+    // TODO: handle optionals
+    // TODO: handle varargs
+
+    this.value.push([types, fn]);
+
+    return this;
   }
 
   build(): FunctionType {
+    // TODO: build function
+
     throw "TODO";
+  }
+
+  private valufyFn(def: Type, valufy: Valufy, fn: Fn): Fn {
+    return (...args: Type[]) => {
+      for (const pos of valufy.filter((pos) => pos < args.length)) {
+        const arg = args[pos];
+
+        if (arg.isType()) {
+          return def;
+        }
+
+        args[pos] = arg.value as any;
+      }
+
+      return fn(...args);
+    };
+  }
+
+  private splitArgs(_required: Required): {
+    required: Type[];
+    optional: Type[];
+    vararg: Type | null;
+  } {
+    let required: Type[];
+    let optional: Type[];
+    let vararg: Type | null;
+
+    const _optional = _required.at(-1);
+
+    if (_optional === undefined || _optional instanceof TypeBase) {
+      // no optionals or vararg
+      required = _required as Type[];
+      optional = [];
+      vararg = null;
+    } else {
+      // optionals, but maybe no vararg
+      const _vararg = _optional.at(-1);
+
+      if (_vararg === undefined || _vararg instanceof TypeBase) {
+        // optionals, but no vararg
+        required = _required.slice(0, -1) as Type[];
+        optional = _optional as Type[];
+        vararg = null;
+      } else {
+        // optionals and vararg
+        required = _required.slice(0, -1) as Type[];
+        optional = _optional.slice(0, -1) as Type[];
+        vararg = _vararg[0];
+      }
+    }
+
+    return { required, optional, vararg };
   }
 }
 
@@ -880,7 +946,7 @@ class FunctionVal extends I.Record({
   fn: (() => $Never) as (...args: Type[]) => Type
 }) {}
 
-class FunctionType extends TypeBase<"function"> {
+class FunctionType extends ValueBase<"function"> {
   constructor(
     value: FunctionVal = new FunctionVal({
       args: I.List([$Array.listOf($Any)]),
@@ -890,37 +956,38 @@ class FunctionType extends TypeBase<"function"> {
     super("function", value);
   }
 
-  define(name: string, vectorize: number[]): FunctionBuilder {
-    throw "TODO";
+  define(name: string, vectorize: number[] = []): FunctionBuilder {
+    return new FunctionBuilder(name, vectorize);
   }
 
   eval(...args: Type[]): Type {
-    throw "TODO";
+    return this.value.fn(...args);
   }
 
-  or(_other: Type): Type {
-    throw new Error("Method not implemented.");
+  protected _or(
+    other: FunctionType
+  ): [FunctionType] | [FunctionType, FunctionType] {
+    return this.equals(other) ? [this] : [this, other];
   }
-  and(_other: Type): Type {
-    throw new Error("Method not implemented.");
+
+  protected _and(other: FunctionType): [] | [FunctionType] {
+    return this.equals(other) ? [this] : [];
   }
-  _or(_other: TypeOf<"function">): TypeOf<"function">[] {
-    throw new Error("Method not implemented.");
+
+  protected _cmp(other: FunctionType): Cmp {
+    return this.equals(other) ? Cmp.Equal : Cmp.Disjoint;
   }
-  _and(_other: TypeOf<"function">): TypeOf<"function">[] {
-    throw new Error("Method not implemented.");
-  }
-  _equals(_other: FunctionType): boolean {
-    throw new Error("Method not implemented.");
-  }
+
   toString(): string {
-    throw new Error("Method not implemented.");
+    return "TODO: FunctionType.toString()";
   }
+
   toJSON(): unknown {
-    throw new Error("Method not implemented.");
+    return "TODO: FunctionType.toJSON()";
   }
+
   isType(): boolean {
-    throw new Error("Method not implemented.");
+    return false;
   }
 }
 
