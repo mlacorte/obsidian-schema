@@ -118,4 +118,15 @@ describe("types", () => {
     expect(unique1.and(shared1).type).toBe(T.Array.type);
     expect(unique2.and(shared1).type).toBe(T.Array.type);
   });
+
+  test("functions", () => {
+    const one = T.Number.literal(1);
+    const two = T.Number.literal(2);
+
+    const normal = T.choice.eval(T.True, one, two);
+    const vector = T.choice.eval(T.Array.literal([T.True, T.False]), one, two);
+
+    expect(normal).toEqual(one);
+    expect(vector).toEqual(T.Array.literal([one, two]));
+  });
 });

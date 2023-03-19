@@ -72,6 +72,7 @@ abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
   abstract toString(): string;
   abstract toJSON(): unknown;
   abstract isType(): boolean;
+  abstract types(): I.Seq.Indexed<Type>;
 }
 
 // any
@@ -102,6 +103,10 @@ class AnyType extends TypeBase<"any"> {
 
   isType(): true {
     return true;
+  }
+
+  types(): I.Seq.Indexed<Type> {
+    return I.Seq([this]);
   }
 }
 
@@ -177,6 +182,10 @@ class NeverType extends TypeBase<"never"> {
   isType(): true {
     return true;
   }
+
+  types(): I.Seq.Indexed<Type> {
+    return I.Seq([this]);
+  }
 }
 
 const $Never = new NeverType();
@@ -210,12 +219,19 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
       : UnionType.cmp(this as unknown as TypeOf<K>, other);
   }
 
+  types(): I.Seq.Indexed<Type> {
+    return I.Seq([this as unknown as TypeOf<K>]);
+  }
+
   protected abstract _or(
     other: TypeOf<K>
   ): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>];
   protected abstract _and(other: TypeOf<K>): [] | [TypeOf<K>];
   protected abstract _cmp(other: TypeOf<K>): Cmp;
 }
+
+type IsType<T> = T extends NullType ? T : T & { value: AnyType };
+type IsValue<T> = T extends NullType ? T : T & { value: Exclude<T, AnyType> };
 
 abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
   constructor(type: K, value?: ValueOf<K>) {
@@ -246,7 +262,7 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
     return this.isType() ? this.type : JSON.stringify(this.value);
   }
 
-  toJSON() {
+  toJSON(): unknown {
     return this.isValue()
       ? { type: this.type, value: this.value }
       : { type: this.type };
@@ -267,12 +283,16 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
       : Cmp.Disjoint;
   }
 
-  isType(): this is this & { value: AnyType } {
+  isType(): this is IsType<this> {
     return this.value instanceof AnyType;
   }
 
-  isValue(): this is this & { value: Exclude<TypeOf<K>, AnyType> } {
+  isValue(): this is IsValue<this> {
     return !this.isType();
+  }
+
+  wrap(val: ValueOf<K> | TypeOf<K>): TypeOf<K> {
+    return val instanceof UnitBase ? val : this.literal(val);
   }
 
   protected _equals(
@@ -281,11 +301,17 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
   ): boolean {
     return a === b;
   }
+
+  abstract literal(val: ValueOf<K>): TypeOf<K>;
 }
 
 class NullType extends UnitBase<"null"> {
   constructor() {
     super("null", null);
+  }
+
+  literal(_val: null): NullType {
+    return $Null;
   }
 
   protected override _equals(_a: null, _b: null): boolean {
@@ -298,8 +324,8 @@ class NumberType extends UnitBase<"number"> {
     super("number", value);
   }
 
-  literal(value: number): NumberType {
-    return new NumberType(value);
+  literal(value: number): IsValue<NumberType> {
+    return new NumberType(value) as IsValue<NumberType>;
   }
 }
 
@@ -308,8 +334,8 @@ class StringType extends UnitBase<"string"> {
     super("string", value);
   }
 
-  literal(value: string): StringType {
-    return new StringType(value);
+  literal(value: string): IsValue<StringType> {
+    return new StringType(value) as IsValue<StringType>;
   }
 }
 
@@ -318,8 +344,8 @@ class BooleanType extends UnitBase<"boolean"> {
     super("boolean", value);
   }
 
-  literal(value: boolean): BooleanType {
-    return new BooleanType(value);
+  literal(value: boolean): IsValue<BooleanType> {
+    return new BooleanType(value) as IsValue<BooleanType>;
   }
 
   override _or(other: BooleanType): [BooleanType] {
@@ -338,8 +364,8 @@ class DateType extends UnitBase<"date"> {
     super("date", value);
   }
 
-  literal(value: L.DateTime): DateType {
-    return new DateType(value);
+  literal(value: L.DateTime): IsValue<DateType> {
+    return new DateType(value) as IsValue<DateType>;
   }
 }
 
@@ -348,8 +374,8 @@ class DurationType extends UnitBase<"duration"> {
     super("duration", value);
   }
 
-  literal(value: L.Duration): DurationType {
-    return new DurationType(value);
+  literal(value: L.Duration): IsValue<DurationType> {
+    return new DurationType(value) as IsValue<DurationType>;
   }
 
   protected override _equals(a: L.Duration, b: L.Duration): boolean {
@@ -362,8 +388,8 @@ class LinkType extends UnitBase<"link"> {
     super("link", value);
   }
 
-  literal(value: Link): LinkType {
-    return new LinkType(value);
+  literal(value: Link): IsValue<LinkType> {
+    return new LinkType(value) as IsValue<LinkType>;
   }
 
   protected override _equals(a: Link, b: Link): boolean {
@@ -376,8 +402,8 @@ class WidgetType extends UnitBase<"widget"> {
     super("widget", value);
   }
 
-  literal(value: Widget): WidgetType {
-    return new WidgetType(value);
+  literal(value: Widget): IsValue<WidgetType> {
+    return new WidgetType(value) as IsValue<WidgetType>;
   }
 
   protected override _equals(a: Widget, b: Widget): boolean {
@@ -386,13 +412,13 @@ class WidgetType extends UnitBase<"widget"> {
 }
 
 const $Null = new NullType();
-const $Number = new NumberType();
-const $String = new StringType();
-const $Boolean = new BooleanType();
-const $Date = new DateType();
-const $Duration = new DurationType();
-const $Link = new LinkType();
-const $Widget = new WidgetType();
+const $Number = new NumberType() as IsType<NumberType>;
+const $String = new StringType() as IsType<StringType>;
+const $Boolean = new BooleanType() as IsType<BooleanType>;
+const $Date = new DateType() as IsType<DateType>;
+const $Duration = new DurationType() as IsType<DurationType>;
+const $Link = new LinkType() as IsType<LinkType>;
+const $Widget = new WidgetType() as IsType<WidgetType>;
 
 // union
 class UnionType extends TypeBase<"union"> {
@@ -503,6 +529,10 @@ class UnionType extends TypeBase<"union"> {
     return res;
   }
 
+  types(): I.Seq.Indexed<Type> {
+    return this.value.valueSeq().flatMap((v) => v);
+  }
+
   or(other: Type): Type {
     return other instanceof AnyType
       ? other
@@ -531,7 +561,7 @@ class UnionType extends TypeBase<"union"> {
     return this.value.map((t) => `${t}`).join(" or ");
   }
 
-  toJSON() {
+  toJSON(): unknown {
     return {
       type: "union",
       value: this.value
@@ -553,18 +583,41 @@ class UnionType extends TypeBase<"union"> {
 }
 
 type KeyOf<K extends CompositeKey> = K extends "object" ? string : number;
+type KeyType<K extends CompositeKey> = K extends "object"
+  ? StringType
+  : NumberType;
 type KnownVal<K extends CompositeKey> = ValueOf<K>["known"];
 
 abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
+  private _allTypes: Type | null = null;
+
   constructor(type: K, value: ValueOf<K>) {
     super(type, value);
   }
 
-  get(key: KeyOf<K>): Type {
+  get(key: KeyOf<K> | KeyType<K>): Type {
     const _this = this as unknown as ObjectType; /* CompositeType */
-    const _key = key as string; /* CompositeKey */
+    const _key = this.wrapKey(key) as StringType; /* KeyType<K> */
 
-    return _this.value.known.get(_key, _this.value.unknown.or($Null));
+    return _key.isValue()
+      ? _this.value.known.get(_key.value, _this.value.unknown.or($Null))
+      : this.allTypes;
+  }
+
+  protected get allTypes(): Type {
+    if (this._allTypes === null) {
+      this._allTypes = this.value.known
+        .valueSeq()
+        .reduce((a, b) => a.or(b), this.value.unknown.or($Null));
+    }
+
+    return this._allTypes;
+  }
+
+  get size(): NumberType {
+    return this.value.unknown instanceof NeverType
+      ? $Number.literal(this.value.known.size)
+      : $Number;
   }
 
   protected _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
@@ -575,8 +628,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
     const normalize = () =>
       this.new(
-        this.value.unknown.or(other.value.unknown),
-        this.mergeKnown(this.value.known, other.value.known)
+        this.mergeKnown(this.value.known, other.value.known),
+        this.value.unknown.or(other.value.unknown)
       );
 
     return cmp === Cmp.Disjoint
@@ -620,7 +673,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
     known = known.asImmutable();
 
-    return [this.new(unknown, known)];
+    return [this.new(known, unknown)];
   }
 
   protected _cmp(other: TypeOf<K>): Cmp {
@@ -655,11 +708,12 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     return [res, false];
   }
 
+  isKnown(): this is Exclude<this, { value: { unknown: NeverType } }> {
+    return this.value.unknown instanceof NeverType;
+  }
+
   isType(): boolean {
-    return (
-      !(this.value.unknown.type === "never") ||
-      this.value.known.some((t) => t.isType())
-    );
+    return !this.isKnown() || this.value.known.some((t) => t.isType());
   }
 
   protected mergeKnown(as: KnownVal<K>, bs: KnownVal<K>): KnownVal<K> {
@@ -703,7 +757,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
         }]`;
   }
 
-  protected abstract new(unknown: Type, known: KnownVal<K>): TypeOf<K>;
+  protected abstract wrapKey(key: KeyOf<K> | KeyType<K>): KeyType<K>;
+  protected abstract new(known: KnownVal<K>, unknown: Type): TypeOf<K>;
   protected abstract emptyKnown(): KnownVal<K>;
   protected abstract appendKnown(
     known: KnownVal<K>,
@@ -732,20 +787,20 @@ class ObjectType extends CompositeBase<"object"> {
     super("object", value);
   }
 
-  protected new(unknown: Type, known: I.Map<any, Type>): ObjectType {
+  protected new(known: I.Map<any, Type>, unknown: Type): ObjectType {
     return new ObjectType(new ObjectVal({ unknown, known }));
   }
 
-  literal(value: Record<string, Type>): ObjectType {
-    return this.new($Never, I.Map(value));
+  object(value: Record<string, Type> = {}, def: Type = $Any): ObjectType {
+    return this.new(I.Map(value), def);
   }
 
-  object(value: Record<string, Type>): ObjectType {
-    return this.new($Any, I.Map(value));
+  literal(value: Record<string, Type> = {}): ObjectType {
+    return this.object(value, $Never);
   }
 
-  objectOf(value: Type): ObjectType {
-    return this.new(value, I.Map());
+  protected wrapKey(key: string | StringType): StringType {
+    return $String.wrap(key);
   }
 
   protected emptyKnown(): I.Map<string, Type> {
@@ -791,20 +846,24 @@ class ArrayType extends CompositeBase<"array"> {
     super("array", value);
   }
 
-  protected new(unknown: Type, known: I.List<Type>): ArrayType {
+  protected new(known: I.List<Type>, unknown: Type): ArrayType {
     return new ArrayType(new ArrayVal({ unknown, known }));
   }
 
-  literal(value: Type[]): ArrayType {
-    return this.new($Never, I.List(value));
+  list(value: Type[] = [], def: Type = $Any): ArrayType {
+    return this.new(I.List(value), def);
   }
 
-  list(value: Type[]): ArrayType {
-    return this.new($Any, I.List(value));
+  literal(value: Type[] = []): ArrayType {
+    return this.list(value, $Never);
   }
 
-  listOf(value: Type): ArrayType {
-    return this.new(value, I.List());
+  append(value: Type): ArrayType {
+    return this.new(this.value.known.push(value), this.value.unknown);
+  }
+
+  protected wrapKey(key: number | NumberType): NumberType {
+    return $Number.wrap(key);
   }
 
   protected emptyKnown(): I.List<Type> {
@@ -836,35 +895,15 @@ class ArrayType extends CompositeBase<"array"> {
 
 const $Array = new ArrayType();
 
-/*
-FunctionType.define:
-- Propagates errors
-- Handles vectorization
-- Splits on unions
-- Provides utilities and context (?)
-- Returns error if match not found
-*/
-
-const example = () => {
-  const elink: FunctionType = $Function
-    .define("elink", [0])
-    .add([$String, $String], $Link, [0, 1], (a: string, d: string) =>
-      $Widget.literal(Widgets.externalLink(a, d))
-    )
-    .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
-    .add([$Null, [$Any]], () => $Null)
-    .build();
-
-  return elink;
-};
-
 // function
 type Vararg = [Type];
 type Optional = Type[] | [...Type[], Vararg];
 type Required = Type[] | [...Type[], Optional];
-type Fn = (...args: any[]) => Type;
+type Fn<T> = (...args: T[]) => Type;
 type Valufy = number[];
-type FunctionBuilderArgs = [Required, Fn] | [Required, Type, Valufy, Fn];
+type FunctionBuilderArgs =
+  | [Required, Fn<Type>]
+  | [Required, Type, Valufy, Fn<any>];
 
 type FunctionBuilderVal = [ArrayType, (...args: Type[]) => Type][];
 
@@ -875,30 +914,91 @@ class FunctionBuilder {
 
   add(...args: FunctionBuilderArgs): FunctionBuilder {
     const { required, optional, vararg } = this.splitArgs(args[0]);
+    const argList = [...required, ...optional];
 
-    const fn =
+    // vectorized types
+    for (const pos of this.vectorize.filter((pos) => pos < argList.length)) {
+      const arg = argList[pos];
+
+      argList[pos] = arg.or($Array.list([], arg));
+    }
+
+    // optional types
+    for (let pos = required.length; pos < argList.length; pos++) {
+      const arg = argList[pos];
+
+      argList[pos] = arg.or($Null);
+    }
+
+    // vararg types
+    const types = $Array.list(argList, vararg || $Never);
+
+    // valufy function
+    let fn =
       typeof args[1] === "function"
         ? args[1]
-        : this.valufyFn(args[1], args[2] as Valufy, args[3] as Fn);
+        : this.valufyFn(args[1], args[2] as Valufy, args[3] as Fn<any>);
 
-    const types = $Array.list(required);
+    // vectorize function
+    fn = this.vectorizeFn(fn);
 
-    // TODO: handle vectorization
-    // TODO: handle optionals
-    // TODO: handle varargs
-
+    // add final result
     this.value.push([types, fn]);
 
     return this;
   }
 
   build(): FunctionType {
-    // TODO: build function
+    const types = this.value.map((v) => v[0]);
 
-    throw "TODO";
+    const fn: Fn<Type> = (...args: Type[]): Type => {
+      // propagate errors
+      const errors = args.filter((arg) => arg instanceof NeverType);
+
+      if (errors.length > 0) {
+        return errors.reduce((res, err) => res.or(err), $Never);
+      }
+
+      // finds match
+      const argList = $Array.list(args);
+      let matchFn: Fn<Type> | null = null;
+
+      for (const [typeList, fn] of this.value) {
+        if (argList.cmp(typeList) <= Cmp.Subset) {
+          matchFn = fn;
+          break;
+        }
+      }
+
+      // throws error if none found
+      if (matchFn === null) {
+        return $Never.error(
+          `No implementation of '${this.name}' found for arguments: ${args
+            .map((a) => `${a}`)
+            .join(", ")}`
+        );
+      }
+
+      // split on unions
+      const argCombos = args.reduce<Type[][]>(
+        (res, arg) =>
+          arg
+            .types()
+            .flatMap((t) => res.map((prev) => [...prev, t]))
+            .toArray(),
+        [[]]
+      );
+
+      // union all results
+      return argCombos
+        .map((argCombo) => fn(...argCombo))
+        .reduce((a, b) => a.or(b), $Never);
+    };
+
+    return FunctionType.new(types, fn);
   }
 
-  private valufyFn(def: Type, valufy: Valufy, fn: Fn): Fn {
+  private valufyFn(def: Type, valufy: Valufy, fn: Fn<any>): Fn<Type> {
     return (...args: Type[]) => {
       for (const pos of valufy.filter((pos) => pos < args.length)) {
         const arg = args[pos];
@@ -911,6 +1011,91 @@ class FunctionBuilder {
       }
 
       return fn(...args);
+    };
+  }
+
+  private vectorizeFn(fn: Fn<Type>): Fn<Type> {
+    return (...args: Type[]): Type => {
+      const vecMap = this.vectorize
+        .filter((pos) => args[pos] instanceof ArrayType && pos < args.length)
+        .reduce(
+          (acc, pos) => acc.set(pos, args[pos] as ArrayType),
+          new Map<number, ArrayType>()
+        );
+
+      const vecs = [...vecMap.values()];
+
+      if (vecs.length === 0) {
+        return fn(...args);
+      }
+
+      // TODO: Test this behavior
+
+      // (2,2)
+      // choice(boolean, [string, 10], number)
+      // [{string,number}, {number}]
+      // 1
+
+      // (0,2)
+      // choice([...list(boolean)], [string, 10], number)
+      // [] | [{string,number}] | [{string,number}, {number}]
+      // -1   0                   1
+
+      // (0,0,inf)
+      // choice([...list(boolean)], [...list(string | 10)], number)
+      // [...list{string,number}]
+      // -1
+
+      // (0,2,inf)
+      // choice([...list(boolean)], [string, 10, ...list(number)], number)
+      // [] | [{string,number}] | [{string,number}, {number}, ...list{number}]
+      // -1   0                   1
+
+      // (1,2)
+      // choice([boolean, ...list(boolean)], [3, 4], [5, 6])
+      // [{3,5}] | [{3,5}, {4,6}]
+      // 0         1
+
+      const maxOrInfinity = Math.min(
+        ...vecs.map((t) => (t.isKnown() ? t.value.known.size : Infinity))
+      );
+      const min = Math.min(...vecs.map((t) => t.value.known.size));
+      const max =
+        maxOrInfinity !== Infinity
+          ? maxOrInfinity
+          : Math.max(...vecs.map((t) => t.value.known.size));
+
+      let res = $Array.literal();
+      const results: Type[] = min === 0 ? [res] : [];
+
+      for (let subPos = 0; subPos < max; subPos++) {
+        const subArgs = [...args];
+
+        for (const [vecPos, vecArg] of vecMap.entries()) {
+          subArgs[vecPos] = vecArg.get(subPos);
+        }
+
+        res = res.append(fn(...subArgs));
+
+        if (subPos + 1 >= min) {
+          results.push(res);
+        }
+      }
+
+      if (maxOrInfinity === Infinity) {
+        const lastPos = results.length - 1;
+        const last = results[lastPos];
+
+        const subArgs = [...args];
+
+        for (const [vecPos, vecArg] of vecMap.entries()) {
+          subArgs[vecPos] = vecArg.get(max);
+        }
+
+        results[lastPos] = last.or($Array.list([], fn(...subArgs)));
+      }
+
+      return results.reduce((a, b) => a.or(b), $Never);
     };
   }
 
@@ -959,11 +1144,15 @@ class FunctionVal extends I.Record({
 class FunctionType extends ValueBase<"function"> {
   constructor(
     value: FunctionVal = new FunctionVal({
-      args: I.List([$Array.listOf($Any)]),
+      args: I.List([$Array.list([], $Any)]),
       fn: () => $Any
     })
   ) {
     super("function", value);
+  }
+
+  static new(args: ArrayType[], fn: (...args: Type[]) => Type): FunctionType {
+    return new FunctionType(new FunctionVal({ args: I.List(args), fn }));
   }
 
   define(name: string, vectorize: number[] = []): FunctionBuilder {
@@ -1002,6 +1191,22 @@ class FunctionType extends ValueBase<"function"> {
 }
 
 const $Function = new FunctionType();
+
+export const choice: FunctionType = $Function
+  .define("choice", [0, 1, 2])
+  .add([$Boolean, $Any, $Any], (cond: BooleanType, pass: Type, fail: Type) =>
+    cond.isType() ? pass.or(fail) : cond.value ? pass : fail
+  )
+  .build();
+
+export const elink: FunctionType = $Function
+  .define("elink", [0])
+  .add([$String, $String], $Link, [0, 1], (a: string, d: string) =>
+    $Widget.literal(Widgets.externalLink(a, d))
+  )
+  .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
+  .add([$Null, [$Any]], () => $Null)
+  .build();
 
 // utility
 function $(arg: null): NullType;
