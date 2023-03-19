@@ -82,7 +82,7 @@ class AnyType extends TypeBase<"any"> {
   }
 
   or(_other: Type): Type {
-    return $Any;
+    return TAny;
   }
 
   and(other: Type): Type {
@@ -110,7 +110,7 @@ class AnyType extends TypeBase<"any"> {
   }
 }
 
-const $Any = new AnyType();
+const TAny = new AnyType();
 
 // never
 class NeverVal extends I.Record({
@@ -125,14 +125,14 @@ class NeverType extends TypeBase<"never"> {
 
   error(message: string, vars: string[] = []): NeverType {
     return message === undefined
-      ? $Never
+      ? TNever
       : new NeverType(
           this.value.add(new NeverVal({ message, vars: I.Set(vars) }))
         );
   }
 
   andError(a: Type, b: Type): NeverType {
-    return $Never.error(`Can't combine '${a}' and '${b}'.`);
+    return TNever.error(`Can't combine '${a}' and '${b}'.`);
   }
 
   or(other: Type): Type {
@@ -188,7 +188,7 @@ class NeverType extends TypeBase<"never"> {
   }
 }
 
-const $Never = new NeverType();
+const TNever = new NeverType();
 
 abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
   constructor(type: K, value: ValueOf<K>) {
@@ -235,7 +235,7 @@ type IsValue<T> = T extends NullType ? T : T & { value: Exclude<T, AnyType> };
 
 abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
   constructor(type: K, value?: ValueOf<K>) {
-    super(type, value === undefined ? $Any : value);
+    super(type, value === undefined ? TAny : value);
   }
 
   _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
@@ -311,7 +311,7 @@ class NullType extends UnitBase<"null"> {
   }
 
   literal(_val: null): NullType {
-    return $Null;
+    return TNull;
   }
 
   protected override _equals(_a: null, _b: null): boolean {
@@ -352,7 +352,7 @@ class BooleanType extends UnitBase<"boolean"> {
     const cmp = this.cmp(other);
 
     return cmp === Cmp.Disjoint
-      ? [$Boolean] // true | false = boolean
+      ? [TBoolean] // true | false = boolean
       : cmp === Cmp.Subset
       ? [other]
       : [this];
@@ -411,14 +411,14 @@ class WidgetType extends UnitBase<"widget"> {
   }
 }
 
-const $Null = new NullType();
-const $Number = new NumberType() as IsType<NumberType>;
-const $String = new StringType() as IsType<StringType>;
-const $Boolean = new BooleanType() as IsType<BooleanType>;
-const $Date = new DateType() as IsType<DateType>;
-const $Duration = new DurationType() as IsType<DurationType>;
-const $Link = new LinkType() as IsType<LinkType>;
-const $Widget = new WidgetType() as IsType<WidgetType>;
+const TNull = new NullType();
+const TNumber = new NumberType() as IsType<NumberType>;
+const TString = new StringType() as IsType<StringType>;
+const TBoolean = new BooleanType() as IsType<BooleanType>;
+const TDate = new DateType() as IsType<DateType>;
+const TDuration = new DurationType() as IsType<DurationType>;
+const TLink = new LinkType() as IsType<LinkType>;
+const TWidget = new WidgetType() as IsType<WidgetType>;
 
 // union
 class UnionType extends TypeBase<"union"> {
@@ -454,7 +454,7 @@ class UnionType extends TypeBase<"union"> {
         ) => ls.flatMap((l) => rs.flatMap((r) => l._or(r))),
         UnionType.vals(rtype)
       ),
-      $Never
+      TNever
     );
   }
 
@@ -475,7 +475,7 @@ class UnionType extends TypeBase<"union"> {
           );
           return res.isEmpty() ? [] : [[k, res]];
         }),
-      $Never.andError(ltype, rtype)
+      TNever.andError(ltype, rtype)
     );
   }
 
@@ -600,7 +600,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     const _key = this.wrapKey(key) as StringType; /* KeyType<K> */
 
     return _key.isValue()
-      ? _this.value.known.get(_key.value, _this.value.unknown.or($Null))
+      ? _this.value.known.get(_key.value, _this.value.unknown.or(TNull))
       : this.allTypes;
   }
 
@@ -608,7 +608,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     if (this._allTypes === null) {
       this._allTypes = this.value.known
         .valueSeq()
-        .reduce((a, b) => a.or(b), this.value.unknown.or($Null));
+        .reduce((a, b) => a.or(b), this.value.unknown.or(TNull));
     }
 
     return this._allTypes;
@@ -616,8 +616,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
   get size(): NumberType {
     return this.value.unknown instanceof NeverType
-      ? $Number.literal(this.value.known.size)
-      : $Number;
+      ? TNumber.literal(this.value.known.size)
+      : TNumber;
   }
 
   protected _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
@@ -725,8 +725,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     for (const key of this.knownKeys(_as, _bs)) {
       const _key = key as string; /* KeyOf<K> */
 
-      const a = _as.get(_key, $Never);
-      const b = _bs.get(_key, $Never);
+      const a = _as.get(_key, TNever);
+      const b = _bs.get(_key, TNever);
 
       this.appendKnown(res, key, a.or(b));
     }
@@ -779,11 +779,11 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 // object
 class ObjectVal extends I.Record({
   known: I.Map<string, Type>(),
-  unknown: $Never as Type
+  unknown: TNever as Type
 }) {}
 
 class ObjectType extends CompositeBase<"object"> {
-  constructor(value: ValueOf<"object"> = new ObjectVal({ unknown: $Any })) {
+  constructor(value: ValueOf<"object"> = new ObjectVal({ unknown: TAny })) {
     super("object", value);
   }
 
@@ -791,16 +791,16 @@ class ObjectType extends CompositeBase<"object"> {
     return new ObjectType(new ObjectVal({ unknown, known }));
   }
 
-  object(value: Record<string, Type> = {}, def: Type = $Any): ObjectType {
+  object(value: Record<string, Type> = {}, def: Type = TAny): ObjectType {
     return this.new(I.Map(value), def);
   }
 
   literal(value: Record<string, Type> = {}): ObjectType {
-    return this.object(value, $Never);
+    return this.object(value, TNever);
   }
 
   protected wrapKey(key: string | StringType): StringType {
-    return $String.wrap(key);
+    return TString.wrap(key);
   }
 
   protected emptyKnown(): I.Map<string, Type> {
@@ -833,16 +833,16 @@ class ObjectType extends CompositeBase<"object"> {
   }
 }
 
-const $Object = new ObjectType();
+const TObject = new ObjectType();
 
 // array
 class ArrayVal extends I.Record({
   known: I.List<Type>(),
-  unknown: $Never as Type
+  unknown: TNever as Type
 }) {}
 
 class ArrayType extends CompositeBase<"array"> {
-  constructor(value: ValueOf<"array"> = new ArrayVal({ unknown: $Any })) {
+  constructor(value: ValueOf<"array"> = new ArrayVal({ unknown: TAny })) {
     super("array", value);
   }
 
@@ -850,12 +850,12 @@ class ArrayType extends CompositeBase<"array"> {
     return new ArrayType(new ArrayVal({ unknown, known }));
   }
 
-  list(value: Type[] = [], def: Type = $Any): ArrayType {
+  list(value: Type[] = [], def: Type = TAny): ArrayType {
     return this.new(I.List(value), def);
   }
 
   literal(value: Type[] = []): ArrayType {
-    return this.list(value, $Never);
+    return this.list(value, TNever);
   }
 
   append(value: Type): ArrayType {
@@ -863,7 +863,7 @@ class ArrayType extends CompositeBase<"array"> {
   }
 
   protected wrapKey(key: number | NumberType): NumberType {
-    return $Number.wrap(key);
+    return TNumber.wrap(key);
   }
 
   protected emptyKnown(): I.List<Type> {
@@ -893,7 +893,7 @@ class ArrayType extends CompositeBase<"array"> {
   }
 }
 
-const $Array = new ArrayType();
+const TArray = new ArrayType();
 
 // function
 type Vararg = [Type];
@@ -920,18 +920,18 @@ class FunctionBuilder {
     for (const pos of this.vectorize.filter((pos) => pos < argList.length)) {
       const arg = argList[pos];
 
-      argList[pos] = arg.or($Array.list([], arg));
+      argList[pos] = arg.or(TArray.list([], arg));
     }
 
     // optional types
     for (let pos = required.length; pos < argList.length; pos++) {
       const arg = argList[pos];
 
-      argList[pos] = arg.or($Null);
+      argList[pos] = arg.or(TNull);
     }
 
     // vararg types
-    const types = $Array.list(argList, vararg || $Never);
+    const types = TArray.list(argList, vararg || TNever);
 
     // valufy function
     let fn =
@@ -956,11 +956,11 @@ class FunctionBuilder {
       const errors = args.filter((arg) => arg instanceof NeverType);
 
       if (errors.length > 0) {
-        return errors.reduce((res, err) => res.or(err), $Never);
+        return errors.reduce((res, err) => res.or(err), TNever);
       }
 
       // finds match
-      const argList = $Array.list(args);
+      const argList = TArray.list(args);
       let matchFn: Fn<Type> | null = null;
 
       for (const [typeList, fn] of this.value) {
@@ -972,7 +972,7 @@ class FunctionBuilder {
 
       // throws error if none found
       if (matchFn === null) {
-        return $Never.error(
+        return TNever.error(
           `No implementation of '${this.name}' found for arguments: ${args
             .map((a) => `${a}`)
             .join(", ")}`
@@ -992,7 +992,7 @@ class FunctionBuilder {
       // union all results
       return argCombos
         .map((argCombo) => fn(...argCombo))
-        .reduce((a, b) => a.or(b), $Never);
+        .reduce((a, b) => a.or(b), TNever);
     };
 
     return FunctionType.new(types, fn);
@@ -1065,7 +1065,7 @@ class FunctionBuilder {
           ? maxOrInfinity
           : Math.max(...vecs.map((t) => t.value.known.size));
 
-      let res = $Array.literal();
+      let res = TArray.literal();
       const results: Type[] = min === 0 ? [res] : [];
 
       for (let subPos = 0; subPos < max; subPos++) {
@@ -1092,10 +1092,10 @@ class FunctionBuilder {
           subArgs[vecPos] = vecArg.get(max);
         }
 
-        results[lastPos] = last.or($Array.list([], fn(...subArgs)));
+        results[lastPos] = last.or(TArray.list([], fn(...subArgs)));
       }
 
-      return results.reduce((a, b) => a.or(b), $Never);
+      return results.reduce((a, b) => a.or(b), TNever);
     };
   }
 
@@ -1138,14 +1138,14 @@ class FunctionBuilder {
 
 class FunctionVal extends I.Record({
   args: I.List<ArrayType>(),
-  fn: (() => $Never) as (...args: Type[]) => Type
+  fn: (() => TNever) as (...args: Type[]) => Type
 }) {}
 
 class FunctionType extends ValueBase<"function"> {
   constructor(
     value: FunctionVal = new FunctionVal({
-      args: I.List([$Array.list([], $Any)]),
-      fn: () => $Any
+      args: I.List([TArray.list([], TAny)]),
+      fn: () => TAny
     })
   ) {
     super("function", value);
@@ -1190,22 +1190,22 @@ class FunctionType extends ValueBase<"function"> {
   }
 }
 
-const $Function = new FunctionType();
+const TFunction = new FunctionType();
 
-export const choice: FunctionType = $Function
+export const choice: FunctionType = TFunction
   .define("choice", [0, 1, 2])
-  .add([$Boolean, $Any, $Any], (cond: BooleanType, pass: Type, fail: Type) =>
+  .add([TBoolean, TAny, TAny], (cond: BooleanType, pass: Type, fail: Type) =>
     cond.isType() ? pass.or(fail) : cond.value ? pass : fail
   )
   .build();
 
-export const elink: FunctionType = $Function
+export const elink: FunctionType = TFunction
   .define("elink", [0])
-  .add([$String, $String], $Link, [0, 1], (a: string, d: string) =>
-    $Widget.literal(Widgets.externalLink(a, d))
+  .add([TString, TString], TLink, [0, 1], (a: string, d: string) =>
+    TWidget.literal(Widgets.externalLink(a, d))
   )
-  .add([$String, [$Null]], (s: StringType) => elink.eval(s, s))
-  .add([$Null, [$Any]], () => $Null)
+  .add([TString, [TNull]], (s: StringType) => elink.eval(s, s))
+  .add([TNull, [TAny]], () => TNull)
   .build();
 
 // utility
@@ -1233,63 +1233,63 @@ function $(
     | Type[]
 ): Type {
   if (arg === null) {
-    return $Null;
+    return TNull;
   }
 
   if (typeof arg === "number") {
-    return $Number.literal(arg);
+    return TNumber.literal(arg);
   }
 
   if (typeof arg === "string") {
-    return $String.literal(arg);
+    return TString.literal(arg);
   }
 
   if (typeof arg === "boolean") {
-    return $Boolean.literal(arg);
+    return TBoolean.literal(arg);
   }
 
   if (arg instanceof L.DateTime) {
-    return $Date.literal(arg);
+    return TDate.literal(arg);
   }
 
   if (arg instanceof L.Duration) {
-    return $Duration.literal(arg);
+    return TDuration.literal(arg);
   }
 
   if (arg instanceof Link) {
-    return $Link.literal(arg);
+    return TLink.literal(arg);
   }
 
   if (arg instanceof Widget) {
-    return $Widget.literal(arg);
+    return TWidget.literal(arg);
   }
 
   if (Array.isArray(arg)) {
-    return $Array.list(arg);
+    return TArray.list(arg);
   }
 
-  return $Object.object(arg);
+  return TObject.object(arg);
 }
 
-const $True = $Boolean.literal(true);
-const $False = $Boolean.literal(false);
+const TTrue = TBoolean.literal(true);
+const TFalse = TBoolean.literal(false);
 
 // exports
 export {
-  $Null as Null,
-  $Number as Number,
-  $String as String,
-  $Boolean as Boolean,
-  $Date as Date,
-  $Duration as Duration,
-  $Link as Link,
-  $Widget as Widget,
-  $Never as Never,
-  $Any as Any,
-  $Object as Object,
-  $Array as Array,
-  $Function as Function,
-  $True as True,
-  $False as False,
+  TNull as Null,
+  TNumber as Number,
+  TString as String,
+  TBoolean as Boolean,
+  TDate as Date,
+  TDuration as Duration,
+  TLink as Link,
+  TWidget as Widget,
+  TNever as Never,
+  TAny as Any,
+  TObject as Object,
+  TArray as Array,
+  TFunction as Function,
+  TTrue as True,
+  TFalse as False,
   $ as $
 };
