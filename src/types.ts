@@ -1204,69 +1204,6 @@ export const elink: FunctionType = TFunction
   .add([TNull, [TAny]], () => TNull)
   .build();
 
-// utility
-function $(arg: null): NullType;
-function $(arg: number): NumberType;
-function $(arg: string): StringType;
-function $(arg: boolean): BooleanType;
-function $(arg: L.DateTime): DateType;
-function $(arg: L.Duration): DurationType;
-function $(arg: Link): LinkType;
-function $(arg: Widget): WidgetType;
-function $(arg: Record<string | number, Type>): ObjectType;
-function $(arg: Type[]): ArrayType;
-function $(
-  arg:
-    | null
-    | number
-    | string
-    | boolean
-    | L.DateTime
-    | L.Duration
-    | Link
-    | Widget
-    | Record<string, Type>
-    | Type[]
-): Type {
-  if (arg === null) {
-    return TNull;
-  }
-
-  if (typeof arg === "number") {
-    return TNumber.literal(arg);
-  }
-
-  if (typeof arg === "string") {
-    return TString.literal(arg);
-  }
-
-  if (typeof arg === "boolean") {
-    return TBoolean.literal(arg);
-  }
-
-  if (arg instanceof L.DateTime) {
-    return TDate.literal(arg);
-  }
-
-  if (arg instanceof L.Duration) {
-    return TDuration.literal(arg);
-  }
-
-  if (arg instanceof Link) {
-    return TLink.literal(arg);
-  }
-
-  if (arg instanceof Widget) {
-    return TWidget.literal(arg);
-  }
-
-  if (Array.isArray(arg)) {
-    return TArray.list(arg);
-  }
-
-  return TObject.object(arg);
-}
-
 const TTrue = TBoolean.literal(true);
 const TFalse = TBoolean.literal(false);
 
@@ -1286,6 +1223,21 @@ export {
   TArray as Array,
   TFunction as Function,
   TTrue as True,
-  TFalse as False,
-  $ as $
+  TFalse as False
+};
+
+export type {
+  NullType,
+  NumberType,
+  StringType,
+  BooleanType,
+  DateType,
+  DurationType,
+  LinkType,
+  WidgetType,
+  NeverType,
+  AnyType,
+  ObjectType,
+  ArrayType,
+  FunctionType
 };
