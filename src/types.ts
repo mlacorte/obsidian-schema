@@ -2,10 +2,6 @@ import * as I from "immutable";
 import * as L from "luxon";
 import { Link, Widget, Widgets } from "obsidian-dataview";
 
-declare module "obsidian-dataview" {
-  const Widgets: typeof import("obsidian-dataview/lib/data-model/value").Widgets;
-}
-
 type TypeMap = {
   null: { type: NullType; value: null };
   number: { type: NumberType; value: number | AnyType };
