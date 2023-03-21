@@ -61,7 +61,7 @@ class ValueSet {
             (acc, { id, vals }) =>
               acc.flatMap(({ argVals, conds: oldConds }) =>
                 vals.toArray().flatMap(({ val: newVal, conds: newConds }) => {
-                  const conds = oldConds.asMutable();
+                  const conds: I.Map<string, T.Type> = oldConds.asMutable();
 
                   for (const [ref, val] of newConds.concat([[id, newVal]])) {
                     const oldVal = conds.get(ref);
