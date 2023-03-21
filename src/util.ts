@@ -60,8 +60,8 @@ export function literal(
   }
 
   if (Array.isArray(arg)) {
-    return T.Array.list(arg);
+    return T.Array.literal(arg);
   }
 
-  return T.Object.object(arg);
+  return T.Object.literal(arg);
 }
