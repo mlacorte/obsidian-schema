@@ -781,8 +781,6 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract unknownCtr: string;
 }
 
-// TODO: prevent compsite unknowns from containing parent type
-
 // object
 class ObjectVal extends I.Record({
   known: I.Map<string, Type>(),
@@ -1008,7 +1006,7 @@ class FunctionBuilder {
       .map((pair) => pair[0])
       .reduce((a, b) => a.or(b), TNever);
 
-    return FunctionType.new(types, fn);
+    return FunctionType.new(this.name, types, fn);
   }
 
   private valufyFn(def: Type, valufy: Valufy, fn: Fn<any>): Fn<Type> {
@@ -1121,23 +1119,23 @@ class FunctionBuilder {
   }
 }
 
-class FunctionVal extends I.Record({
-  args: TNever as Type,
-  fn: (() => TNever) as (...args: Type[]) => Type
-}) {}
+type FunctionVal = (...args: Type[]) => Type;
 
 class FunctionType extends ValueBase<"function"> {
   constructor(
-    value: FunctionVal = new FunctionVal({
-      args: TAny,
-      fn: () => TAny
-    })
+    public name: string = "<function>",
+    public args: Type = TArray.list(),
+    value: FunctionVal = () => TAny
   ) {
     super("function", value);
   }
 
-  static new(args: Type, fn: (...args: Type[]) => Type): FunctionType {
-    return new FunctionType(new FunctionVal({ args, fn }));
+  static new(
+    name: string,
+    args: Type,
+    fn: (...args: Type[]) => Type
+  ): FunctionType {
+    return new FunctionType(name, args, fn);
   }
 
   define(name: string, vectorize: number[] = []): FunctionBuilder {
@@ -1145,7 +1143,7 @@ class FunctionType extends ValueBase<"function"> {
   }
 
   eval(...args: Type[]): Type {
-    return this.value.fn(...args);
+    return this.value(...args);
   }
 
   protected _or(
@@ -1163,11 +1161,15 @@ class FunctionType extends ValueBase<"function"> {
   }
 
   toString(): string {
-    return "TODO: FunctionType.toString()";
+    return `${this.name}(...${this.args})`;
   }
 
   toJSON(): unknown {
-    return "TODO: FunctionType.toJSON()";
+    return {
+      type: "function",
+      name: this.name,
+      args: this.args.toString()
+    };
   }
 
   isType(): boolean {
@@ -1193,6 +1195,8 @@ export const elink: FunctionType = TFunction.define("elink", [0])
 
 const TTrue = TBoolean.literal(true);
 const TFalse = TBoolean.literal(false);
+
+throw choice.toString();
 
 // exports
 export {
