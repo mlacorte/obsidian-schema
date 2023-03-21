@@ -1196,8 +1196,6 @@ export const elink: FunctionType = TFunction.define("elink", [0])
 const TTrue = TBoolean.literal(true);
 const TFalse = TBoolean.literal(false);
 
-throw choice.toString();
-
 // exports
 export {
   TNull as Null,
