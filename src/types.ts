@@ -39,10 +39,10 @@ export type Type = TypeOf<TypeKey>;
 type ValueType = TypeOf<ValueKey>;
 
 export const enum Cmp {
-  Equal = 0b00,
-  Subset = 0b01,
-  Superset = 0b10,
-  Disjoint = 0b11
+  Equal = 0b00, // 0
+  Subset = 0b01, // 1
+  Superset = 0b10, // 2
+  Disjoint = 0b11 // 3
 }
 
 abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
@@ -459,7 +459,7 @@ class UnionType extends TypeBase<"union"> {
     const rvals = UnionType.vals(rtype);
 
     return UnionType.shrink(
-      I.Set.union<ValueKey>([lvals.keys(), rvals.keys()])
+      I.Set.union<ValueKey>([lvals.keySeq(), rvals.keySeq()])
         .toMap()
         .flatMap((k) => {
           const res: I.Set<ValueType> = (
@@ -478,7 +478,7 @@ class UnionType extends TypeBase<"union"> {
   static cmp(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Cmp {
     const lvals = UnionType.vals(ltype);
     const rvals = UnionType.vals(rtype);
-    const keys = I.Set.intersect<ValueKey>([lvals.keys(), rvals.keys()]);
+    const keys = I.Set.intersect<ValueKey>([lvals.keySeq(), rvals.keySeq()]);
 
     let res =
       (keys.size < rvals.size ? Cmp.Subset : Cmp.Equal) |
@@ -554,7 +554,9 @@ class UnionType extends TypeBase<"union"> {
   }
 
   toString() {
-    return this.value.map((t) => `${t}`).join(" or ");
+    return this.types()
+      .map((t) => `${t}`)
+      .join(" or ");
   }
 
   toJSON(): unknown {
@@ -745,12 +747,20 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 
   toString(): string {
     const { known, unknown } = this.value;
+    const empty = this.literals.join("").replace(/ +/g, "");
 
-    return known.isEmpty()
-      ? `${this.type}<${unknown}>`
-      : `[${known.map((t, k) => this.toStringIndexed(k as any, t)).join(", ")}${
-          unknown instanceof NeverType ? "" : `, ...${this.type}<${unknown}>`
-        }]`;
+    const emptyKnown = known.isEmpty();
+    const emptyUnknown = unknown instanceof NeverType;
+
+    return emptyKnown && emptyUnknown
+      ? empty
+      : emptyKnown
+      ? `${this.unknownCtr}(${unknown})`
+      : `${this.literals[0]}${known
+          .map((t, k) => this.toStringIndexed(k as any, t))
+          .join(", ")}${
+          emptyUnknown ? "" : `, ...${this.unknownCtr}(${unknown})`
+        }${this.literals[1]}`;
   }
 
   protected abstract wrapKey(key: KeyOf<K> | KeyType<K>): KeyType<K>;
@@ -768,6 +778,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract knownToJSON(): unknown;
   protected abstract literals: [string, string];
   protected abstract toStringIndexed(key: KeyOf<K>, type: Type): string;
+  protected abstract unknownCtr: string;
 }
 
 // TODO: prevent compsite unknowns from containing parent type
@@ -783,16 +794,16 @@ class ObjectType extends CompositeBase<"object"> {
     super("object", value);
   }
 
-  protected new(known: I.Map<any, Type>, unknown: Type): ObjectType {
+  new(known: I.Map<any, Type>, unknown: Type): ObjectType {
     return new ObjectType(new ObjectVal({ unknown, known }));
   }
 
-  object(value: Record<string, Type> = {}, def: Type = TAny): ObjectType {
+  object(def: Type = TAny, value: Record<string, Type> = {}): ObjectType {
     return this.new(I.Map(value), def);
   }
 
   literal(value: Record<string, Type> = {}): ObjectType {
-    return this.object(value, TNever);
+    return this.object(TNever, value);
   }
 
   protected wrapKey(key: string | StringType): StringType {
@@ -815,7 +826,7 @@ class ObjectType extends CompositeBase<"object"> {
     as: I.Map<string, Type>,
     bs: I.Map<string, Type>
   ): Iterable<string> {
-    return I.Set.union([as.keys(), bs.keys()]);
+    return I.Set.union([as.keySeq(), bs.keySeq()]);
   }
 
   protected knownToJSON(): unknown {
@@ -827,6 +838,8 @@ class ObjectType extends CompositeBase<"object"> {
   protected toStringIndexed(key: string, type: Type): string {
     return `${key}: ${type}`;
   }
+
+  protected unknownCtr = "objectOf";
 }
 
 const TObject = new ObjectType();
@@ -842,16 +855,16 @@ class ArrayType extends CompositeBase<"array"> {
     super("array", value);
   }
 
-  protected new(known: I.List<Type>, unknown: Type): ArrayType {
+  new(known: I.List<Type>, unknown: Type): ArrayType {
     return new ArrayType(new ArrayVal({ unknown, known }));
   }
 
-  list(value: Type[] = [], def: Type = TAny): ArrayType {
+  list(def: Type = TAny, value: Type[] = []): ArrayType {
     return this.new(I.List(value), def);
   }
 
   literal(value: Type[] = []): ArrayType {
-    return this.list(value, TNever);
+    return this.list(TNever, value);
   }
 
   append(value: Type): ArrayType {
@@ -875,7 +888,7 @@ class ArrayType extends CompositeBase<"array"> {
   }
 
   protected knownKeys(as: I.List<Type>, bs: I.List<Type>): Iterable<number> {
-    return as.size > bs.size ? as.keys() : bs.keys();
+    return as.size > bs.size ? as.keySeq() : bs.keySeq();
   }
 
   protected knownToJSON(): unknown {
@@ -887,6 +900,8 @@ class ArrayType extends CompositeBase<"array"> {
   protected toStringIndexed(_key: number, type: Type): string {
     return `${type}`;
   }
+
+  protected unknownCtr = "listOf";
 }
 
 const TArray = new ArrayType();
@@ -916,7 +931,7 @@ class FunctionBuilder {
     for (const pos of this.vectorize.filter((pos) => pos < argList.length)) {
       const arg = argList[pos];
 
-      argList[pos] = arg.or(TArray.list([], arg));
+      argList[pos] = arg.or(TArray.list(arg));
     }
 
     // optional types
@@ -927,7 +942,7 @@ class FunctionBuilder {
     }
 
     // vararg types
-    const types = TArray.list(argList, vararg || TNever);
+    const types = TArray.list(vararg || TNever, argList);
 
     // valufy function
     let fn =
@@ -945,8 +960,6 @@ class FunctionBuilder {
   }
 
   build(): FunctionType {
-    const types = this.value.map((v) => v[0]);
-
     const fn: Fn<Type> = (...args: Type[]): Type => {
       // propagate errors
       const errors = args.filter((arg) => arg instanceof NeverType);
@@ -956,11 +969,11 @@ class FunctionBuilder {
       }
 
       // finds match
-      const argList = TArray.list(args);
+      const argList = TArray.literal(args);
       let matchFn: Fn<Type> | null = null;
 
-      for (const [typeList, fn] of this.value) {
-        if (argList.cmp(typeList) <= Cmp.Subset) {
+      for (const [types, fn] of this.value) {
+        if (argList.cmp(types) <= Cmp.Subset) {
           matchFn = fn;
           break;
         }
@@ -987,9 +1000,13 @@ class FunctionBuilder {
 
       // union all results
       return argCombos
-        .map((argCombo) => fn(...argCombo))
+        .map((argCombo) => (matchFn as Fn<Type>)(...argCombo))
         .reduce((a, b) => a.or(b), TNever);
     };
+
+    const types = this.value
+      .map((pair) => pair[0])
+      .reduce((a, b) => a.or(b), TNever);
 
     return FunctionType.new(types, fn);
   }
@@ -1012,45 +1029,17 @@ class FunctionBuilder {
 
   private vectorizeFn(fn: Fn<Type>): Fn<Type> {
     return (...args: Type[]): Type => {
-      const vecMap = this.vectorize
-        .filter((pos) => args[pos] instanceof ArrayType && pos < args.length)
-        .reduce(
-          (acc, pos) => acc.set(pos, args[pos] as ArrayType),
-          new Map<number, ArrayType>()
-        );
+      const vecMap = new Map(
+        this.vectorize
+          .filter((pos) => args[pos] instanceof ArrayType && pos < args.length)
+          .map((pos) => [pos, args[pos] as ArrayType])
+      );
 
       const vecs = [...vecMap.values()];
 
       if (vecs.length === 0) {
         return fn(...args);
       }
-
-      // TODO: Test this behavior
-
-      // (2,2)
-      // choice(boolean, [string, 10], number)
-      // [{string,number}, {number}]
-      // 1
-
-      // (0,2)
-      // choice([...list(boolean)], [string, 10], number)
-      // [] | [{string,number}] | [{string,number}, {number}]
-      // -1   0                   1
-
-      // (0,0,inf)
-      // choice([...list(boolean)], [...list(string | 10)], number)
-      // [...list{string,number}]
-      // -1
-
-      // (0,2,inf)
-      // choice([...list(boolean)], [string, 10, ...list(number)], number)
-      // [] | [{string,number}] | [{string,number}, {number}, ...list{number}]
-      // -1   0                   1
-
-      // (1,2)
-      // choice([boolean, ...list(boolean)], [3, 4], [5, 6])
-      // [{3,5}] | [{3,5}, {4,6}]
-      // 0         1
 
       const maxOrInfinity = Math.min(
         ...vecs.map((t) => (t.isKnown() ? t.value.known.size : Infinity))
@@ -1080,15 +1069,15 @@ class FunctionBuilder {
 
       if (maxOrInfinity === Infinity) {
         const lastPos = results.length - 1;
-        const last = results[lastPos];
+        const last = results[lastPos] as ArrayType;
 
         const subArgs = [...args];
 
         for (const [vecPos, vecArg] of vecMap.entries()) {
-          subArgs[vecPos] = vecArg.get(max);
+          subArgs[vecPos] = vecArg.value.known.get(max, vecArg.value.unknown);
         }
 
-        results[lastPos] = last.or(TArray.list([], fn(...subArgs)));
+        results[lastPos] = TArray.new(last.value.known, fn(...subArgs));
       }
 
       return results.reduce((a, b) => a.or(b), TNever);
@@ -1133,22 +1122,22 @@ class FunctionBuilder {
 }
 
 class FunctionVal extends I.Record({
-  args: I.List<ArrayType>(),
+  args: TNever as Type,
   fn: (() => TNever) as (...args: Type[]) => Type
 }) {}
 
 class FunctionType extends ValueBase<"function"> {
   constructor(
     value: FunctionVal = new FunctionVal({
-      args: I.List([TArray.list([], TAny)]),
+      args: TAny,
       fn: () => TAny
     })
   ) {
     super("function", value);
   }
 
-  static new(args: ArrayType[], fn: (...args: Type[]) => Type): FunctionType {
-    return new FunctionType(new FunctionVal({ args: I.List(args), fn }));
+  static new(args: Type, fn: (...args: Type[]) => Type): FunctionType {
+    return new FunctionType(new FunctionVal({ args, fn }));
   }
 
   define(name: string, vectorize: number[] = []): FunctionBuilder {
@@ -1188,15 +1177,13 @@ class FunctionType extends ValueBase<"function"> {
 
 const TFunction = new FunctionType();
 
-export const choice: FunctionType = TFunction
-  .define("choice", [0, 1, 2])
+export const choice: FunctionType = TFunction.define("choice", [0, 1, 2])
   .add([TBoolean, TAny, TAny], (cond: BooleanType, pass: Type, fail: Type) =>
     cond.isType() ? pass.or(fail) : cond.value ? pass : fail
   )
   .build();
 
-export const elink: FunctionType = TFunction
-  .define("elink", [0])
+export const elink: FunctionType = TFunction.define("elink", [0])
   .add([TString, TString], TLink, [0, 1], (a: string, d: string) =>
     TWidget.literal(Widgets.externalLink(a, d))
   )
