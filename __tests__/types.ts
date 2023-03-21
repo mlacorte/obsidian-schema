@@ -1,9 +1,12 @@
+import { fn } from "../src/builtins";
 import * as T from "../src/types";
+
+const one = T.Number.literal(1);
+const two = T.Number.literal(2);
+const three = T.Number.literal(3);
 
 describe("types", () => {
   test("types", () => {
-    const one = T.Number.literal(1);
-    const two = T.Number.literal(2);
     const number = one.or(T.Number);
     const never = one.and(two);
     const oneOrTwo = one.or(two);
@@ -57,9 +60,6 @@ describe("types", () => {
   });
 
   test("equality", () => {
-    const one = T.Number.literal(1);
-    const two = T.Number.literal(2);
-
     expect(T.Number.equals(T.Number)).toBe(true);
     expect(T.Number.equals(T.String)).toBe(false);
     expect(one.or(two).equals(two.or(one))).toBe(true);
@@ -68,10 +68,6 @@ describe("types", () => {
   });
 
   test("objects", () => {
-    const one = T.Number.literal(1);
-    const two = T.Number.literal(2);
-    const three = T.Number.literal(3);
-
     const a = T.Object.object(T.Any, { a: one.or(two) });
     const b = T.Object.object(T.Any, { a: one });
     const c = T.Object.object(T.Any, { a: one, b: one });
@@ -92,10 +88,6 @@ describe("types", () => {
   });
 
   test("lists", () => {
-    const one = T.Number.literal(1);
-    const two = T.Number.literal(2);
-    const three = T.Number.literal(3);
-
     const a = T.Array.list(T.Any, [one.or(two)]);
     const b = T.Array.list(T.Any, [one]);
     const c = T.Array.list(T.Any, [one, two]);
@@ -134,51 +126,56 @@ describe("types", () => {
     expect(literal.cmp(b)).toBe(T.Cmp.Subset);
   });
 
-  test("functions", () => {
-    const $one = T.Number.literal(1);
-    const $two = T.Number.literal(2);
+  describe("functions", () => {
+    test("vectorize", () => {
+      const lit = (arg: T.Type | T.Type[]): T.Type =>
+        Array.isArray(arg) ? T.Array.literal(arg as T.Type[]) : (arg as T.Type);
 
-    const $str = T.String;
-    const $num = T.Number;
-    const $bool = T.Boolean;
-    const $true = T.True;
-    const $false = T.False;
+      const or = (...args: (T.Type | T.Type[])[]) =>
+        args.map(lit).reduce((a, b) => a.or(b), T.Never);
 
-    const list = (t: T.Type = T.Any, vs: T.Type[] = []) => T.Array.list(t, vs);
+      const tests: [T.Type, T.Type, T.Type, T.Type][] = [
+        [T.True, one, two, one],
+        [[T.True, T.False], one, two, [one, two]],
+        [
+          T.Boolean,
+          [T.String, one],
+          T.Number,
+          [or(T.String, T.Number), T.Number]
+        ],
+        [
+          T.Array.list(T.Boolean),
+          [T.String, one],
+          T.Number,
+          or([], [or(T.String, T.Number)], [or(T.String, T.Number), T.Number])
+        ],
+        [
+          T.Array.list(T.Boolean),
+          T.Array.list(T.String.or(one)),
+          T.Number,
+          T.Array.list(T.Number.or(T.String))
+        ],
+        [
+          T.Array.list(T.Boolean),
+          T.Array.list(T.Number, [T.String, one]),
+          T.Number,
+          or(
+            [],
+            [T.String.or(T.Number)],
+            T.Array.list(T.Number, [T.String.or(T.Number), T.Number])
+          )
+        ],
+        [
+          T.Array.list(T.Boolean, [T.Boolean]),
+          [T.String, one],
+          [T.Number, two],
+          or([or(T.String, T.Number)], [or(T.String, T.Number), or(one, two)])
+        ]
+      ].map((row) => row.map(lit) as any);
 
-    const lit = (arg: T.Type | T.Type[]): T.Type =>
-      Array.isArray(arg) ? T.Array.literal(arg as T.Type[]) : (arg as T.Type);
-
-    const or = (...args: (T.Type | T.Type[])[]) =>
-      args.map(lit).reduce((a, b) => a.or(b), T.Never);
-
-    const tests: [T.Type, T.Type, T.Type, T.Type][] = [
-      [$true, $one, $two, $one],
-      [[$true, $false], $one, $two, [$one, $two]],
-      [$bool, [$str, $one], $num, [or($str, $num), $num]],
-      [
-        list($bool),
-        [$str, $one],
-        $num,
-        or([], [or($str, $num)], [or($str, $num), $num])
-      ],
-      [list($bool), list($str.or($one)), $num, list($num.or($str))],
-      [
-        list($bool),
-        list($num, [$str, $one]),
-        $num,
-        or([], [$str.or($num)], list($num, [$str.or($num), $num]))
-      ],
-      [
-        list($bool, [$bool]),
-        [$str, $one],
-        [$num, $two],
-        or([or($str, $num)], [or($str, $num), or($one, $two)])
-      ]
-    ].map((row) => row.map(lit) as any);
-
-    for (const test of tests) {
-      expect(T.choice.eval(...(test.slice(0, 3) as any))).toEqual(test[3]);
-    }
+      for (const test of tests) {
+        expect(fn.choice.eval(...(test.slice(0, 3) as any))).toEqual(test[3]);
+      }
+    });
   });
 });

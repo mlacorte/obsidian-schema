@@ -1,10 +1,10 @@
-import { op } from "../src/functions";
+import { op } from "../src/builtins";
 import * as T from "../src/types";
 
 const one = T.Number.literal(1);
 const two = T.Number.literal(2);
 
-describe("functions", () => {
+describe("builtins", () => {
   describe("ops", () => {
     test("lte", () => {
       expect(op.lte.eval(one, two)).toEqual(T.True);

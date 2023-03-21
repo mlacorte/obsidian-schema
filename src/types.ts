@@ -1,6 +1,6 @@
 import * as I from "immutable";
 import * as L from "luxon";
-import { Link, Widget, Widgets } from "obsidian-dataview";
+import { Link, Widget } from "obsidian-dataview";
 
 type TypeMap = {
   null: { type: NullType; value: null };
@@ -415,6 +415,9 @@ const TDate = new DateType() as IsType<DateType>;
 const TDuration = new DurationType() as IsType<DurationType>;
 const TLink = new LinkType() as IsType<LinkType>;
 const TWidget = new WidgetType() as IsType<WidgetType>;
+
+const TTrue = TBoolean.literal(true);
+const TFalse = TBoolean.literal(false);
 
 // union
 class UnionType extends TypeBase<"union"> {
@@ -1178,23 +1181,6 @@ class FunctionType extends ValueBase<"function"> {
 }
 
 const TFunction = new FunctionType();
-
-export const choice: FunctionType = TFunction.define("choice", [0, 1, 2])
-  .add([TBoolean, TAny, TAny], (cond: BooleanType, pass: Type, fail: Type) =>
-    cond.isType() ? pass.or(fail) : cond.value ? pass : fail
-  )
-  .build();
-
-export const elink: FunctionType = TFunction.define("elink", [0])
-  .add([TString, TString], TLink, [0, 1], (a: string, d: string) =>
-    TWidget.literal(Widgets.externalLink(a, d))
-  )
-  .add([TString, [TNull]], (s: StringType) => elink.eval(s, s))
-  .add([TNull, [TAny]], () => TNull)
-  .build();
-
-const TTrue = TBoolean.literal(true);
-const TFalse = TBoolean.literal(false);
 
 // exports
 export {
