@@ -1,67 +1,145 @@
-import { App, Modal, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { getAPI } from "obsidian-dataview";
+import {
+  autorun,
+  configure,
+  observable,
+  reaction,
+  runInAction,
+  toJS
+} from "mobx";
+import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
 
-interface SchemaPluginSettings {
-  validateInactiveNotes: boolean;
-}
-
-const DEFAULT_SETTINGS: SchemaPluginSettings = {
-  validateInactiveNotes: false
-};
+import {
+  DEFAULT_DATAVIEW_SETTINGS,
+  DEFAULT_SCHEMA_SETTINGS,
+  ObservableContext
+} from "./context";
 
 export default class SchemaPlugin extends Plugin {
-  settings: SchemaPluginSettings;
+  context: ObservableContext = new ObservableContext();
+
+  protected get settings() {
+    return this.context.settings;
+  }
+
+  protected get appPlugins() {
+    return (this.app as any).plugins;
+  }
+
+  protected get dataview() {
+    return this.appPlugins.plugins["dataview"];
+  }
+
+  private onPluginChangeDisposer: () => void = () => undefined;
+
+  private schemaDisposers: (() => void)[] = [];
+  private get schemaDisposer() {
+    return () => {
+      this.schemaDisposers.forEach((dispose) => dispose());
+      this.schemaDisposers = [];
+    };
+  }
+  private set schemaDisposer(dispose: () => void) {
+    this.schemaDisposers.push(dispose);
+  }
 
   async onload() {
     console.clear();
 
-    await this.loadSettings();
+    // allow dataview to mutate its settings without mobx warnings
+    configure({ enforceActions: "never" });
 
-    const dv = getAPI(this.app);
-    if (!dv) {
-      new Alert(this.app).open();
-      return;
-    }
+    // make plugins observable
+    this.appPlugins.plugins = observable(
+      this.appPlugins.plugins,
+      {},
+      { deep: false }
+    );
 
+    // watch plugins
+    this.onPluginChangeDisposer = autorun(() => {
+      if (!this.dataview) {
+        return;
+      }
+
+      // load dataview and start watching settings
+      if (this.dataview.settings) {
+        this.loadAndWatchDataviewSettings();
+      } else {
+        this.app.metadataCache.on("dataview:api-ready" as any, () => {
+          this.loadAndWatchDataviewSettings();
+        });
+      }
+    });
+
+    // load schema settings
+    await runInAction(async () => {
+      this.settings.schema = Object.assign(
+        {},
+        DEFAULT_SCHEMA_SETTINGS,
+        await this.loadData()
+      );
+    });
+
+    // save schema settings on change
+    this.schemaDisposer = reaction(
+      () => Object.values(this.settings.schema),
+      () => {
+        this.saveData(this.settings.schema);
+      }
+    );
+
+    // add settings page
     this.addSettingTab(new SchemaSettingsTab(this.app, this));
   }
 
-  onunload() {}
+  onunload() {
+    // return mobx to default configuration
+    configure({ enforceActions: "observed" });
 
-  async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    // stop watchers
+    this.schemaDisposer();
+    this.onPluginChangeDisposer();
+
+    // return dataview to its default state
+    this.unloadDataview();
+
+    // return plugins to its default state
+    this.appPlugins.plugins = { ...this.appPlugins.plugins };
   }
 
-  async saveSettings() {
-    await this.saveData(this.settings);
-  }
-}
+  loadAndWatchDataviewSettings() {
+    this.dataview.settings = observable(this.dataview.settings);
 
-class Alert extends Modal {
-  constructor(app: App) {
-    super(app);
-  }
+    runInAction(() => {
+      this.settings.dataview = this.dataview.settings;
+    });
 
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.setText(
-      "Plugin 'Dataview' is required for Schema to work. \
-      Please install it and re-enable Schema."
-    );
+    const onunloadDataview = this.dataview.onunload.bind(this.dataview);
+    this.dataview.onunload = () => {
+      this.unloadDataview();
+      onunloadDataview();
+    };
   }
 
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+  unloadDataview() {
+    this.dataview.settings = toJS(this.dataview.settings);
+
+    runInAction(() => {
+      this.settings.dataview = DEFAULT_DATAVIEW_SETTINGS;
+    });
   }
 }
 
 class SchemaSettingsTab extends PluginSettingTab {
-  plugin: SchemaPlugin;
+  context: ObservableContext;
+
+  get settings() {
+    return this.context.settings.schema;
+  }
 
   constructor(app: App, plugin: SchemaPlugin) {
     super(app, plugin);
-    this.plugin = plugin;
+    this.context = plugin.context;
   }
 
   display(): void {
@@ -80,12 +158,11 @@ class SchemaSettingsTab extends PluginSettingTab {
         information at the expense of reduced performance in large vaults."
       )
       .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.validateInactiveNotes)
-          .onChange(async (value) => {
-            this.plugin.settings.validateInactiveNotes = value;
-            await this.plugin.saveSettings();
+        toggle.setValue(this.settings.validateInactiveNotes).onChange((value) =>
+          runInAction(() => {
+            this.settings.validateInactiveNotes = value;
           })
+        )
       );
   }
 }
