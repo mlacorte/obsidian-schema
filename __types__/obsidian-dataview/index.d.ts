@@ -1,5 +1,6 @@
 import "obsidian-dataview";
 
+import { Plugin } from "obsidian";
 import { DataviewApi, DataviewSettings } from "obsidian-dataview";
 
 declare module "obsidian" {
@@ -7,7 +8,7 @@ declare module "obsidian" {
     plugins: {
       enabledPlugins: Set<string>;
       plugins: {
-        dataview?: {
+        dataview?: Plugin & {
           settings?: DataviewSettings;
           api: DataviewApi;
           onunload(): void;

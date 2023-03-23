@@ -1,6 +1,7 @@
+import { MetadataChangeCallback } from "__types__/obsidian";
 import { autorun, configure, observable, reaction, toJS } from "mobx";
-import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { DataviewSettings } from "obsidian-dataview";
+import { App, EventRef, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { DataviewSettings, PageMetadata } from "obsidian-dataview";
 
 import { ObservableContext } from "./context";
 
@@ -19,6 +20,19 @@ export default class SchemaPlugin extends Plugin {
   }
   private set schemaDisposer(dispose: () => void) {
     this._schemaDisposer.push(dispose);
+  }
+
+  private _metadataDisposer: EventRef[] = [];
+  get metadataDisposer(): () => void {
+    return () => {
+      this._metadataDisposer.forEach((ref) =>
+        this.app.metadataCache.offref(ref)
+      );
+      this._metadataDisposer = [];
+    };
+  }
+  set metadataDisposer(ref: EventRef) {
+    this._metadataDisposer.push(ref);
   }
 
   async onload() {
@@ -46,9 +60,13 @@ export default class SchemaPlugin extends Plugin {
       if (dataview.settings !== undefined) {
         this.loadAndWatchDataviewSettings(dataview as LoadedDataviewPlugin);
       } else {
-        this.app.metadataCache.on("dataview:api-ready" as any, () => {
-          this.loadAndWatchDataviewSettings(dataview as LoadedDataviewPlugin);
-        });
+        const ref = this.app.metadataCache.on(
+          "dataview:api-ready" as any,
+          () => {
+            this.loadAndWatchDataviewSettings(dataview as LoadedDataviewPlugin);
+            this.app.metadataCache.offref(ref);
+          }
+        );
       }
     });
 
@@ -89,6 +107,15 @@ export default class SchemaPlugin extends Plugin {
     dataview.settings = observable(dataview.settings);
     this.context.linkDataviewSettings(dataview.settings);
 
+    if (dataview.api.index.initialized) {
+      this.registerDataviewChangeListener(dataview);
+    } else {
+      const ref = this.app.metadataCache.on("dataview:index-ready", () => {
+        this.registerDataviewChangeListener(dataview);
+        this.app.metadataCache.offref(ref);
+      });
+    }
+
     const onunloadDataview = dataview.onunload.bind(dataview);
     dataview.onunload = () => {
       this.unloadDataview(dataview);
@@ -96,8 +123,27 @@ export default class SchemaPlugin extends Plugin {
     };
   }
 
+  registerDataviewChangeListener(dataview: LoadedDataviewPlugin) {
+    const updateFn: MetadataChangeCallback = (type, file) => {
+      const data = dataview.api.index.pages.get(file.path) as PageMetadata;
+
+      // TODO: make this synchronize state
+      console.log({ type, path: file.path, fields: data.fields });
+    };
+
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      updateFn("update", file, undefined);
+    }
+
+    this.metadataDisposer = this.app.metadataCache.on(
+      "dataview:metadata-change",
+      updateFn
+    );
+  }
+
   unloadDataview(dataview: DataviewPlugin) {
     dataview.settings = toJS(dataview.settings);
+    this.metadataDisposer();
     this.context.resetDataviewSettings();
   }
 }
