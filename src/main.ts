@@ -6,15 +6,13 @@ import { ObservableContext } from "./context";
 export default class SchemaPlugin extends Plugin {
   context: ObservableContext = new ObservableContext();
 
-  protected get appPlugins() {
+  protected get plugins() {
     return (this.app as any).plugins;
   }
 
   protected get dataview() {
-    return this.appPlugins.plugins["dataview"];
+    return this.plugins.plugins["dataview"];
   }
-
-  private onPluginChangeDisposer: () => void = () => undefined;
 
   private schemaDisposers: (() => void)[] = [];
   private get schemaDisposer() {
@@ -34,14 +32,14 @@ export default class SchemaPlugin extends Plugin {
     configure({ enforceActions: "never" });
 
     // make plugins observable
-    this.appPlugins.plugins = observable(
-      this.appPlugins.plugins,
+    this.plugins.plugins = observable(
+      this.plugins.plugins,
       {},
       { deep: false }
     );
 
     // watch plugins
-    this.onPluginChangeDisposer = autorun(() => {
+    this.schemaDisposer = autorun(() => {
       if (!this.dataview) {
         return;
       }
@@ -77,13 +75,12 @@ export default class SchemaPlugin extends Plugin {
 
     // stop watchers
     this.schemaDisposer();
-    this.onPluginChangeDisposer();
 
     // return dataview to its default state
     this.unloadDataview();
 
     // return plugins to its default state
-    this.appPlugins.plugins = { ...this.appPlugins.plugins };
+    this.plugins.plugins = { ...this.plugins.plugins };
   }
 
   loadAndWatchDataviewSettings() {
