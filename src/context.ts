@@ -49,7 +49,11 @@ export class ObservableContext implements IContext {
     Object.assign(this.settings.schema, update);
   }
 
-  linkDataviewSettings(settings: DataviewSettings = DEFAULT_DATAVIEW_SETTINGS) {
+  linkDataviewSettings(settings: DataviewSettings) {
     this.settings.dataview = settings;
+  }
+
+  resetDataviewSettings() {
+    this.settings.dataview = DEFAULT_DATAVIEW_SETTINGS;
   }
 }

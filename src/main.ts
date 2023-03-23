@@ -1,17 +1,17 @@
 import { autorun, configure, observable, reaction, toJS } from "mobx";
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { DataviewSettings } from "obsidian-dataview";
 
 import { ObservableContext } from "./context";
+
+type DataviewPlugin = Exclude<App["plugins"]["plugins"]["dataview"], undefined>;
+type LoadedDataviewPlugin = DataviewPlugin & { settings: DataviewSettings };
 
 export default class SchemaPlugin extends Plugin {
   context: ObservableContext = new ObservableContext();
 
-  protected get plugins() {
-    return (this.app as any).plugins;
-  }
-
   protected get dataview() {
-    return this.plugins.plugins["dataview"];
+    return this.app.plugins.plugins["dataview"];
   }
 
   private schemaDisposers: (() => void)[] = [];
@@ -32,24 +32,26 @@ export default class SchemaPlugin extends Plugin {
     configure({ enforceActions: "never" });
 
     // make plugins observable
-    this.plugins.plugins = observable(
-      this.plugins.plugins,
+    this.app.plugins.plugins = observable(
+      this.app.plugins.plugins,
       {},
       { deep: false }
     );
 
     // watch plugins
     this.schemaDisposer = autorun(() => {
-      if (!this.dataview) {
+      const dataview = this.app.plugins.plugins["dataview"];
+
+      if (dataview === undefined) {
         return;
       }
 
       // load dataview and start watching settings
-      if (this.dataview.settings) {
-        this.loadAndWatchDataviewSettings();
+      if (dataview.settings !== undefined) {
+        this.loadAndWatchDataviewSettings(dataview as LoadedDataviewPlugin);
       } else {
         this.app.metadataCache.on("dataview:api-ready" as any, () => {
-          this.loadAndWatchDataviewSettings();
+          this.loadAndWatchDataviewSettings(dataview as LoadedDataviewPlugin);
         });
       }
     });
@@ -76,27 +78,31 @@ export default class SchemaPlugin extends Plugin {
     // stop watchers
     this.schemaDisposer();
 
-    // return dataview to its default state
-    this.unloadDataview();
+    // if dataview is loaded
+    const dataview = this.app.plugins.plugins["dataview"];
+    if (dataview) {
+      // return dataview to its default state
+      this.unloadDataview(dataview);
 
-    // return plugins to its default state
-    this.plugins.plugins = { ...this.plugins.plugins };
+      // return plugins to its default state
+      this.app.plugins.plugins = { ...this.app.plugins.plugins };
+    }
   }
 
-  loadAndWatchDataviewSettings() {
-    this.dataview.settings = observable(this.dataview.settings);
-    this.context.linkDataviewSettings(this.dataview.settings);
+  loadAndWatchDataviewSettings(dataview: LoadedDataviewPlugin) {
+    dataview.settings = observable(dataview.settings);
+    this.context.linkDataviewSettings(dataview.settings);
 
-    const onunloadDataview = this.dataview.onunload.bind(this.dataview);
-    this.dataview.onunload = () => {
-      this.unloadDataview();
+    const onunloadDataview = dataview.onunload.bind(this.dataview);
+    dataview.onunload = () => {
+      this.unloadDataview(dataview);
       onunloadDataview();
     };
   }
 
-  unloadDataview() {
-    this.dataview.settings = toJS(this.dataview.settings);
-    this.context.linkDataviewSettings();
+  unloadDataview(dataview: DataviewPlugin) {
+    dataview.settings = toJS(dataview.settings);
+    this.context.resetDataviewSettings();
   }
 }
 
