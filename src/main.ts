@@ -10,19 +10,15 @@ type LoadedDataviewPlugin = DataviewPlugin & { settings: DataviewSettings };
 export default class SchemaPlugin extends Plugin {
   context: ObservableContext = new ObservableContext();
 
-  protected get dataview() {
-    return this.app.plugins.plugins["dataview"];
-  }
-
-  private schemaDisposers: (() => void)[] = [];
+  private _schemaDisposer: (() => void)[] = [];
   private get schemaDisposer() {
     return () => {
-      this.schemaDisposers.forEach((dispose) => dispose());
-      this.schemaDisposers = [];
+      this._schemaDisposer.forEach((dispose) => dispose());
+      this._schemaDisposer = [];
     };
   }
   private set schemaDisposer(dispose: () => void) {
-    this.schemaDisposers.push(dispose);
+    this._schemaDisposer.push(dispose);
   }
 
   async onload() {
@@ -93,7 +89,7 @@ export default class SchemaPlugin extends Plugin {
     dataview.settings = observable(dataview.settings);
     this.context.linkDataviewSettings(dataview.settings);
 
-    const onunloadDataview = dataview.onunload.bind(this.dataview);
+    const onunloadDataview = dataview.onunload.bind(dataview);
     dataview.onunload = () => {
       this.unloadDataview(dataview);
       onunloadDataview();
