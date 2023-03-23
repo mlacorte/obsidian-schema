@@ -44,4 +44,12 @@ export class ObservableContext implements IContext {
   constructor() {
     makeAutoObservable(this);
   }
+
+  updateSchemaSettings(update: Partial<SchemaSettings> = {}) {
+    Object.assign(this.settings.schema, update);
+  }
+
+  linkDataviewSettings(settings: DataviewSettings = DEFAULT_DATAVIEW_SETTINGS) {
+    this.settings.dataview = settings;
+  }
 }

@@ -1,25 +1,10 @@
-import {
-  autorun,
-  configure,
-  observable,
-  reaction,
-  runInAction,
-  toJS
-} from "mobx";
+import { autorun, configure, observable, reaction, toJS } from "mobx";
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
 
-import {
-  DEFAULT_DATAVIEW_SETTINGS,
-  DEFAULT_SCHEMA_SETTINGS,
-  ObservableContext
-} from "./context";
+import { ObservableContext } from "./context";
 
 export default class SchemaPlugin extends Plugin {
   context: ObservableContext = new ObservableContext();
-
-  protected get settings() {
-    return this.context.settings;
-  }
 
   protected get appPlugins() {
     return (this.app as any).plugins;
@@ -72,19 +57,13 @@ export default class SchemaPlugin extends Plugin {
     });
 
     // load schema settings
-    await runInAction(async () => {
-      this.settings.schema = Object.assign(
-        {},
-        DEFAULT_SCHEMA_SETTINGS,
-        await this.loadData()
-      );
-    });
+    this.context.updateSchemaSettings(await this.loadData());
 
     // save schema settings on change
     this.schemaDisposer = reaction(
-      () => Object.values(this.settings.schema),
-      () => {
-        this.saveData(this.settings.schema);
+      () => toJS(this.context.settings.schema),
+      async () => {
+        await this.saveData(this.context.settings.schema);
       }
     );
 
@@ -109,10 +88,7 @@ export default class SchemaPlugin extends Plugin {
 
   loadAndWatchDataviewSettings() {
     this.dataview.settings = observable(this.dataview.settings);
-
-    runInAction(() => {
-      this.settings.dataview = this.dataview.settings;
-    });
+    this.context.linkDataviewSettings(this.dataview.settings);
 
     const onunloadDataview = this.dataview.onunload.bind(this.dataview);
     this.dataview.onunload = () => {
@@ -123,19 +99,12 @@ export default class SchemaPlugin extends Plugin {
 
   unloadDataview() {
     this.dataview.settings = toJS(this.dataview.settings);
-
-    runInAction(() => {
-      this.settings.dataview = DEFAULT_DATAVIEW_SETTINGS;
-    });
+    this.context.linkDataviewSettings();
   }
 }
 
 class SchemaSettingsTab extends PluginSettingTab {
   context: ObservableContext;
-
-  get settings() {
-    return this.context.settings.schema;
-  }
 
   constructor(app: App, plugin: SchemaPlugin) {
     super(app, plugin);
@@ -158,11 +127,11 @@ class SchemaSettingsTab extends PluginSettingTab {
         information at the expense of reduced performance in large vaults."
       )
       .addToggle((toggle) =>
-        toggle.setValue(this.settings.validateInactiveNotes).onChange((value) =>
-          runInAction(() => {
-            this.settings.validateInactiveNotes = value;
-          })
-        )
+        toggle
+          .setValue(this.context.settings.schema.validateInactiveNotes)
+          .onChange((validateInactiveNotes) =>
+            this.context.updateSchemaSettings({ validateInactiveNotes })
+          )
       );
   }
 }
