@@ -1,5 +1,6 @@
 import { buildParserFile } from "@lezer/generator";
 import builtins from "builtin-modules";
+import * as chokidar from "chokidar";
 import esbuild from "esbuild";
 import { readFile, writeFile } from "fs/promises";
 import glob from "glob";
@@ -14,70 +15,86 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = process.argv[2] === "production";
 
-/** @type {esbuild.Plugin} */
-const lezerPlugin = {
-  name: "lezer",
-  setup(build) {
-    const cached = new Map();
+async function buildLezerGrammar(path) {
+  let input;
 
-    build.onStart(async () => {
-      for (const path of await glob("src/**/*.grammar")) {
-        let input;
-
-        try {
-          input = await readFile(path, "utf8");
-        } catch (e) {
-          continue;
-        }
-
-        if (cached.get(path) === input) {
-          return;
-        }
-
-        const { dir, name } = parse(path);
-        const { parser, terms } = buildParserFile(input, {
-          fileName: path,
-          includeNames: true
-        });
-
-        await writeFile(`${dir}${sep}${name}.grammar.ts`, parser + terms);
-
-        cached.set(path, input);
-      }
-    });
+  try {
+    input = await readFile(path, "utf8");
+  } catch (e) {
+    return;
   }
-};
 
-esbuild
-  .build({
-    banner: {
-      js: banner
-    },
-    entryPoints: ["src/main.ts"],
-    bundle: true,
-    external: [
-      "obsidian",
-      "electron",
-      "@codemirror/autocomplete",
-      "@codemirror/collab",
-      "@codemirror/commands",
-      "@codemirror/language",
-      "@codemirror/lint",
-      "@codemirror/search",
-      "@codemirror/state",
-      "@codemirror/view",
-      "@lezer/common",
-      "@lezer/highlight",
-      "@lezer/lr",
-      ...builtins
-    ],
-    format: "cjs",
-    watch: !prod,
-    target: "es2018",
-    logLevel: "info",
-    sourcemap: prod ? false : "inline",
-    treeShaking: true,
-    outfile: "main.js",
-    plugins: [lezerPlugin]
-  })
-  .catch(() => process.exit(1));
+  const { dir, name } = parse(path);
+  const parserPath = `${dir}${sep}${name}.grammar.ts`;
+
+  let parser, terms;
+
+  try {
+    const res = buildParserFile(input, {
+      fileName: path,
+      includeNames: true
+    });
+
+    parser = res.parser;
+    terms = res.terms;
+  } catch (e) {
+    await writeFile(
+      parserPath,
+      `/*\n${e.stack}\n*/\n\nexport type parser = ${JSON.stringify(
+        e.message
+      )};\n`
+    );
+
+    return;
+  }
+
+  await writeFile(parserPath, parser + terms);
+}
+
+(async () => {
+  const grammarPaths = "src/**/*.grammar";
+
+  if (prod) {
+    await Promise.allSettled(
+      (await glob(grammarPaths)).map((path) => buildLezerGrammar(path))
+    );
+  } else {
+    const watcher = chokidar.watch(grammarPaths);
+
+    watcher.on("add", buildLezerGrammar);
+    watcher.on("change", buildLezerGrammar);
+  }
+
+  esbuild
+    .build({
+      banner: {
+        js: banner
+      },
+      entryPoints: ["src/main.ts"],
+      bundle: true,
+      external: [
+        "obsidian",
+        "electron",
+        "@codemirror/autocomplete",
+        "@codemirror/collab",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/lint",
+        "@codemirror/search",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/common",
+        "@lezer/highlight",
+        "@lezer/lr",
+        ...builtins
+      ],
+      format: "cjs",
+      watch: !prod,
+      target: "es2018",
+      logLevel: "info",
+      sourcemap: prod ? false : "inline",
+      treeShaking: true,
+      outfile: "main.js"
+    })
+    .catch(() => process.exit(1));
+})();
