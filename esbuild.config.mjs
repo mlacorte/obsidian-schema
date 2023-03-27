@@ -1,5 +1,9 @@
+import { buildParserFile } from "@lezer/generator";
 import builtins from "builtin-modules";
 import esbuild from "esbuild";
+import { readFile, writeFile } from "fs/promises";
+import glob from "glob";
+import { parse, sep } from "path";
 import process from "process";
 
 const banner = `/*
@@ -9,6 +13,40 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = process.argv[2] === "production";
+
+/** @type {esbuild.Plugin} */
+const lezerPlugin = {
+  name: "lezer",
+  setup(build) {
+    const cached = new Map();
+
+    build.onStart(async () => {
+      for (const path of await glob("src/**/*.grammar")) {
+        let input;
+
+        try {
+          input = await readFile(path, "utf8");
+        } catch (e) {
+          continue;
+        }
+
+        if (cached.get(path) === input) {
+          return;
+        }
+
+        const { dir, name } = parse(path);
+        const { parser, terms } = buildParserFile(input, {
+          fileName: path,
+          includeNames: true
+        });
+
+        await writeFile(`${dir}${sep}${name}.grammar.ts`, parser + terms);
+
+        cached.set(path, input);
+      }
+    });
+  }
+};
 
 esbuild
   .build({
@@ -39,6 +77,7 @@ esbuild
     logLevel: "info",
     sourcemap: prod ? false : "inline",
     treeShaking: true,
-    outfile: "main.js"
+    outfile: "main.js",
+    plugins: [lezerPlugin]
   })
   .catch(() => process.exit(1));
