@@ -45,10 +45,14 @@ async function buildLezerGrammar(path) {
       )};\n`
     );
 
+    console.log(e.message);
+
     return;
   }
 
   await writeFile(parserPath, parser + terms);
+
+  console.log(`Generated: "${parserPath}"`);
 }
 
 (async () => {
