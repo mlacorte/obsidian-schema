@@ -1,32 +1,30 @@
-import * as P from "parsimmon";
+import { Tree } from "@lezer/common";
 
-export type SchemaExpr = { type: "types"; value: Map<string, unknown> };
+import * as schema from "./parser/schema.parser";
 
-export type NoteNode = P.Node<"text", string> | P.Node<"schema", SchemaExpr[]>;
+export function parseSchema(str: string): Tree {
+  return schema.parser.configure({ strict: true, top: "Block" }).parse(str);
+}
 
-const $chars = "(\\.|.)";
-const $sep = "%schema%";
-const $body = `((?!${$sep})${$chars})*`;
-const $schema = `${$sep}(${$chars}*?)${$sep}`;
-const $text = `((?!${$schema})${$chars})+`;
-const $ = (str: string) => new RegExp(str, "i");
+export function parseMarkdown(str: string): Tree {
+  return schema.parser.parse(str);
+}
 
-const empty = P.eof
-  .node("text")
-  .map((s) => [s])
-  .desc("empty text block");
+export function debug(tree: Tree) {
+  const res: unknown[] = [];
+  const cursor = tree.cursor();
 
-const sep = P.regexp($($sep)).desc("schema separator");
-const body = P.regexp($($body)).desc("schema body");
+  if (!cursor.firstChild()) {
+    return res;
+  }
 
-export const TextBlock = P.regexp($($text)).node("text").desc("text block");
+  do {
+    const isError = cursor.type.isError;
 
-export const SchemaBlock = P.seq(sep, body, sep)
-  // .map((seq) => seq[1])
-  .map(() => [])
-  .node("schema")
-  .desc("schema block");
+    isError && cursor.firstChild();
+    res.push([cursor.name, cursor.from, cursor.to, isError]);
+    isError && cursor.parent();
+  } while (cursor.nextSibling());
 
-export const Note = empty
-  .or(P.alt<NoteNode>(TextBlock, SchemaBlock).many())
-  .desc("note");
+  return res;
+}

@@ -1,3 +1,4 @@
 npm node_modules
 build
-src/**/*.grammar.ts
+src/**/*.parser.ts
+src/**/*.terms.ts

@@ -2,7 +2,7 @@ import { buildParserFile } from "@lezer/generator";
 import builtins from "builtin-modules";
 import * as chokidar from "chokidar";
 import esbuild from "esbuild";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, unlink, writeFile } from "fs/promises";
 import glob from "glob";
 import { parse, sep } from "path";
 import process from "process";
@@ -25,7 +25,8 @@ async function buildLezerGrammar(path) {
   }
 
   const { dir, name } = parse(path);
-  const parserPath = `${dir}${sep}${name}.grammar.ts`;
+  const parserPath = `${dir}${sep}${name}.parser.ts`;
+  const termsPath = `${dir}${sep}${name}.terms.ts`;
 
   let parser, terms;
 
@@ -38,21 +39,21 @@ async function buildLezerGrammar(path) {
     parser = res.parser;
     terms = res.terms;
   } catch (e) {
-    await writeFile(
-      parserPath,
-      `/*\n${e.stack}\n*/\n\nexport type parser = ${JSON.stringify(
-        e.message
-      )};\n`
-    );
+    await Promise.allSettled([unlink(parserPath), unlink(termsPath)]);
 
-    console.log(e.message);
-
+    console.log(`Removed: "${parserPath}"`);
+    console.log(`Removed: "${termsPath}"`);
+    console.log(`\n${e.message}\n`);
     return;
   }
 
-  await writeFile(parserPath, parser + terms);
+  await Promise.allSettled([
+    writeFile(parserPath, parser),
+    writeFile(termsPath, terms)
+  ]);
 
   console.log(`Generated: "${parserPath}"`);
+  console.log(`Generated: "${termsPath}"`);
 }
 
 (async () => {
