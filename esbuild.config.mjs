@@ -15,7 +15,23 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = process.argv[2] === "production";
 
+function log(kind, msgs) {
+  if (msgs.length === 0) {
+    return;
+  }
+
+  const formatted = esbuild.formatMessagesSync(
+    msgs.map((text) => ({ text })),
+    { kind, color: true }
+  );
+
+  console.log(formatted.join(""));
+}
+
 async function buildLezerGrammar(path) {
+  console.clear();
+  console.log();
+
   let input;
 
   try {
@@ -29,11 +45,13 @@ async function buildLezerGrammar(path) {
   const termsPath = `${dir}${sep}${name}.terms.ts`;
 
   let parser, terms;
+  let warnings = [];
 
   try {
     const res = buildParserFile(input, {
       fileName: path,
-      includeNames: true
+      includeNames: !prod,
+      warn: (str) => warnings.push(str)
     });
 
     parser = res.parser;
@@ -41,19 +59,21 @@ async function buildLezerGrammar(path) {
   } catch (e) {
     await Promise.allSettled([unlink(parserPath), unlink(termsPath)]);
 
-    console.log(`Removed: "${parserPath}"`);
-    console.log(`Removed: "${termsPath}"`);
-    console.log(`\n${e.message}\n`);
+    log("warning", [`Removed: ${parserPath}`, `Removed: ${termsPath}`]);
+    log("error", [e.message]);
+
     return;
+  } finally {
+    if (warnings.length > 0) {
+      log("warning", warnings);
+      warnings = [];
+    }
   }
 
   await Promise.allSettled([
     writeFile(parserPath, parser),
     writeFile(termsPath, terms)
   ]);
-
-  console.log(`Generated: "${parserPath}"`);
-  console.log(`Generated: "${termsPath}"`);
 }
 
 (async () => {
@@ -95,7 +115,7 @@ async function buildLezerGrammar(path) {
       ],
       format: "cjs",
       target: "es2018",
-      logLevel: "info",
+      logLevel: !prod ? "warning" : "info",
       sourcemap: prod ? false : "inline",
       treeShaking: true,
       outfile: "main.js"
