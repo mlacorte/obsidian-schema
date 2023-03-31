@@ -1,45 +1,42 @@
-@top Document { (Markdown | SchemaBlock | DataBlock)* }
+@top MarkdownDoc { (Markdown | SchemaBlock | DataBlock)* }
+@top SchemaDoc { block }
+
+// for testing
+@top TagDoc { Tag }
+@top IdentifierDoc { Identifier }
+// for testing
 
 Markdown { unknown }
 
-Schema { Block }
+Schema { block }
 SchemaBlock { schemaDelim Schema schemaDelim }
 
-Data { Block }
+Data { block }
 DataBlock { dataDelim Data dataDelim }
 
-Block { value }
+block { list<value>? }
+value { Bool | Null | Number | String | Object | Array }
 
-value { True | False | Null | Number | String | Object | Array }
-
-String { string }
 Object { "{" list<Property>? "}" }
 Array  { "[" list<value>? "]" }
+Property { String ":" value }
 
-Property { PropertyName ":" value }
-PropertyName { string }
+Tag { tag }
+Identifier { identifier }
 
 @tokens {
-  True  { "true" }
-  False { "false" }
+  Number { "-"? $[0-9]+ ("." $[0-9]+)? }
+  String { '"' ("\\" _ | !["\\])* '"' }
+  Bool { "true" | "false" | "True" | "False" }
   Null  { "null" }
-
-  Number { '-'? int frac? exp?  }
-  int  { '0' | $[1-9] @digit* }
-  frac { '.' @digit+ }
-  exp  { $[eE] $[+\-]? @digit+ }
-
-  string { '"' char* '"' }
-  char { $[\u{20}\u{21}\u{23}-\u{5b}\u{5d}-\u{10ffff}] | "\\" esc }
-  esc  { $["\\\/bfnrt] | "u" hex hex hex hex }
-  hex  { $[0-9a-fA-F] }
-
-  whitespace { $[ \n\r\t] }
+  whitespace { @whitespace }
 }
 
 @external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
 @external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
 @external tokens unknownTokenizer from "./schema.tokens" { unknown }
+@external tokens tagTokenizer from "./schema.tokens" { tag }
+@external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace }
 list<item> { item ("," item)* }
