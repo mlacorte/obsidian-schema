@@ -16,16 +16,15 @@ describe("parser", () => {
   test("error recovery", () => {
     let tree = parse("%schema%foo: null");
     expect(hasErrors(tree)).toBe(true);
-    expect(tree.topNode.firstChild?.firstChild?.nextSibling?.type.isError).toBe(
-      true
-    );
+    expect(tree.topNode.firstChild?.nextSibling?.type.isError).toBe(true);
 
     tree = parse("%schema%%schema%");
     expect(hasErrors(tree)).toBe(false);
   });
 
   test("tags", () => {
-    const errors = (str: string) => hasErrors(parse(str, { top: "TagDoc" }));
+    const errors = (str: string) =>
+      hasErrors(parse(`"%schema%tag:${str}%schema%`));
 
     expect(errors("#some/tag")).toBe(false);
     expect(errors("#some/ tag")).toBe(true);
@@ -33,7 +32,7 @@ describe("parser", () => {
 
   test("identifiers", () => {
     const errors = (str: string) =>
-      hasErrors(parse(str, { top: "IdentifierDoc" }));
+      hasErrors(parse(`%schema%${str}:true%schema%`));
 
     expect(errors("")).toBe(true);
     expect(errors("plain")).toBe(false);
@@ -46,12 +45,13 @@ describe("parser", () => {
   });
 
   test("links", () => {
-    let errors = (str: string) => hasErrors(parse(str, { top: "LinkDoc" }));
+    let errors = (str: string) =>
+      hasErrors(parse(`%schema%link:${str}%schema%`));
 
     expect(errors("[[]]")).toBe(false);
     expect(errors("[[Some/Link]]")).toBe(false);
 
-    errors = (str: string) => hasErrors(parse(str, { top: "EmbedLinkDoc" }));
+    errors = (str: string) => hasErrors(parse(`%schema%elink:${str}%schema%`));
 
     expect(errors("![[]]")).toBe(false);
     expect(errors("![[Some/Link]]")).toBe(false);
@@ -68,6 +68,12 @@ describe("parser", () => {
         "My key": null,
         #tag: [-1, 2, 3.0],
         [[Link|foo]]: { a: 10, b: 20 }
+      %schema%
+
+      Math time:
+
+      %schema%
+        fancy: 10 + (3 / 10) + 29 >= 53 - 20 / 10 or (true and false)
       %schema%
 
       You can escape the escape sequence too to make it work though:

@@ -24,14 +24,33 @@ export function hasErrors(tree: Tree) {
   return error;
 }
 
-export function children(tree: Tree): SyntaxNode[] {
+export function children(tree: Tree | SyntaxNode): SyntaxNode[] {
   const nodes: SyntaxNode[] = [];
 
-  for (let node = tree.topNode.firstChild; node; node = node.nextSibling) {
+  for (
+    let node = tree instanceof Tree ? tree.topNode.firstChild : tree.firstChild;
+    node;
+    node = node.nextSibling
+  ) {
     nodes.push(node);
   }
 
   return nodes;
+}
+
+type ParseTree = [name: string, value: string | ParseTree[]];
+
+export function inspect(str: string, tree: Tree): ParseTree {
+  const inspectRec = (node: SyntaxNode): ParseTree => {
+    const childTrees = children(node).map((node) => inspectRec(node));
+
+    return [
+      node.name,
+      childTrees.length === 0 ? str.slice(node.from, node.to) : childTrees
+    ];
+  };
+
+  return inspectRec(tree.topNode);
 }
 
 export { parser };

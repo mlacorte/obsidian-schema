@@ -1,32 +1,39 @@
-@top MarkdownDoc { (Markdown | SchemaBlock | DataBlock)* }
+@top MarkdownDoc { (Markdown | schemaBlock | dataBlock)* }
 @top SchemaDoc { block }
-
-// for testing
-@top TagDoc { Tag }
-@top IdentifierDoc { Identifier }
-@top LinkDoc { Link }
-@top EmbedLinkDoc { EmbedLink }
-// for testing
 
 Markdown { unknown }
 
 Schema { block }
-SchemaBlock { schemaDelim Schema schemaDelim }
+schemaBlock { schemaDelim Schema schemaDelim }
 
 Data { block }
-DataBlock { dataDelim Data dataDelim }
+dataBlock { dataDelim Data dataDelim }
 
 block { list<Property>? }
 
-Expression { value | "(" Expression ")" }
-value { Bool | Null | Number | String | Object | Array }
+expression { value | binaryExpression | "(" expression ")" }
+value { Bool | Null | Number | String | Link | EmbedLink | Tag | Object | Array }
 
 Object { "{" list<Property>? "}" }
-Array  { "[" list<Expression>? "]" }
-Property { (String | Tag | Link | Identifier) ":" Expression }
+Array  { "[" list<expression>? "]" }
+Property { (String | Tag | Link | Identifier) ":" expression }
 
-Tag { tag }
-Identifier { identifier }
+@precedence { mulDiv @left, plsMin @left, cmp @left, bool @left }
+
+binaryExpression {
+  Multiply { expression !mulDiv "*" expression } |
+  Divide { expression !mulDiv "/" expression } |
+  Plus { expression !plsMin "+" expression } |
+  Minus { expression !plsMin "-" expression } |
+  Gte { expression !cmp ">=" expression } |
+  Lte { expression !cmp "<=" expression } |
+  Neq { expression !cmp "!=" expression } |
+  Gt { expression !cmp ">" expression } |
+  Lt { expression !cmp "<" expression } |
+  Eq { expression !cmp "=" expression } |
+  And { expression !bool ("and" | "&") expression } |
+  Or { expression !bool ("or" | "|") expression }
+}
 
 @tokens {
   Number { "-"? $[0-9]+ ("." $[0-9]+)? }
@@ -37,6 +44,9 @@ Identifier { identifier }
   Null { "null" }
   whitespace { @whitespace }
 }
+
+Tag { tag }
+Identifier { identifier }
 
 @external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
 @external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
