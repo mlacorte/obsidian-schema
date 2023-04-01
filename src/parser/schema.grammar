@@ -4,6 +4,8 @@
 // for testing
 @top TagDoc { Tag }
 @top IdentifierDoc { Identifier }
+@top LinkDoc { Link }
+@top EmbedLinkDoc { EmbedLink }
 // for testing
 
 Markdown { unknown }
@@ -14,12 +16,20 @@ SchemaBlock { schemaDelim Schema schemaDelim }
 Data { block }
 DataBlock { dataDelim Data dataDelim }
 
-block { list<value>? }
+block { list<Property>? }
+
+Expression { value | "(" Expression ")" }
 value { Bool | Null | Number | String | Object | Array }
 
 Object { "{" list<Property>? "}" }
-Array  { "[" list<value>? "]" }
-Property { String ":" value }
+Array  { "[" list<Expression>? "]" }
+Property { (String | Tag | PropertyName) ":" Expression }
+
+@external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
+@external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
+@external tokens unknownTokenizer from "./schema.tokens" { unknown }
+@external tokens tagTokenizer from "./schema.tokens" { tag }
+@external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 Tag { tag }
 Identifier { identifier }
@@ -28,15 +38,14 @@ Identifier { identifier }
   Number { "-"? $[0-9]+ ("." $[0-9]+)? }
   String { '"' ("\\" _ | !["\\])* '"' }
   Bool { "true" | "false" | "True" | "False" }
-  Null  { "null" }
+  Link { "[[" ![\[\]]* "]]" }
+  EmbedLink { "![[" ![\[\]]* "]]" }
+  Null { "null" }
+  propertyChar { @asciiLetter | $[_$\u{a1}-\u{10ffff}] }
+  PropertyName { propertyChar (propertyChar | @digit)* }
   whitespace { @whitespace }
+  @precedence { whitespace, PropertyName }
 }
-
-@external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
-@external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
-@external tokens unknownTokenizer from "./schema.tokens" { unknown }
-@external tokens tagTokenizer from "./schema.tokens" { tag }
-@external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace }
 list<item> { item ("," item)* }

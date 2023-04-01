@@ -6,21 +6,21 @@ describe("parser", () => {
 
     expect(childCount("")).toBe(0);
     expect(childCount("nonempty")).toBe(1);
-    expect(childCount("%schema%{}%schema%")).toBe(1);
-    expect(childCount("left%schema%{}%schema%")).toBe(2);
-    expect(childCount("%schema%{}%schema%right")).toBe(2);
-    expect(childCount("left%schema%{}%schema%right")).toBe(3);
-    expect(childCount("%schema%{}%schema%%schema%{}%schema%")).toBe(2);
+    expect(childCount("%schema%%schema%")).toBe(1);
+    expect(childCount("left%schema%%schema%")).toBe(2);
+    expect(childCount("%schema%%schema%right")).toBe(2);
+    expect(childCount("left%schema%%schema%right")).toBe(3);
+    expect(childCount("%schema%%schema%%schema%%schema%")).toBe(2);
   });
 
   test("error recovery", () => {
-    let tree = parse("%schema%{}");
+    let tree = parse("%schema%foo: null");
     expect(hasErrors(tree)).toBe(true);
     expect(tree.topNode.firstChild?.firstChild?.nextSibling?.type.isError).toBe(
       true
     );
 
-    tree = parse("%schema%{}%schema%");
+    tree = parse("%schema%%schema%");
     expect(hasErrors(tree)).toBe(false);
   });
 
@@ -43,5 +43,17 @@ describe("parser", () => {
     expect(errors("😀-simple-emoji")).toBe(false);
     expect(errors("another-🙃-emoji")).toBe(false);
     expect(errors("👩🏻‍❤️‍💋‍👨🏽_a_complex_emoji")).toBe(false);
+  });
+
+  test("links", () => {
+    let errors = (str: string) => hasErrors(parse(str, { top: "LinkDoc" }));
+
+    expect(errors("[[]]")).toBe(false);
+    expect(errors("[[Some/Link]]")).toBe(false);
+
+    errors = (str: string) => hasErrors(parse(str, { top: "EmbedLinkDoc" }));
+
+    expect(errors("![[]]")).toBe(false);
+    expect(errors("![[Some/Link]]")).toBe(false);
   });
 });
