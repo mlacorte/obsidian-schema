@@ -56,4 +56,29 @@ describe("parser", () => {
     expect(errors("![[]]")).toBe(false);
     expect(errors("![[Some/Link]]")).toBe(false);
   });
+
+  test("composite", () => {
+    const str = `
+      This is some markdown outside of the schema block.
+
+      Check it out, you can escape it too: \\%schema%
+
+      %schema%
+        property-name: ("foo"),
+        "My key": null,
+        #tag: [-1, 2, 3.0],
+        [[Link|foo]]: { a: 10, b: 20 }
+      %schema%
+
+      You can escape the escape sequence too to make it work though:
+
+      \\\\%data%
+        "Does this work?": True,
+        😎_l33t: false
+      %data%
+
+      Nice!\\`;
+
+    expect(hasErrors(parse(str))).toBe(false);
+  });
 });

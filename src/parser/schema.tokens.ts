@@ -63,11 +63,20 @@ export const unknownTokenizer = new ExternalTokenizer((input) => {
     return;
   }
 
-  while (
-    input.next !== -1 &&
-    !lookaheadMatch(input, schemaDelimLit) &&
-    !lookaheadMatch(input, dataDelimLit)
-  ) {
+  for (;;) {
+    if (input.next === "\\".codePointAt(0)) {
+      input.advance(2);
+      continue;
+    }
+
+    if (
+      input.next === -1 ||
+      lookaheadMatch(input, schemaDelimLit) ||
+      lookaheadMatch(input, dataDelimLit)
+    ) {
+      break;
+    }
+
     input.advance();
   }
 
