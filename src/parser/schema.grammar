@@ -12,7 +12,7 @@ dataBlock { dataDelim Data dataDelim }
 block { list<Property>? }
 
 expression { value | binaryExpression | "(" expression ")" }
-value { Bool | Null | Number | String | Link | EmbedLink | Tag | Object | Array }
+value { Identifier | Bool | Null | Number | String | Link | EmbedLink | Tag | Object | Array }
 
 Object { "{" list<Property>? "}" }
 Array  { "[" list<expression>? "]" }

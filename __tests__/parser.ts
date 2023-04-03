@@ -64,6 +64,7 @@ describe("parser", () => {
       Check it out, you can escape it too: \\%schema%
 
       %schema%
+        identifier: myLocalVariable,
         property-name: ("foo"),
         "My key": null,
         #tag: [-1, 2, 3.0],
