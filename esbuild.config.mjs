@@ -47,6 +47,13 @@ async function buildLezerGrammar(path) {
   let parser, terms;
   let warnings = [];
 
+  function printWarnings() {
+    if (warnings.length > 0) {
+      log("warning", warnings);
+      warnings = [];
+    }
+  }
+
   try {
     const res = buildParserFile(input, {
       fileName: path,
@@ -59,16 +66,19 @@ async function buildLezerGrammar(path) {
   } catch (e) {
     await Promise.allSettled([unlink(parserPath), unlink(termsPath)]);
 
-    log("warning", [`Removed: ${parserPath}`, `Removed: ${termsPath}`]);
-    log("error", [e.message]);
-
-    return;
-  } finally {
     if (warnings.length > 0) {
       log("warning", warnings);
       warnings = [];
     }
+
+    printWarnings();
+    log("warning", [`Removed: ${parserPath}`, `Removed: ${termsPath}`]);
+    log("error", [e.message]);
+
+    return;
   }
+
+  printWarnings();
 
   await Promise.allSettled([
     writeFile(parserPath, parser),
