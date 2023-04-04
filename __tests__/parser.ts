@@ -82,6 +82,7 @@ describe("parser", () => {
         empty: () => "empty",
         single: (foo) => null,
         lambda: (a,b) => 4,
+        typedLambda: (a: 10, b: 20) => 30,
         "My key": null,
         #tag: [-1, 2, 3.0],
         #nested/tag: [-1.0, -2, 3],

@@ -18,8 +18,10 @@ Object { "{" listOf<Property> "}" }
 Property { (String | Tag | Link | Identifier) ":" expression }
 
 Lambda { "(" LambdaArgs ~lambdaOrParen ")" "=>" LambdaExpr }
-LambdaArgs { listOf<Identifier> }
+LambdaArgs { listOf<Arg | TypedArg> }
 LambdaExpr { expression }
+Arg { Identifier }
+TypedArg { Identifier ":" expression }
 
 @precedence { mulDiv @left, plsMin @left, cmp @left, bool @left }
 
