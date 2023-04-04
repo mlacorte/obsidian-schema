@@ -9,14 +9,17 @@ schemaBlock { schemaDelim Schema schemaDelim }
 Data { block }
 dataBlock { dataDelim Data dataDelim }
 
-block { list<Property>? }
+block { list<Property> }
+expression { value | binaryExpression | "(" expression ~lambdaOrParen ")" }
+value { Identifier | Bool | Null | Number | String | Link | EmbedLink | Tag | Object | Array | Lambda }
 
-expression { value | binaryExpression | "(" expression ")" }
-value { Identifier | Bool | Null | Number | String | Link | EmbedLink | Tag | Object | Array }
-
-Object { "{" list<Property>? "}" }
-Array  { "[" list<expression>? "]" }
+Array  { "[" list<expression> "]" }
+Object { "{" list<Property> "}" }
 Property { (String | Tag | Link | Identifier) ":" expression }
+
+Lambda { "(" LambdaArgs ~lambdaOrParen ")" "=>" LambdaExpr }
+LambdaArgs { list<Identifier> }
+LambdaExpr { expression }
 
 @precedence { mulDiv @left, plsMin @left, cmp @left, bool @left }
 
@@ -55,6 +58,6 @@ Identifier { identifier }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace }
-list<item> { item ("," item)* }
+list<item> { item? ("," item)* }
 
 @detectDelim

@@ -38,19 +38,23 @@ export function children(tree: Tree | SyntaxNode): SyntaxNode[] {
   return nodes;
 }
 
-type ParseTree = [name: string, value: string | ParseTree[]];
+type ParseTreeJSON =
+  | [string, string]
+  | [string, ParseTreeJSON, ...ParseTreeJSON[]];
 
-export function inspect(str: string, tree: Tree): ParseTree {
-  const inspectRec = (node: SyntaxNode): ParseTree => {
-    const childTrees = children(node).map((node) => inspectRec(node));
+export function toJSON(str: string, tree: Tree): ParseTreeJSON {
+  const toJSONRec = (node: SyntaxNode): ParseTreeJSON => {
+    const childTrees = children(node).map((node) => toJSONRec(node));
 
     return [
       node.name,
-      childTrees.length === 0 ? str.slice(node.from, node.to) : childTrees
-    ];
+      ...(childTrees.length === 0
+        ? [str.slice(node.from, node.to)]
+        : childTrees)
+    ] as any;
   };
 
-  return inspectRec(tree.topNode);
+  return toJSONRec(tree.topNode);
 }
 
 export { parser };

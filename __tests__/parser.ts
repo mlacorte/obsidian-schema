@@ -1,4 +1,4 @@
-import { children, hasErrors, parse } from "../src/parser";
+import { children, hasErrors, parse, toJSON } from "../src/parser";
 
 describe("parser", () => {
   test("markdown", () => {
@@ -57,6 +57,19 @@ describe("parser", () => {
     expect(errors("![[Some/Link]]")).toBe(false);
   });
 
+  test("identifier expression", () => {
+    const expr = "exp1-exp2";
+    const str = `key:${expr}`;
+    const tree = parse(str, { top: "SchemaDoc" });
+
+    expect(hasErrors(tree)).toBe(false);
+    expect(children(tree).length).toBe(1);
+    expect(toJSON(str, tree)).toEqual([
+      "SchemaDoc",
+      ["Property", ["Identifier", "key"], ["Identifier", expr]]
+    ]);
+  });
+
   test("composite", () => {
     const str = `
       This is some markdown outside of the schema block.
@@ -64,11 +77,15 @@ describe("parser", () => {
       Check it out, you can escape it too: \\%schema%
 
       %schema%
-        identifier: myLocalVariable,
-        property-name: ("foo"),
+        identifier: my1-2tricky-identifier,
+        parens: ((("nice"))),
+        empty: () => "empty",
+        single: (foo) => null,
+        lambda: (a,b) => 4,
         "My key": null,
         #tag: [-1, 2, 3.0],
-        [[Link|foo]]: { a: 10, b: 20 }
+        #nested/tag: [-1.0, -2, 3],
+        [[Link|foo]]: false
       %schema%
 
       Math time:
@@ -81,7 +98,7 @@ describe("parser", () => {
 
       \\\\%data%
         "Does this work?": True,
-        😎_l33t: false
+        😎_l33t: { a: 10, b: 20 }
       %data%
 
       Nice!\\`;
