@@ -81,10 +81,10 @@ describe("parser", () => {
         parens: ((("nice"))),
         empty: () => "empty",
         single: (foo) => null,
-        lambda: (a,b) => 4,
+        lambda: (a,b,) => 4,
         typedLambda: (a: 10, b: 20) => 30,
         "My key": null,
-        #tag: [-1, 2, 3.0],
+        #tag: [-1, 2, 3.0,],
         #nested/tag: [-1.0, -2, 3],
         [[Link|foo]]: false
       %schema%
@@ -92,14 +92,14 @@ describe("parser", () => {
       Math time:
 
       %schema%
-        fancy: 10 + (3 / 10) + 29 >= 53 - 20 / 10 or (true and false)
+        fancy: 10 + (3 / 10) + 29 >= 53 - 20 / 10 or (true and false),
       %schema%
 
       You can escape the escape sequence too to make it work though:
 
       \\\\%data%
         "Does this work?": True,
-        😎_l33t: { a: 10, b: 20 }
+        😎_l33t: { a: 10, b: 20, }
       %data%
 
       Nice!\\`;

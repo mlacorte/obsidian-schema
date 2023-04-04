@@ -60,6 +60,6 @@ Identifier { identifier }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace }
-listOf<item> { (item ("," item)*)? }
+listOf<item> { (item ("," item)* ","?)? }
 
 @detectDelim
