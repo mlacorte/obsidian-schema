@@ -5,12 +5,17 @@ Markdown { unknown }
 Schema { block }
 
 block { listOf<Property> }
+
 expression {
   value |
-  binaryExpression |
+  postfixExpression |
+  mathExpression |
+  comparisonExpression |
+  logicalExpression  |
   Not { "!" expression } |
   "(" expression ~lambdaOrParen ")"
 }
+
 value {
   Identifier |
   Bool |
@@ -27,21 +32,33 @@ value {
   Lambda
 }
 
-@precedence { mulDiv @left, plsMin @left, cmp @left, bool @left }
+@precedence { postFix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
 
-binaryExpression {
+postfixExpression {
+  Call { expression !postFix "(" expression ")" } |
+  Index { expression !postFix "[" expression "]" } |
+  Dot { expression !postFix "." Identifier }
+}
+
+mathExpression {
   Multiply { expression !mulDiv "*" expression } |
   Divide { expression !mulDiv "/" expression } |
   Plus { expression !plsMin "+" expression } |
-  Minus { expression !plsMin "-" expression } |
+  Minus { expression !plsMin "-" expression }
+}
+
+comparisonExpression {
   Gte { expression !cmp ">=" expression } |
   Lte { expression !cmp "<=" expression } |
   Neq { expression !cmp "!=" expression } |
   Gt { expression !cmp ">" expression } |
   Lt { expression !cmp "<" expression } |
-  Eq { expression !cmp "=" expression } |
-  And { expression !bool ("and" | "&") expression } |
-  Or { expression !bool ("or" | "|") expression }
+  Eq { expression !cmp "=" expression }
+}
+
+logicalExpression {
+  And { expression !logic ("and" | "&") expression } |
+  Or { expression !logic ("or" | "|") expression }
 }
 
 Identifier { identifier }

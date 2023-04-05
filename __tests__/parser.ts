@@ -112,6 +112,14 @@ describe("parser", () => {
         epoch: date(1970-01-01T00:00:00.000)
       }
 
+      Alright, let's get fancy with postfix stuff
+
+      %{
+        dots: a.b.c.d,
+        indexes: a[b["c"]]["d"],
+        fns: a(b(c))(d)
+      }
+
       Nice!\\`;
 
     const tree = parse(str);
