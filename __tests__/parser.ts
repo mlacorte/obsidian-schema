@@ -6,38 +6,36 @@ describe("parser", () => {
 
     expect(childCount("")).toBe(0);
     expect(childCount("nonempty")).toBe(1);
-    expect(childCount("%schema%%schema%")).toBe(1);
-    expect(childCount("left%schema%%schema%")).toBe(2);
-    expect(childCount("%schema%%schema%right")).toBe(2);
-    expect(childCount("left%schema%%schema%right")).toBe(3);
-    expect(childCount("%schema%%schema%%schema%%schema%")).toBe(2);
+    expect(childCount("%{}")).toBe(1);
+    expect(childCount("left%{}")).toBe(2);
+    expect(childCount("%{}right")).toBe(2);
+    expect(childCount("left%{}right")).toBe(3);
+    expect(childCount("%{}%{}")).toBe(2);
   });
 
   test("error recovery", () => {
-    let tree = parse("%schema%foo: null");
+    let tree = parse("%{foo: null");
     expect(hasErrors(tree)).toBe(true);
     expect(tree.topNode.firstChild?.nextSibling?.type.isError).toBe(true);
 
-    tree = parse("%schema%%schema%");
+    tree = parse("%{}");
     expect(hasErrors(tree)).toBe(false);
   });
 
   test("tags", () => {
-    const errors = (str: string) =>
-      hasErrors(parse(`"%schema%tag:${str}%schema%`));
+    const errors = (str: string) => hasErrors(parse(`"%{tag:${str}}`));
 
     expect(errors("#some/tag")).toBe(false);
     expect(errors("#some/ tag")).toBe(true);
   });
 
   test("dates", () => {
-    const tree = parse(`today:date(today)`, { top: "SchemaDoc" });
+    const tree = parse(`%{today:date(today)}`);
     expect(hasErrors(tree)).toBe(false);
   });
 
   test("identifiers", () => {
-    const errors = (str: string) =>
-      hasErrors(parse(`%schema%${str}:true%schema%`));
+    const errors = (str: string) => hasErrors(parse(`%{${str}:true}`));
 
     expect(errors("")).toBe(true);
     expect(errors("plain")).toBe(false);
@@ -50,13 +48,12 @@ describe("parser", () => {
   });
 
   test("links", () => {
-    let errors = (str: string) =>
-      hasErrors(parse(`%schema%link:${str}%schema%`));
+    let errors = (str: string) => hasErrors(parse(`%{link:${str}}`));
 
     expect(errors("[[]]")).toBe(false);
     expect(errors("[[Some/Link]]")).toBe(false);
 
-    errors = (str: string) => hasErrors(parse(`%schema%elink:${str}%schema%`));
+    errors = (str: string) => hasErrors(parse(`%{elink:${str}}`));
 
     expect(errors("![[]]")).toBe(false);
     expect(errors("![[Some/Link]]")).toBe(false);
@@ -79,9 +76,9 @@ describe("parser", () => {
     const str = `
       This is some markdown outside of the schema block.
 
-      Check it out, you can escape it too: \\%schema%
+      Check it out, you can escape it too: \\%{
 
-      %schema%
+      %{schema: {
         identifier: my1-2tricky-identifier,
         parens: ((("nice"))),
         empty: () => "empty",
@@ -92,19 +89,19 @@ describe("parser", () => {
         #tag: [-1, 2, 3.0,],
         #nested/tag: [-1.0, -2, 3],
         [[Link|foo]]: false
-      %schema%
+      }}
 
       Math time:
 
-      %schema%
+      %{schema: {
         fancy: 10 + (3 / 10) + 29 >= 53 - 20 / 10 or (true and false),
         a-little-more: date(now) + dur(1h4m5s),
         one-sec: dur(-1.1h) + dur(1.1h, 1s),
-      %schema%
+      }}
 
       You can escape the escape sequence too to make it work though:
 
-      \\\\%data%
+      \\\\%{
         "Does this work?": True,
         😎_l33t: { a: 10, b: 20, },
         today: date(today),
@@ -112,7 +109,7 @@ describe("parser", () => {
         new-millenia: date(2000-01),
         freedom: date(1776-07-02),
         epoch: date(1970-01-01T00:00:00.000)
-      %data%
+      }
 
       Nice!\\`;
 

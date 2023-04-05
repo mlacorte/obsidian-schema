@@ -1,15 +1,10 @@
 import { ExternalTokenizer, InputStream } from "@lezer/lr";
 import emoji from "emoji-regex";
 
-import {
-  dataDelim,
-  identifier,
-  schemaDelim,
-  unknown
-} from "./schema.terms";
+import { identifier, schemaClose, schemaOpen, unknown } from "./schema.terms";
 
-const dataDelimLit = "%data%";
-const schemaDelimLit = "%schema%";
+const schemaOpenLit = "%{";
+const schemaCloseLit = "}";
 
 const emojiRegex = new RegExp(emoji(), "");
 const longestEmojiSeqLength = 24; // probably overkill, but idk
@@ -42,17 +37,20 @@ function tryTake(input: InputStream, num: number): string {
   return String.fromCodePoint(...chars);
 }
 
-export const schemaDelimTokenizer = new ExternalTokenizer((input) => {
-  if (lookaheadMatch(input, schemaDelimLit)) {
-    input.acceptToken(schemaDelim, schemaDelimLit.length);
+export const schemaOpenTokenizer = new ExternalTokenizer((input) => {
+  if (lookaheadMatch(input, schemaOpenLit)) {
+    input.acceptToken(schemaOpen, schemaOpenLit.length);
   }
 });
 
-export const dataDelimTokenizer = new ExternalTokenizer((input) => {
-  if (lookaheadMatch(input, dataDelimLit)) {
-    input.acceptToken(dataDelim, dataDelimLit.length);
-  }
-});
+export const schemaCloseTokenizer = new ExternalTokenizer(
+  (input) => {
+    if (lookaheadMatch(input, schemaCloseLit)) {
+      input.acceptToken(schemaClose, schemaCloseLit.length);
+    }
+  },
+  { fallback: true }
+);
 
 export const unknownTokenizer = new ExternalTokenizer((input) => {
   if (input.next === -1) {
@@ -65,11 +63,7 @@ export const unknownTokenizer = new ExternalTokenizer((input) => {
       continue;
     }
 
-    if (
-      input.next === -1 ||
-      lookaheadMatch(input, schemaDelimLit) ||
-      lookaheadMatch(input, dataDelimLit)
-    ) {
+    if (input.next === -1 || lookaheadMatch(input, schemaOpenLit)) {
       break;
     }
 

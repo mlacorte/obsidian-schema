@@ -1,13 +1,8 @@
-@top MarkdownDoc { (Markdown | schemaBlock | dataBlock)* }
+@top MarkdownDoc { (schemaOpen Schema schemaClose | Markdown)* }
 @top SchemaDoc { block }
 
 Markdown { unknown }
-
 Schema { block }
-schemaBlock { schemaDelim Schema schemaDelim }
-
-Data { block }
-dataBlock { dataDelim Data dataDelim }
 
 block { listOf<Property> }
 expression { value | binaryExpression | "(" expression ~lambdaOrParen ")" }
@@ -81,8 +76,8 @@ durationPair {
   whitespace { @whitespace }
 }
 
-@external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
-@external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
+@external tokens schemaOpenTokenizer from "./schema.tokens" { schemaOpen }
+@external tokens schemaCloseTokenizer from "./schema.tokens" { schemaClose }
 @external tokens unknownTokenizer from "./schema.tokens" { unknown }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
