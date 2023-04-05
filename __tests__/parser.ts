@@ -98,6 +98,8 @@ describe("parser", () => {
 
       %schema%
         fancy: 10 + (3 / 10) + 29 >= 53 - 20 / 10 or (true and false),
+        a-little-more: date(now) + dur(1h4m5s),
+        one-sec: dur(-1.1h) + dur(1.1h, 1s),
       %schema%
 
       You can escape the escape sequence too to make it work though:
