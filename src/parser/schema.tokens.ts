@@ -5,15 +5,11 @@ import {
   dataDelim,
   identifier,
   schemaDelim,
-  tag,
   unknown
 } from "./schema.terms";
 
 const dataDelimLit = "%data%";
 const schemaDelimLit = "%schema%";
-
-const tagCharRegex =
-  /[^\u2000-\u206F\u2E00-\u2E7F'!"#$%&()*+,.:;<=>?@^`{|}~[\]\\\s]/;
 
 const emojiRegex = new RegExp(emoji(), "");
 const longestEmojiSeqLength = 24; // probably overkill, but idk
@@ -81,23 +77,6 @@ export const unknownTokenizer = new ExternalTokenizer((input) => {
   }
 
   input.acceptToken(unknown);
-});
-
-export const tagTokenizer = new ExternalTokenizer((input) => {
-  if (input.next !== "#".codePointAt(0)) {
-    return;
-  }
-
-  input.advance();
-
-  while (
-    input.next !== -1 &&
-    tagCharRegex.test(String.fromCodePoint(input.next))
-  ) {
-    input.advance();
-  }
-
-  input.acceptToken(tag);
 });
 
 function identifierCharCheck(input: InputStream, regex: RegExp): number {

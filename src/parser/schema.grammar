@@ -33,8 +33,9 @@ binaryExpression {
   Or { expression !bool ("or" | "|") expression }
 }
 
-Tag { tag }
 Identifier { identifier }
+Date { "date(" ( DateLiteral | DateShorthand) ")" }
+Duration { "dur(" durationPair (","? durationPair)* ")" }
 
 Lambda { "(" LambdaArgs ~lambdaOrParen ")" "=>" LambdaExpr }
 LambdaArgs { listOf<Arg | TypedArg> }
@@ -45,8 +46,6 @@ TypedArg { Identifier ":" expression }
 Array  { "[" listOf<expression> "]" }
 Object { "{" listOf<Property> "}" }
 Property { (String | Tag | Link | Identifier) ":" expression }
-Date { "date(" ( DateLiteral | DateShorthand) ")" }
-Duration { "dur(" durationPair (","? durationPair)* ")" }
 
 durationPair {
   DurationYears { Number ("year" | "years" | "yr" | "yrs") } |
@@ -65,6 +64,7 @@ durationPair {
   Link { "[[" ![\[\]]* "]]" }
   EmbedLink { "![[" ![\[\]]* "]]" }
   Null { "null" }
+  Tag { "#" ![\u2000-\u206F\u2E00-\u2E7F'!"#$%&()*+,.:;<=>?@^`{|}~\[\]\\ \t\r\n\v\f]* }
   DateShorthand {
     "now" | "today" | "yesterday" | "tomorrow" |
     "sow" | "eow" | "soy" | "eoy" | "som" | "eom"
@@ -84,7 +84,6 @@ durationPair {
 @external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
 @external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
 @external tokens unknownTokenizer from "./schema.tokens" { unknown }
-@external tokens tagTokenizer from "./schema.tokens" { tag }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace }
