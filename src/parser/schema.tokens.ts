@@ -101,9 +101,7 @@ export const tagTokenizer = new ExternalTokenizer((input) => {
 });
 
 function identifierCharCheck(input: InputStream, regex: RegExp): number {
-  const str = tryTake(input, longestEmojiSeqLength);
-
-  if (str.length === 0) {
+  if (input.next === -1) {
     return 0;
   }
 
@@ -111,34 +109,38 @@ function identifierCharCheck(input: InputStream, regex: RegExp): number {
     return 1;
   }
 
-  const res = emojiRegex.exec(str);
+  const str = tryTake(input, longestEmojiSeqLength);
+  const emojiMatch = emojiRegex.exec(str);
 
-  if (res === null) {
+  if (emojiMatch === null) {
     return 0;
   }
 
   emojiRegex.lastIndex = 0;
-  return res[0].length;
+  return emojiMatch[0].length;
 }
 
-export const identifierTokenizer = new ExternalTokenizer((input) => {
-  let len = identifierCharCheck(input, identifierFirstRegex);
-
-  if (len === 0) {
-    return;
-  }
-
-  input.advance(len);
-
-  for (;;) {
-    len = identifierCharCheck(input, identifierLaterRegex);
+export const identifierTokenizer = new ExternalTokenizer(
+  (input) => {
+    let len = identifierCharCheck(input, identifierFirstRegex);
 
     if (len === 0) {
-      break;
+      return;
     }
 
     input.advance(len);
-  }
 
-  input.acceptToken(identifier);
-});
+    for (;;) {
+      len = identifierCharCheck(input, identifierLaterRegex);
+
+      if (len === 0) {
+        break;
+      }
+
+      input.advance(len);
+    }
+
+    input.acceptToken(identifier);
+  },
+  { fallback: true }
+);

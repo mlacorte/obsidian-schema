@@ -1,4 +1,4 @@
-import { children, hasErrors, parse, toJSON } from "../src/parser";
+import { children, hasErrors, parse, prettyPrint, toJSON } from "../src/parser";
 
 describe("parser", () => {
   test("markdown", () => {
@@ -28,6 +28,11 @@ describe("parser", () => {
 
     expect(errors("#some/tag")).toBe(false);
     expect(errors("#some/ tag")).toBe(true);
+  });
+
+  test("dates", () => {
+    const tree = parse(`today:date(today)`, { top: "SchemaDoc" });
+    expect(hasErrors(tree)).toBe(false);
   });
 
   test("identifiers", () => {
@@ -99,11 +104,23 @@ describe("parser", () => {
 
       \\\\%data%
         "Does this work?": True,
-        😎_l33t: { a: 10, b: 20, }
+        😎_l33t: { a: 10, b: 20, },
+        today: date(today),
+        now: date( now ),
+        new-millenia: date(2000-01),
+        freedom: date(1776-07-02),
+        epoch: date(1970-01-01T00:00:00.000)
       %data%
 
       Nice!\\`;
 
-    expect(hasErrors(parse(str))).toBe(false);
+    const tree = parse(str);
+    const errors = hasErrors(tree);
+
+    if (errors) {
+      console.log(prettyPrint(str, tree));
+    }
+
+    expect(errors).toBe(false);
   });
 });

@@ -11,17 +11,10 @@ dataBlock { dataDelim Data dataDelim }
 
 block { listOf<Property> }
 expression { value | binaryExpression | "(" expression ~lambdaOrParen ")" }
-value { Identifier | Bool | Null | Number | String | Link | EmbedLink | Tag | Object | Array | Lambda }
-
-Array  { "[" listOf<expression> "]" }
-Object { "{" listOf<Property> "}" }
-Property { (String | Tag | Link | Identifier) ":" expression }
-
-Lambda { "(" LambdaArgs ~lambdaOrParen ")" "=>" LambdaExpr }
-LambdaArgs { listOf<Arg | TypedArg> }
-LambdaExpr { expression }
-Arg { Identifier }
-TypedArg { Identifier ":" expression }
+value {
+  Identifier | Bool | Null | Number | String |
+  Link | EmbedLink | Tag | Date | Object | Array | Lambda
+}
 
 @precedence { mulDiv @left, plsMin @left, cmp @left, bool @left }
 
@@ -40,6 +33,20 @@ binaryExpression {
   Or { expression !bool ("or" | "|") expression }
 }
 
+Tag { tag }
+Identifier { identifier }
+
+Lambda { "(" LambdaArgs ~lambdaOrParen ")" "=>" LambdaExpr }
+LambdaArgs { listOf<Arg | TypedArg> }
+LambdaExpr { expression }
+Arg { Identifier }
+TypedArg { Identifier ":" expression }
+
+Array  { "[" listOf<expression> "]" }
+Object { "{" listOf<Property> "}" }
+Property { (String | Tag | Link | Identifier) ":" expression }
+Date { "date(" ( DateLiteral | DateShorthand) ")" }
+
 @tokens {
   Number { "-"? $[0-9]+ ("." $[0-9]+)? }
   String { '"' ("\\" _ | !["\\])* '"' }
@@ -47,11 +54,21 @@ binaryExpression {
   Link { "[[" ![\[\]]* "]]" }
   EmbedLink { "![[" ![\[\]]* "]]" }
   Null { "null" }
+  DateShorthand {
+    "now" | "today" | "yesterday" | "tomorrow" |
+    "sow" | "eow" | "soy" | "eoy" | "som" | "eom"
+  }
+  DateLiteral {
+    @digit @digit @digit @digit "-" @digit @digit (
+      "-" @digit @digit (
+      "T" @digit @digit (
+      ":" @digit @digit (
+      ":" @digit @digit (
+      "." @digit @digit @digit
+    )?)?)?)?)?
+  }
   whitespace { @whitespace }
 }
-
-Tag { tag }
-Identifier { identifier }
 
 @external tokens schemaDelimTokenizer from "./schema.tokens" { schemaDelim }
 @external tokens dataDelimTokenizer from "./schema.tokens" { dataDelim }
