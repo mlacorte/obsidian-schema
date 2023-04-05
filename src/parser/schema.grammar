@@ -5,10 +5,26 @@ Markdown { unknown }
 Schema { block }
 
 block { listOf<Property> }
-expression { value | binaryExpression | "(" expression ~lambdaOrParen ")" }
+expression {
+  value |
+  binaryExpression |
+  Not { "!" expression } |
+  "(" expression ~lambdaOrParen ")"
+}
 value {
-  Identifier | Bool | Null | Number | String | Duration |
-  Link | EmbedLink | Tag | Date | Object | Array | Lambda
+  Identifier |
+  Bool |
+  Null |
+  Number |
+  String |
+  Link |
+  EmbedLink |
+  Tag |
+  Date |
+  Duration |
+  Object |
+  Array |
+  Lambda
 }
 
 @precedence { mulDiv @left, plsMin @left, cmp @left, bool @left }
