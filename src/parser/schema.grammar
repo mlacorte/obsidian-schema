@@ -7,30 +7,16 @@ Schema { block }
 block { listOf<property> }
 
 expression {
-  value |
-  postfixExpression |
-  mathExpression |
-  comparisonExpression |
-  logicalExpression  |
+  value | postfixExpression | mathExpression |
+  comparisonExpression | logicalExpression  |
   Not { "!" expression } |
   LocalProperty "," expression |
   "(" expression ~lambdaOrParen ")"
 }
 
 value {
-  Identifier |
-  Bool |
-  Null |
-  Number |
-  String |
-  Link |
-  EmbedLink |
-  Tag |
-  Date |
-  Duration |
-  Object |
-  Array |
-  Lambda
+  Identifier | Bool | Null | Number | String | Link | EmbedLink |
+  Tag | Date | Duration | Object | Array | Lambda
 }
 
 @precedence { postfix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
@@ -74,12 +60,12 @@ TypedArg { Identifier ":" expression }
 
 Array  { "[" listOf<expression | Of> "]" }
 Object { "{" listOf<property> "}" }
-Property { "override"? propertyKey ":" expression }
+Property { kw<"override">? propertyKey ":" expression }
 
 property { Of | LocalProperty | Property }
-propertyKey { String | ("protected"? Tag) | ("protected"? Link) | Identifier }
-Of { "of" expression }
-LocalProperty { "local" propertyKey ":" expression }
+propertyKey { String | (kw<"protected">? Tag) | (kw<"protected">? Link) | Identifier }
+Of { kw<"of"> expression }
+LocalProperty { kw<"local"> propertyKey ":" expression }
 
 durationPair {
   DurationYears { Number ("year" | "years" | "yr" | "yrs") } |
@@ -113,13 +99,16 @@ durationPair {
     )?)?)?)?)?
   }
   divideOp { "/" }
-  lineComment { "//" ![\n]* }
+  lineComment[@name="//"] { "//" ![\n]* }
   whitespace { @whitespace }
   @precedence { lineComment, divideOp }
+
+  "%{" "}" "!" "(" ")" "," "[" "]" "." "*" "/" "+" "-"
+  ">=" "<=" "!=" ">" "<" "=" "and" "&" "or" "|" "=>" "{" ":"
 }
 
 @skip {} {
-  blockComment { "/*" blockCommentChar* blockCommentStop }
+  blockComment[@name="/**/"] { "/*" blockCommentChar* blockCommentStop }
 }
 
 @local tokens {
@@ -131,6 +120,9 @@ durationPair {
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace | lineComment | blockComment }
-listOf<item> { (item ("," item)* ","?)? }
+
+listOf<term> { (term ("," term)* ","?)? }
+kw<term> { @specialize[@name={term}]<identifier, term> }
+
 
 @detectDelim

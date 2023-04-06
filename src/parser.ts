@@ -3,20 +3,26 @@ import { ParserConfig } from "@lezer/lr";
 
 import { parser } from "./parser/schema.parser";
 
-export function parse(str: string, config?: ParserConfig): Tree {
-  return parser.configure(config || {}).parse(str);
+export function isSyntax(str: string): boolean {
+  return /[A-Z⚠]/.test(str[0]);
 }
 
-export function* traverse(tree: Tree) {
+export function parse(str: string, config: ParserConfig = {}): Tree {
+  return parser.configure(config).parse(str);
+}
+
+export function* traverse(tree: Tree, syntax = false) {
   const cursor = tree.cursor();
 
   do {
-    yield cursor;
+    if (syntax || isSyntax(cursor.name)) {
+      yield cursor;
+    }
   } while (cursor.next());
 }
 
-export function hasErrors(tree: Tree) {
-  for (const cursor of traverse(tree)) {
+export function hasErrors(tree: string | Tree) {
+  for (const cursor of traverse(tree instanceof Tree ? tree : parse(tree))) {
     if (cursor.type.isError) {
       return true;
     }
@@ -25,7 +31,10 @@ export function hasErrors(tree: Tree) {
   return false;
 }
 
-export function children(tree: Tree | SyntaxNode): SyntaxNode[] {
+export function children(
+  tree: Tree | SyntaxNode,
+  syntax = false
+): SyntaxNode[] {
   const nodes: SyntaxNode[] = [];
 
   for (
@@ -33,7 +42,9 @@ export function children(tree: Tree | SyntaxNode): SyntaxNode[] {
     node;
     node = node.nextSibling
   ) {
-    nodes.push(node);
+    if (syntax || isSyntax(node.name)) {
+      nodes.push(node);
+    }
   }
 
   return nodes;
@@ -41,9 +52,15 @@ export function children(tree: Tree | SyntaxNode): SyntaxNode[] {
 
 type ParseTreeJSON = [string, string] | [string, ...ParseTreeJSON[]];
 
-export function toJSON(str: string, tree: Tree): ParseTreeJSON {
+export function toJSON(
+  str: string,
+  args: { tree?: Tree; syntax?: boolean } = {}
+): ParseTreeJSON {
+  const tree = args.tree || parse(str);
+  const syntax = args.syntax || false;
+
   const toJSONRec = (node: SyntaxNode): ParseTreeJSON => {
-    const childTrees = children(node).map((node) => toJSONRec(node));
+    const childTrees = children(node, syntax).map((node) => toJSONRec(node));
 
     return [
       node.name,
@@ -56,10 +73,13 @@ export function toJSON(str: string, tree: Tree): ParseTreeJSON {
   return toJSONRec(tree.topNode);
 }
 
-export function prettyPrint(str: string, tree?: Tree): string {
+export function prettyPrint(
+  str: string,
+  args: { tree?: Tree; syntax?: boolean } = {}
+): string {
   const strs: string[] = [];
 
-  const printASTRec = ([name, ...values]: ParseTreeJSON, depth: number) => {
+  const prettyPrintRec = ([name, ...values]: ParseTreeJSON, depth: number) => {
     const indent = " ".repeat(depth * 2);
     name = JSON.stringify(name);
 
@@ -75,14 +95,14 @@ export function prettyPrint(str: string, tree?: Tree): string {
       strs.push(`${indent}[${name},`);
 
       for (const child of values as ParseTreeJSON[]) {
-        printASTRec(child, depth + 1);
+        prettyPrintRec(child, depth + 1);
       }
 
       strs[strs.length - 1] = strs[strs.length - 1].slice(0, -1) + "],";
     }
   };
 
-  printASTRec(toJSON(str, tree || parse(str)), 0);
+  prettyPrintRec(toJSON(str, args), 0);
 
   const res = strs.join("\n").slice(0, -1);
 

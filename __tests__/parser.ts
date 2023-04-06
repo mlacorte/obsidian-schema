@@ -14,28 +14,23 @@ describe("parser", () => {
   });
 
   test("error recovery", () => {
-    let tree = parse("%{foo: null");
-    expect(hasErrors(tree)).toBe(true);
-    expect(tree.topNode.firstChild?.nextSibling?.type.isError).toBe(true);
-
-    tree = parse("%{}");
-    expect(hasErrors(tree)).toBe(false);
+    expect(hasErrors("%{foo: null")).toBe(true);
+    expect(hasErrors("%{}")).toBe(false);
   });
 
   test("tags", () => {
-    const errors = (str: string) => hasErrors(parse(`"%{tag:${str}}`));
+    const errors = (str: string) => hasErrors(`"%{tag:${str}}`);
 
     expect(errors("#some/tag")).toBe(false);
     expect(errors("#some/ tag")).toBe(true);
   });
 
   test("dates", () => {
-    const tree = parse(`%{today:date(today)}`);
-    expect(hasErrors(tree)).toBe(false);
+    expect(hasErrors("%{today:date(today)}")).toBe(false);
   });
 
   test("identifiers", () => {
-    const errors = (str: string) => hasErrors(parse(`%{${str}:true}`));
+    const errors = (str: string) => hasErrors(`%{${str}:true}`);
 
     expect(errors("")).toBe(true);
     expect(errors("plain")).toBe(false);
@@ -48,7 +43,7 @@ describe("parser", () => {
   });
 
   test("links", () => {
-    let errors = (str: string) => hasErrors(parse(`%{link:${str}}`));
+    let errors = (str: string) => hasErrors(`%{link:${str}}`);
 
     expect(errors("[[]]")).toBe(false);
     expect(errors("[[Some/Link]]")).toBe(false);
@@ -66,7 +61,7 @@ describe("parser", () => {
 
     expect(hasErrors(tree)).toBe(false);
     expect(children(tree).length).toBe(1);
-    expect(toJSON(str, tree)).toEqual([
+    expect(toJSON(str, { tree })).toEqual([
       "SchemaDoc",
       ["Property", ["Identifier", "key"], ["Identifier", expr]]
     ]);
@@ -135,6 +130,9 @@ describe("parser", () => {
       %{
         // comments?
         normal: "this is normal",
+        /**
+         * comments?
+         */
         expression: local foo: "this is local", foo, // comments?
         local property: "this is local",
         withProperty: property,
@@ -145,10 +143,8 @@ describe("parser", () => {
         baz: object(of boolean),
         protected #some/tag: true,
         override pi: 3.14,
-        override protected #a/little/wird: "meh"
-        /**
-         * comments?
-         */
+        override protected #a/little/wird: "meh",
+        localproperty: "should be an identifier"
       }
 
       Nice!\\`;
@@ -157,7 +153,7 @@ describe("parser", () => {
     const errors = hasErrors(tree);
 
     if (errors) {
-      console.log(prettyPrint(str, tree));
+      console.log(prettyPrint(str, { tree, syntax: true }));
     }
 
     expect(errors).toBe(false);
