@@ -43,7 +43,7 @@ postfixExpression {
 
 mathExpression {
   Multiply { expression !mulDiv "*" expression } |
-  Divide { expression !mulDiv "/" expression } |
+  Divide { expression !mulDiv divideOp expression } |
   Plus { expression !plsMin "+" expression } |
   Minus { expression !plsMin "-" expression }
 }
@@ -112,13 +112,25 @@ durationPair {
       "." @digit @digit @digit
     )?)?)?)?)?
   }
+  divideOp { "/" }
+  lineComment { "//" ![\n]* }
   whitespace { @whitespace }
+  @precedence { lineComment, divideOp }
+}
+
+@skip {} {
+  blockComment { "/*" blockCommentChar* blockCommentStop }
+}
+
+@local tokens {
+  blockCommentStop { "*/" }
+  @else blockCommentChar
 }
 
 @external tokens unknownTokenizer from "./schema.tokens" { unknown }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
-@skip { whitespace }
+@skip { whitespace | lineComment | blockComment }
 listOf<item> { (item ("," item)* ","?)? }
 
 @detectDelim

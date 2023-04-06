@@ -133,11 +133,12 @@ describe("parser", () => {
       Time for some keywords:
 
       %{
+        // comments?
         normal: "this is normal",
-        expression: local foo: "this is local", foo,
+        expression: local foo: "this is local", foo, // comments?
         local property: "this is local",
         withProperty: property,
-        inLambda: (a) => (b) => local c: a + b, c * c,
+        inLambda: /* comments? */ (a) => (b) => local c: a + b, c * c,
         of foo,
         foo: [1, 2, 3, of number],
         bar: { of string },
@@ -145,6 +146,9 @@ describe("parser", () => {
         protected #some/tag: true,
         override pi: 3.14,
         override protected #a/little/wird: "meh"
+        /**
+         * comments?
+         */
       }
 
       Nice!\\`;
