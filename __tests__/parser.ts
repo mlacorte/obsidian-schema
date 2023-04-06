@@ -141,7 +141,10 @@ describe("parser", () => {
         of foo,
         foo: [1, 2, 3, of number],
         bar: { of string },
-        baz: object(of boolean)
+        baz: object(of boolean),
+        protected #some/tag: true,
+        override pi: 3.14,
+        override protected #a/little/wird: "meh"
       }
 
       Nice!\\`;

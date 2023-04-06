@@ -74,10 +74,10 @@ TypedArg { Identifier ":" expression }
 
 Array  { "[" listOf<expression | Of> "]" }
 Object { "{" listOf<property> "}" }
-Property { propertyKey ":" expression }
+Property { "override"? propertyKey ":" expression }
 
 property { Of | LocalProperty | Property }
-propertyKey { String | Tag | Link | Identifier }
+propertyKey { String | ("protected"? Tag) | ("protected"? Link) | Identifier }
 Of { "of" expression }
 LocalProperty { "local" propertyKey ":" expression }
 
