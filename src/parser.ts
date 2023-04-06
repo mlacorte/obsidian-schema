@@ -67,18 +67,18 @@ export function prettyPrint(str: string, tree?: Tree): string {
       const value = JSON.stringify(values[0]);
 
       if (value.length === 0) {
-        strs.push(`${indent}[${name}, []],`);
+        strs.push(`${indent}[${name}],`);
       } else {
         strs.push(`${indent}[${name}, ${value}],`);
       }
     } else {
-      strs.push(`${indent}[${name}, [`);
+      strs.push(`${indent}[${name},`);
 
       for (const child of values as ParseTreeJSON[]) {
         printASTRec(child, depth + 1);
       }
 
-      strs.push(`${indent}],`);
+      strs[strs.length - 1] = strs[strs.length - 1].slice(0, -1) + "],";
     }
   };
 
