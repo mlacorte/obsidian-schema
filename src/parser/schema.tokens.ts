@@ -1,10 +1,7 @@
 import { ExternalTokenizer, InputStream } from "@lezer/lr";
 import emoji from "emoji-regex";
 
-import { identifier, schemaClose, schemaOpen, unknown } from "./schema.terms";
-
-const schemaOpenLit = "%{";
-const schemaCloseLit = "}";
+import { identifier, unknown } from "./schema.terms";
 
 const emojiRegex = new RegExp(emoji(), "");
 const longestEmojiSeqLength = 24; // probably overkill, but idk
@@ -37,21 +34,6 @@ function tryTake(input: InputStream, num: number): string {
   return String.fromCodePoint(...chars);
 }
 
-export const schemaOpenTokenizer = new ExternalTokenizer((input) => {
-  if (lookaheadMatch(input, schemaOpenLit)) {
-    input.acceptToken(schemaOpen, schemaOpenLit.length);
-  }
-});
-
-export const schemaCloseTokenizer = new ExternalTokenizer(
-  (input) => {
-    if (lookaheadMatch(input, schemaCloseLit)) {
-      input.acceptToken(schemaClose, schemaCloseLit.length);
-    }
-  },
-  { fallback: true }
-);
-
 export const unknownTokenizer = new ExternalTokenizer((input) => {
   if (input.next === -1) {
     return;
@@ -63,7 +45,7 @@ export const unknownTokenizer = new ExternalTokenizer((input) => {
       continue;
     }
 
-    if (input.next === -1 || lookaheadMatch(input, schemaOpenLit)) {
+    if (input.next === -1 || lookaheadMatch(input, "%{")) {
       break;
     }
 

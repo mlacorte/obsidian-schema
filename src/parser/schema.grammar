@@ -1,4 +1,4 @@
-@top MarkdownDoc { (schemaOpen Schema schemaClose | Markdown)* }
+@top MarkdownDoc { ("%{" Schema "}" | Markdown)* }
 @top SchemaDoc { block }
 
 Markdown { unknown }
@@ -115,8 +115,6 @@ durationPair {
   whitespace { @whitespace }
 }
 
-@external tokens schemaOpenTokenizer from "./schema.tokens" { schemaOpen }
-@external tokens schemaCloseTokenizer from "./schema.tokens" { schemaClose }
 @external tokens unknownTokenizer from "./schema.tokens" { unknown }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
