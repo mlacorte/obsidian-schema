@@ -24,7 +24,7 @@ value {
 postfixExpression {
   Call { expression !postfix "(" listOf<expression | Of> ")" } |
   Index { expression !postfix "[" expression "]" } |
-  Dot { expression !postfix "." Identifier }
+  Dot { expression !postfix "." DotIdentifier { identifier } }
 }
 
 mathExpression {
@@ -61,9 +61,15 @@ TypedArg { Identifier ":" expression }
 Array  { "[" listOf<expression | Of> "]" }
 Object { "{" listOf<property> "}" }
 Property { kw<"override">? propertyKey ":" expression }
+PropertyIdentifier { identifier }
 
 property { Of | LocalProperty | Property }
-propertyKey { String | (kw<"protected">? Tag) | (kw<"protected">? Link) | Identifier }
+propertyKey {
+  PropertyIdentifier |
+  String |
+  kw<"protected">? Tag |
+  kw<"protected">? Link
+}
 Of { kw<"of"> expression }
 LocalProperty { kw<"local"> propertyKey ":" expression }
 
@@ -77,9 +83,10 @@ durationPair {
   DurationSeconds { Number ("second" | "seconds" | "sec" | "secs" | "s") }
 }
 
+@external tokens unknownTokenizer from "./schema.tokens" { unknown }
+
 @tokens {
   Number { "-"? $[0-9]+ ("." $[0-9]+)? }
-  String { '"' ("\\" _ | !["\\])* '"' }
   Bool { "true" | "false" | "True" | "False" }
   Link { "[[" ![\[\]]* "]]" }
   EmbedLink { "![[" ![\[\]]* "]]" }
@@ -98,7 +105,9 @@ durationPair {
       "." @digit @digit @digit
     )?)?)?)?)?
   }
-  divideOp { "/" }
+  escape[@name="\\"] { "\\" _ }
+  stringContent { ![\\"]+ }
+  divideOp[@name="/"] { "/" }
   lineComment[@name="//"] { "//" ![\n]* }
   whitespace { @whitespace }
   @precedence { lineComment, divideOp }
@@ -108,7 +117,8 @@ durationPair {
 }
 
 @skip {} {
-  blockComment[@name="/**/"] { "/*" blockCommentChar* blockCommentStop }
+  String { '"' (escape | stringContent)* '"' }
+  blockComment[@name="/*"] { "/*" blockCommentChar* blockCommentStop }
 }
 
 @local tokens {
@@ -116,13 +126,11 @@ durationPair {
   @else blockCommentChar
 }
 
-@external tokens unknownTokenizer from "./schema.tokens" { unknown }
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
 
 @skip { whitespace | lineComment | blockComment }
 
 listOf<term> { (term ("," term)* ","?)? }
 kw<term> { @specialize[@name={term}]<identifier, term> }
-
 
 @detectDelim

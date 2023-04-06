@@ -19,10 +19,8 @@ describe("parser", () => {
   });
 
   test("tags", () => {
-    const errors = (str: string) => hasErrors(`"%{tag:${str}}`);
-
-    expect(errors("#some/tag")).toBe(false);
-    expect(errors("#some/ tag")).toBe(true);
+    expect(hasErrors(`%{tag:#some/tag}`)).toBe(false);
+    expect(hasErrors(`%{tag:#some/ tag}`)).toBe(true);
   });
 
   test("dates", () => {
@@ -63,7 +61,7 @@ describe("parser", () => {
     expect(children(tree).length).toBe(1);
     expect(toJSON(str, { tree })).toEqual([
       "SchemaDoc",
-      ["Property", ["Identifier", "key"], ["Identifier", expr]]
+      ["Property", ["PropertyIdentifier", "key"], ["Identifier", expr]]
     ]);
   });
 
@@ -143,7 +141,7 @@ describe("parser", () => {
         baz: object(of boolean),
         protected #some/tag: true,
         override pi: 3.14,
-        override protected #a/little/wird: "meh",
+        override protected #a/little/weird: "meh",
         localproperty: "should be an identifier"
       }
 
