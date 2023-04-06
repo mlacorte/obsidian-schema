@@ -36,7 +36,7 @@ value {
 @precedence { postfix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
 
 postfixExpression {
-  Call { expression !postfix "(" listOf<expression> ")" } |
+  Call { expression !postfix "(" listOf<expression | Of> ")" } |
   Index { expression !postfix "[" expression "]" } |
   Dot { expression !postfix "." Identifier }
 }
@@ -72,12 +72,13 @@ LambdaExpr { expression }
 Arg { Identifier }
 TypedArg { Identifier ":" expression }
 
-Array  { "[" listOf<expression> "]" }
+Array  { "[" listOf<expression | Of> "]" }
 Object { "{" listOf<property> "}" }
 Property { propertyKey ":" expression }
 
-property { LocalProperty | Property }
+property { Of | LocalProperty | Property }
 propertyKey { String | Tag | Link | Identifier }
+Of { "of" expression }
 LocalProperty { "local" propertyKey ":" expression }
 
 durationPair {

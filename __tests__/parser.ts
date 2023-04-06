@@ -137,7 +137,11 @@ describe("parser", () => {
         expression: local foo: "this is local", foo,
         local property: "this is local",
         withProperty: property,
-        inLambda: (a) => (b) => local c: a + b, c * c
+        inLambda: (a) => (b) => local c: a + b, c * c,
+        of foo,
+        foo: [1, 2, 3, of number],
+        bar: { of string },
+        baz: object(of boolean)
       }
 
       Nice!\\`;
