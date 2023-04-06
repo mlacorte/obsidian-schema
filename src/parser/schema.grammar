@@ -35,7 +35,7 @@ value {
 @precedence { postFix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
 
 postfixExpression {
-  Call { expression !postFix "(" expression ")" } |
+  Call { expression !postFix "(" listOf<expression> ")" } |
   Index { expression !postFix "[" expression "]" } |
   Dot { expression !postFix "." Identifier }
 }

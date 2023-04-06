@@ -117,7 +117,10 @@ describe("parser", () => {
       %{
         dots: a.b.c.d,
         indexes: a[b["c"]]["d"],
-        fns: a(b(c))(d)
+        fns: a(b(c))(d),
+        emptyFn: foo(),
+        multiArgFn: foo(a,b,d),
+        trailingComma: foo(a,),
       }
 
       Nice!\\`;
