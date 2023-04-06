@@ -72,6 +72,13 @@ describe("parser", () => {
     ]);
   });
 
+  test("local property", () => {
+    const str = `%{local foo: "bar", biz: foo}`;
+    const tree = parse(str);
+
+    expect(hasErrors(tree)).toBe(false);
+  });
+
   test("composite", () => {
     const str = `
       This is some markdown outside of the schema block.
@@ -121,6 +128,16 @@ describe("parser", () => {
         emptyFn: foo(),
         multiArgFn: foo(a,b,d),
         trailingComma: foo(a,),
+      }
+
+      Time for some keywords:
+
+      %{
+        normal: "this is normal",
+        expression: local foo: "this is local", foo,
+        local property: "this is local",
+        withProperty: property,
+        inLambda: (a) => (b) => local c: a + b, c * c
       }
 
       Nice!\\`;

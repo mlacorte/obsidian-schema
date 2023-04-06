@@ -4,7 +4,7 @@
 Markdown { unknown }
 Schema { block }
 
-block { listOf<Property> }
+block { listOf<property> }
 
 expression {
   value |
@@ -13,6 +13,7 @@ expression {
   comparisonExpression |
   logicalExpression  |
   Not { "!" expression } |
+  LocalProperty "," expression |
   "(" expression ~lambdaOrParen ")"
 }
 
@@ -32,12 +33,12 @@ value {
   Lambda
 }
 
-@precedence { postFix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
+@precedence { postfix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
 
 postfixExpression {
-  Call { expression !postFix "(" listOf<expression> ")" } |
-  Index { expression !postFix "[" expression "]" } |
-  Dot { expression !postFix "." Identifier }
+  Call { expression !postfix "(" listOf<expression> ")" } |
+  Index { expression !postfix "[" expression "]" } |
+  Dot { expression !postfix "." Identifier }
 }
 
 mathExpression {
@@ -72,8 +73,12 @@ Arg { Identifier }
 TypedArg { Identifier ":" expression }
 
 Array  { "[" listOf<expression> "]" }
-Object { "{" listOf<Property> "}" }
-Property { (String | Tag | Link | Identifier) ":" expression }
+Object { "{" listOf<property> "}" }
+Property { propertyKey ":" expression }
+
+property { LocalProperty | Property }
+propertyKey { String | Tag | Link | Identifier }
+LocalProperty { "local" propertyKey ":" expression }
 
 durationPair {
   DurationYears { Number ("year" | "years" | "yr" | "yrs") } |
