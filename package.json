@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-schema",
 	"version": "0.1.0",
-	"description": "Adds schema validation and frontmatter generation to notes",
+	"description": "Extends Dataview expressions to add schema validation and more powerful metadata capabilities to Obsidian",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs --watch",
