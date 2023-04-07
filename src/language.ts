@@ -17,7 +17,7 @@ export const schemaLanguage = LRLanguage.define({
         Bool: tags.bool,
         "\\": tags.escape,
         "override protected": tags.modifier,
-        "and or of": tags.operatorKeyword,
+        "and or of include": tags.operatorKeyword,
         local: tags.definitionKeyword,
         '"*" "/" + -': tags.arithmeticOperator,
         '"!" & |': tags.logicOperator,
