@@ -4,8 +4,8 @@
 	"description": "Extends Dataview expressions to add schema validation and more powerful metadata capabilities to Obsidian",
 	"main": "main.js",
 	"scripts": {
-		"dev": "node esbuild.config.mjs --watch",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"dev": "node esbuild.config.mjs",
+		"build": "node esbuild.config.mjs production && tsc -noEmit -skipLibCheck",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"test": "jest --watch test"
 	},

@@ -22,5 +22,5 @@ data.json
 .DS_Store
 
 # Lezer
-src/**/*.parser.ts
-src/**/*.terms.ts
+src/**/*.parser.js
+src/**/*.terms.js

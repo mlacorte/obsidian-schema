@@ -41,8 +41,8 @@ async function buildLezerGrammar(path) {
   }
 
   const { dir, name } = parse(path);
-  const parserPath = `${dir}${sep}${name}.parser.ts`;
-  const termsPath = `${dir}${sep}${name}.terms.ts`;
+  const parserPath = `${dir}${sep}${name}.parser.js`;
+  const termsPath = `${dir}${sep}${name}.terms.js`;
 
   let parser, terms;
   let warnings = [];
@@ -100,11 +100,9 @@ async function buildLezerGrammar(path) {
     watcher.on("change", buildLezerGrammar);
   }
 
-  esbuild
-    .build({
-      banner: {
-        js: banner
-      },
+  const context = await esbuild
+    .context({
+      banner: { js: banner },
       entryPoints: ["src/main.ts"],
       bundle: true,
       external: [
@@ -131,4 +129,12 @@ async function buildLezerGrammar(path) {
       outfile: "main.js"
     })
     .catch(() => process.exit(1));
+
+  if (prod) {
+    await context.rebuild();
+    return await context.dispose();
+  }
+
+  await context.watch();
+  await context.rebuild();
 })();

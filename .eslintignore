@@ -1,4 +1,4 @@
 npm node_modules
 build
-src/**/*.parser.ts
-src/**/*.terms.ts
+src/**/*.parser.js
+src/**/*.terms.js
