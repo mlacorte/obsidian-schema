@@ -110,6 +110,8 @@ durationPair {
   stringContent { ![\\"]+ }
   divideOp[@name="/"] { "/" }
   lineComment[@name="//"] { "//" ![\n]* }
+  blockCommentRest { ![*] blockCommentRest | "*" blockCommentAfterStar }
+  blockCommentAfterStar { "/" | "*" blockCommentAfterStar | ![/*] blockCommentRest }
   whitespace { @whitespace }
   @precedence { lineComment, divideOp }
 
@@ -119,12 +121,7 @@ durationPair {
 
 @skip {} {
   String { '"' (escape | stringContent)* '"' }
-  blockComment[@name="/*"] { "/*" blockCommentChar* blockCommentStop }
-}
-
-@local tokens {
-  blockCommentStop { "*/" }
-  @else blockCommentChar
+  blockComment[@name="/*"] { "/*" blockCommentRest }
 }
 
 @external tokens identifierTokenizer from "./schema.tokens" { identifier }
@@ -133,5 +130,7 @@ durationPair {
 
 listOf<term> { (term ("," term)* ","?)? }
 kw<term> { @specialize[@name={term}]<identifier, term> }
+
+@external propSource highlight from "./schema.highlight"
 
 @detectDelim
