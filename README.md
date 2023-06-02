@@ -31,7 +31,7 @@ be able to query and visualize different possible states of an Obsidian vault.
 
 None yet. Features still being determined.
 
-## Developmet
+## Development
 
 Use the following for development purposes:
 
