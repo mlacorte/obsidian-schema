@@ -1,5 +1,6 @@
-import * as T from "../src/types";
-import { fn, val } from "../src/valueset";
+import * as T from "./types";
+import { fn, val } from "./valueset";
+import { describe, expect, test } from "bun:test";
 
 const one = T.Number.literal(1);
 const two = T.Number.literal(2);
@@ -26,38 +27,38 @@ describe("valueset", () => {
     expect(b.conditions()).toEqual([[[b.id, one]], [[b.id, two]]]);
 
     const c = fn("c", [a, b], (a, b) =>
-      T.Number.literal((a.value as any) + b.value)
+      T.Number.literal((a.value as any) + b.value),
     );
 
     expect(c.values()).toEqual([two, three, three, four]);
     expect(c.conditions()).toEqual([
       [
         [a.id, one],
-        [b.id, one]
+        [b.id, one],
       ],
       [
         [a.id, one],
-        [b.id, two]
+        [b.id, two],
       ],
       [
         [a.id, two],
-        [b.id, one]
+        [b.id, one],
       ],
       [
         [a.id, two],
-        [b.id, two]
-      ]
+        [b.id, two],
+      ],
     ]);
 
     const d = fn("d", [a, a], (l, r) =>
-      T.Number.literal((l.value as any) + r.value)
+      T.Number.literal((l.value as any) + r.value),
     );
 
     expect(d.values()).toEqual([two, four]);
     expect(d.conditions()).toEqual([[[a.id, one]], [[a.id, two]]]);
 
     const e = fn("e", [a, c], (a, c) =>
-      T.Number.literal((c.value as any) + a.value)
+      T.Number.literal((c.value as any) + a.value),
     );
 
     expect(e.values()).toEqual([three, four, five, six]);
@@ -65,23 +66,23 @@ describe("valueset", () => {
       [
         [a.id, one],
         [b.id, one],
-        [c.id, two]
+        [c.id, two],
       ],
       [
         [a.id, one],
         [b.id, two],
-        [c.id, three]
+        [c.id, three],
       ],
       [
         [a.id, two],
         [b.id, one],
-        [c.id, three]
+        [c.id, three],
       ],
       [
         [a.id, two],
         [b.id, two],
-        [c.id, four]
-      ]
+        [c.id, four],
+      ],
     ]);
   });
 });

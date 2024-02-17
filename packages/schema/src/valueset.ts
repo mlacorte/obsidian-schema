@@ -1,4 +1,4 @@
-import * as I from "immutable";
+import I from "immutable";
 
 import * as T from "./types";
 
@@ -11,7 +11,7 @@ let $id = 1;
 
 class ValueSet {
   private readonly _id: number;
-  private readonly vals: I.Set<PossibleValue>;
+  private readonly vals!: I.Set<PossibleValue>;
 
   get id(): string {
     return `<${this.name}:${this._id}>`;

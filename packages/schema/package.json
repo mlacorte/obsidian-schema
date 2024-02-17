@@ -1,0 +1,19 @@
+{
+  "name": "schema",
+  "module": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "prepare": "bun scripts/prepare.ts"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.4.2",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "immutable": "^5.0.0-beta.5",
+    "luxon": "^3.4.4"
+  }
+}

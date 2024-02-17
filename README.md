@@ -35,9 +35,9 @@ None yet. Features still being determined.
 
 Use the following for development purposes:
 
-- `pnpm dev`
-- `pnpm test`
-- `pnpm build`
+- `bun dev`
+- `bun test`
+- `bun build`
 
-The `pnpm` package is added as a dev dependency, so you can run `npm install` to
+The `bun` package is added as a dev dependency, so you can run `npm install` to
 get it if you don't want to install it globally.

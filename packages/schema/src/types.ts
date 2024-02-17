@@ -1,6 +1,6 @@
-import * as I from "immutable";
+import I from "immutable";
 import * as L from "luxon";
-import { Link, Widget } from "obsidian-dataview";
+import { Link, Widget } from "./stubs";
 
 type TypeMap = {
   null: { type: NullType; value: null };
@@ -15,7 +15,7 @@ type TypeMap = {
   array: { type: ArrayType; value: ArrayVal };
   function: { type: FunctionType; value: FunctionVal };
   union: { type: UnionType; value: I.Map<ValueKey, I.Set<ValueType>> };
-  any: { type: AnyType; value: "*" };
+  any: { type: AnyType; value: AnyType };
   never: { type: NeverType; value: I.Set<NeverVal> };
 };
 
@@ -42,11 +42,14 @@ export const enum Cmp {
   Equal = 0b00, // 0
   Subset = 0b01, // 1
   Superset = 0b10, // 2
-  Disjoint = 0b11 // 3
+  Disjoint = 0b11, // 3
 }
 
 abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
-  constructor(public type: K, public value: ValueOf<K>) {}
+  constructor(
+    public type: K,
+    public value: ValueOf<K>,
+  ) {}
 
   equals(other: unknown): boolean {
     return (
@@ -74,7 +77,8 @@ abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
 // any
 class AnyType extends TypeBase<"any"> {
   constructor() {
-    super("any", "*");
+    super("any", undefined as any);
+    this.value = this;
   }
 
   or(_other: Type): Type {
@@ -111,7 +115,7 @@ const TAny = new AnyType();
 // never
 class NeverVal extends I.Record({
   message: "",
-  vars: I.Set<string>()
+  vars: I.Set<string>(),
 }) {}
 
 class NeverType extends TypeBase<"never"> {
@@ -123,7 +127,7 @@ class NeverType extends TypeBase<"never"> {
     return message === undefined
       ? TNever
       : new NeverType(
-          this.value.add(new NeverVal({ message, vars: I.Set(vars) }))
+          this.value.add(new NeverVal({ message, vars: I.Set(vars) })),
         );
   }
 
@@ -133,13 +137,13 @@ class NeverType extends TypeBase<"never"> {
 
   or(other: Type): Type {
     return other instanceof NeverType
-      ? new NeverType(this.value.union(other.value))
+      ? new NeverType(this.value.union(other.value).sort())
       : other;
   }
 
   and(other: Type): Type {
     return other instanceof NeverType
-      ? new NeverType(this.value.intersect(other.value))
+      ? new NeverType(this.value.intersect(other.value).sort())
       : this;
   }
 
@@ -171,7 +175,7 @@ class NeverType extends TypeBase<"never"> {
       type: "never",
       value: this.value
         .toArray()
-        .map((v) => ({ message: v.message, vars: v.vars.toArray() }))
+        .map((v) => ({ message: v.message, vars: v.vars.toArray() })),
     };
   }
 
@@ -195,24 +199,24 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
     return other instanceof AnyType
       ? other
       : other instanceof NeverType
-      ? (this as unknown as TypeOf<K>)
-      : UnionType.or(this as unknown as TypeOf<K>, other);
+        ? (this as unknown as TypeOf<K>)
+        : UnionType.or(this as unknown as TypeOf<K>, other);
   }
 
   and(other: Type): Type {
     return other instanceof AnyType
       ? (this as unknown as TypeOf<K>)
       : other instanceof NeverType
-      ? other
-      : UnionType.and(this as unknown as TypeOf<K>, other);
+        ? other
+        : UnionType.and(this as unknown as TypeOf<K>, other);
   }
 
   cmp(other: Type): Cmp {
     return other instanceof AnyType
       ? Cmp.Subset
       : other instanceof NeverType
-      ? Cmp.Superset
-      : UnionType.cmp(this as unknown as TypeOf<K>, other);
+        ? Cmp.Superset
+        : UnionType.cmp(this as unknown as TypeOf<K>, other);
   }
 
   types(): I.Seq.Indexed<Type> {
@@ -220,14 +224,16 @@ abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
   }
 
   protected abstract _or(
-    other: TypeOf<K>
+    other: TypeOf<K>,
   ): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>];
   protected abstract _and(other: TypeOf<K>): [] | [TypeOf<K>];
   protected abstract _cmp(other: TypeOf<K>): Cmp;
 }
 
 type IsType<T> = T extends NullType ? T : T & { value: AnyType };
-type IsValue<T> = T extends NullType ? T : T & { value: Exclude<T, AnyType> };
+type IsValue<T extends { value: unknown }> = T extends NullType
+  ? T
+  : T & { value: Exclude<T["value"], AnyType> };
 
 abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
   constructor(type: K, value?: ValueOf<K>) {
@@ -240,8 +246,8 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
     return cmp === Cmp.Disjoint
       ? [this as unknown as TypeOf<K>, other]
       : cmp === Cmp.Subset
-      ? [other]
-      : [this as unknown as TypeOf<K>];
+        ? [other]
+        : [this as unknown as TypeOf<K>];
   }
 
   _and(other: TypeOf<K>): [] | [TypeOf<K>] {
@@ -250,8 +256,8 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
     return cmp === Cmp.Disjoint
       ? []
       : cmp === Cmp.Subset
-      ? [this as unknown as TypeOf<K>]
-      : [other];
+        ? [this as unknown as TypeOf<K>]
+        : [other];
   }
 
   toString() {
@@ -271,16 +277,16 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
     return ltype && rtype
       ? Cmp.Equal
       : ltype
-      ? Cmp.Superset
-      : rtype
-      ? Cmp.Subset
-      : this._equals(this.value as any, other.value as any)
-      ? Cmp.Equal
-      : Cmp.Disjoint;
+        ? Cmp.Superset
+        : rtype
+          ? Cmp.Subset
+          : this._equals(this.value as any, other.value as any)
+            ? Cmp.Equal
+            : Cmp.Disjoint;
   }
 
   isType(): this is IsType<this> {
-    return this.value instanceof AnyType;
+    return (this.value as any) instanceof AnyType;
   }
 
   isValue(): this is IsValue<this> {
@@ -293,7 +299,7 @@ abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
 
   protected _equals(
     a: Exclude<ValueOf<K>, AnyType>,
-    b: Exclude<ValueOf<K>, AnyType>
+    b: Exclude<ValueOf<K>, AnyType>,
   ): boolean {
     return a === b;
   }
@@ -350,8 +356,8 @@ class BooleanType extends UnitBase<"boolean"> {
     return cmp === Cmp.Disjoint
       ? [TBoolean] // true | false = boolean
       : cmp === Cmp.Subset
-      ? [other]
-      : [this];
+        ? [other]
+        : [this];
   }
 }
 
@@ -362,6 +368,10 @@ class DateType extends UnitBase<"date"> {
 
   literal(value: L.DateTime): IsValue<DateType> {
     return new DateType(value) as IsValue<DateType>;
+  }
+
+  protected override _equals(a: Link, b: Link): boolean {
+    return a.equals(b);
   }
 }
 
@@ -386,10 +396,6 @@ class LinkType extends UnitBase<"link"> {
 
   literal(value: Link): IsValue<LinkType> {
     return new LinkType(value) as IsValue<LinkType>;
-  }
-
-  protected override _equals(a: Link, b: Link): boolean {
-    return a.equals(b);
   }
 }
 
@@ -447,13 +453,10 @@ class UnionType extends TypeBase<"union"> {
   static or(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Type {
     return UnionType.shrink(
       UnionType.vals(ltype).mergeWith(
-        (
-          ls: I.Set<NumberType /* ValueType */>,
-          rs: I.Set<NumberType /* ValueType */>
-        ) => ls.flatMap((l) => rs.flatMap((r) => l._or(r))),
-        UnionType.vals(rtype)
+        (ls, rs) => ls.flatMap((l) => rs.flatMap((r) => (l as any)._or(r))),
+        UnionType.vals(rtype),
       ),
-      TNever
+      TNever,
     );
   }
 
@@ -470,11 +473,11 @@ class UnionType extends TypeBase<"union"> {
           ).flatMap((l) =>
             (
               rvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
-            ).flatMap((r) => l._and(r))
+            ).flatMap((r) => l._and(r)),
           );
           return res.isEmpty() ? [] : [[k, res]];
         }),
-      TNever.andError(ltype, rtype)
+      TNever.andError(ltype, rtype),
     );
   }
 
@@ -536,24 +539,24 @@ class UnionType extends TypeBase<"union"> {
     return other instanceof AnyType
       ? other
       : other instanceof NeverType
-      ? this
-      : UnionType.or(this, other);
+        ? this
+        : UnionType.or(this, other);
   }
 
   and(other: Type): Type {
     return other instanceof AnyType
       ? this
       : other instanceof NeverType
-      ? other
-      : UnionType.and(this, other);
+        ? other
+        : UnionType.and(this, other);
   }
 
   cmp(other: Type): Cmp {
     return other instanceof AnyType
       ? Cmp.Subset
       : other instanceof NeverType
-      ? Cmp.Superset
-      : UnionType.cmp(this, other);
+        ? Cmp.Superset
+        : UnionType.cmp(this, other);
   }
 
   toString() {
@@ -569,12 +572,12 @@ class UnionType extends TypeBase<"union"> {
         .map((s) =>
           s
             .flatMap((v) =>
-              v.value instanceof AnyType ? [] : [(v.toJSON() as any).value]
+              v.value instanceof AnyType ? [] : [(v.toJSON() as any).value],
             )
             .toArray()
-            .sort()
+            .sort(),
         )
-        .toObject()
+        .toObject(),
     };
   }
 
@@ -630,7 +633,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     const normalize = () =>
       this.new(
         this.mergeKnown(this.value.known, other.value.known),
-        this.value.unknown.or(other.value.unknown)
+        this.value.unknown.or(other.value.unknown),
       );
 
     return cmp === Cmp.Disjoint
@@ -638,8 +641,8 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
         ? [normalize()]
         : [_this, _other]
       : cmp === Cmp.Subset
-      ? [_other]
-      : [_this];
+        ? [_other]
+        : [_this];
   }
 
   protected _and(other: TypeOf<K>): [] | [TypeOf<K>] {
@@ -758,12 +761,12 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
     return emptyKnown && emptyUnknown
       ? empty
       : emptyKnown
-      ? `${this.unknownCtr}(${unknown})`
-      : `${this.literals[0]}${known
-          .map((t, k) => this.toStringIndexed(k as any, t))
-          .join(", ")}${
-          emptyUnknown ? "" : `, ...${this.unknownCtr}(${unknown})`
-        }${this.literals[1]}`;
+        ? `${this.unknownCtr}(${unknown})`
+        : `${this.literals[0]}${known
+            .map((t, k) => this.toStringIndexed(k as any, t))
+            .join(", ")}${
+            emptyUnknown ? "" : `, ...${this.unknownCtr}(${unknown})`
+          }${this.literals[1]}`;
   }
 
   protected abstract wrapKey(key: KeyOf<K> | KeyType<K>): KeyType<K>;
@@ -772,11 +775,11 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
   protected abstract appendKnown(
     known: KnownVal<K>,
     key: KeyOf<K>,
-    val: Type
+    val: Type,
   ): KnownVal<K>;
   protected abstract knownKeys(
     as: KnownVal<K>,
-    bs: KnownVal<K>
+    bs: KnownVal<K>,
   ): Iterable<KeyOf<K>>;
   protected abstract knownToJSON(): unknown;
   protected abstract literals: [string, string];
@@ -787,7 +790,7 @@ abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
 // object
 class ObjectVal extends I.Record({
   known: I.Map<string, Type>(),
-  unknown: TNever as Type
+  unknown: TNever as Type,
 }) {}
 
 class ObjectType extends CompositeBase<"object"> {
@@ -818,14 +821,14 @@ class ObjectType extends CompositeBase<"object"> {
   protected appendKnown(
     known: I.Map<string, Type>,
     key: string,
-    val: Type
+    val: Type,
   ): I.Map<string, Type> {
     return known.set(key, val);
   }
 
   protected knownKeys(
     as: I.Map<string, Type>,
-    bs: I.Map<string, Type>
+    bs: I.Map<string, Type>,
   ): Iterable<string> {
     return I.Set.union([as.keySeq(), bs.keySeq()]);
   }
@@ -848,7 +851,7 @@ const TObject = new ObjectType();
 // array
 class ArrayVal extends I.Record({
   known: I.List<Type>(),
-  unknown: TNever as Type
+  unknown: TNever as Type,
 }) {}
 
 class ArrayType extends CompositeBase<"array"> {
@@ -883,7 +886,7 @@ class ArrayType extends CompositeBase<"array"> {
   protected appendKnown(
     known: I.List<Type>,
     _key: number,
-    val: Type
+    val: Type,
   ): I.List<Type> {
     return known.push(val);
   }
@@ -908,13 +911,14 @@ class ArrayType extends CompositeBase<"array"> {
 const TArray = new ArrayType();
 
 // function
+type SingleType = Exclude<Type, UnionType | NeverType>;
 type Vararg = [Type];
 type Optional = Type[] | [...Type[], Vararg];
 type Required = Type[] | [...Type[], Optional];
 type Fn<T> = (...args: T[]) => Type;
 type Valufy = number[];
 type FunctionBuilderArgs =
-  | [Required, Fn<Type>]
+  | [Required, Fn<SingleType>]
   | [Required, Type, Valufy, Fn<any>];
 
 type FunctionBuilderVal = [ArrayType, (...args: Type[]) => Type][];
@@ -922,7 +926,10 @@ type FunctionBuilderVal = [ArrayType, (...args: Type[]) => Type][];
 class FunctionBuilder {
   value: FunctionBuilderVal = [];
 
-  constructor(public name = "<lambda>", public vectorize: number[] = []) {}
+  constructor(
+    public name = "<lambda>",
+    public vectorize: number[] = [],
+  ) {}
 
   add(...args: FunctionBuilderArgs): FunctionBuilder {
     const { required, optional, vararg } = this.splitArgs(args[0]);
@@ -948,7 +955,7 @@ class FunctionBuilder {
     // valufy function
     let fn =
       typeof args[1] === "function"
-        ? args[1]
+        ? (args[1] as Fn<Type>)
         : this.valufyFn(args[1], args[2] as Valufy, args[3] as Fn<any>);
 
     // vectorize function
@@ -971,7 +978,7 @@ class FunctionBuilder {
 
       // finds match
       const argList = TArray.literal(args);
-      let matchFn: Fn<Type> | null = null;
+      let matchFn: Fn<SingleType> | null = null;
 
       for (const [types, fn] of this.value) {
         if (argList.cmp(types) <= Cmp.Subset) {
@@ -985,7 +992,7 @@ class FunctionBuilder {
         return TNever.error(
           `No implementation of '${this.name}' found for arguments: ${args
             .map((a) => `${a}`)
-            .join(", ")}`
+            .join(", ")}`,
         );
       }
 
@@ -996,7 +1003,7 @@ class FunctionBuilder {
             .types()
             .flatMap((t) => res.map((prev) => [...prev, t]))
             .toArray(),
-        [[]]
+        [[]],
       );
 
       // union all results
@@ -1007,7 +1014,7 @@ class FunctionBuilder {
 
     const types = this.value
       .map((pair) => pair[0])
-      .reduce((a, b) => a.or(b), TNever);
+      .reduce((a, b) => (a as any).or(b), TNever);
 
     return FunctionType.new(this.name, types, fn);
   }
@@ -1033,7 +1040,7 @@ class FunctionBuilder {
       const vecMap = new Map(
         this.vectorize
           .filter((pos) => args[pos] instanceof ArrayType && pos < args.length)
-          .map((pos) => [pos, args[pos] as ArrayType])
+          .map((pos) => [pos, args[pos] as ArrayType]),
       );
 
       const vecs = [...vecMap.values()];
@@ -1043,7 +1050,7 @@ class FunctionBuilder {
       }
 
       const maxOrInfinity = Math.min(
-        ...vecs.map((t) => (t.isKnown() ? t.value.known.size : Infinity))
+        ...vecs.map((t) => (t.isKnown() ? t.value.known.size : Infinity)),
       );
       const min = Math.min(...vecs.map((t) => t.value.known.size));
       const max =
@@ -1128,7 +1135,7 @@ class FunctionType extends ValueBase<"function"> {
   constructor(
     public name: string = "<function>",
     public args: Type = TArray.list(),
-    value: FunctionVal = () => TAny
+    value: FunctionVal = () => TAny,
   ) {
     super("function", value);
   }
@@ -1136,7 +1143,7 @@ class FunctionType extends ValueBase<"function"> {
   static new(
     name: string,
     args: Type,
-    fn: (...args: Type[]) => Type
+    fn: (...args: Type[]) => Type,
   ): FunctionType {
     return new FunctionType(name, args, fn);
   }
@@ -1150,7 +1157,7 @@ class FunctionType extends ValueBase<"function"> {
   }
 
   protected _or(
-    other: FunctionType
+    other: FunctionType,
   ): [FunctionType] | [FunctionType, FunctionType] {
     return this.equals(other) ? [this] : [this, other];
   }
@@ -1171,7 +1178,7 @@ class FunctionType extends ValueBase<"function"> {
     return {
       type: "function",
       name: this.name,
-      args: this.args.toString()
+      args: this.args.toString(),
     };
   }
 
@@ -1198,7 +1205,7 @@ export {
   TArray as Array,
   TFunction as Function,
   TTrue as True,
-  TFalse as False
+  TFalse as False,
 };
 
 export type {
@@ -1214,5 +1221,6 @@ export type {
   AnyType,
   ObjectType,
   ArrayType,
-  FunctionType
+  FunctionType,
+  UnionType,
 };

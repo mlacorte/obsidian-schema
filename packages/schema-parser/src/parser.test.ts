@@ -1,4 +1,5 @@
-import { children, hasErrors, parse, prettyPrint, toJSON } from "../src/parser";
+import { children, hasErrors, parse, prettyPrint, toJSON } from "./parser";
+import { describe, test, expect } from "bun:test";
 
 describe("parser", () => {
   test("markdown", () => {

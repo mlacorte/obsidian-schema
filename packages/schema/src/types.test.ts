@@ -1,9 +1,14 @@
-import { fn } from "../src/builtins";
-import * as T from "../src/types";
+import { fn } from "./builtins";
+import * as T from "./types";
+import { describe, expect, test } from "bun:test";
 
 const one = T.Number.literal(1);
 const two = T.Number.literal(2);
 const three = T.Number.literal(3);
+
+const eqJSON = (a: T.Type, b: T.Type) => {
+  expect(a.toJSON()).toEqual(b.toJSON());
+};
 
 describe("types", () => {
   test("types", () => {
@@ -21,14 +26,14 @@ describe("types", () => {
     expect((never.value as any).toJS()).toEqual([
       {
         message: "Can't combine '1' and '2'.",
-        vars: []
-      }
+        vars: [],
+      },
     ]);
     expect(oneOrTwo.type).toBe("union");
   });
 
   test("boolean", () => {
-    expect(T.True.or(T.False)).toEqual(T.Boolean);
+    eqJSON(T.True.or(T.False), T.Boolean);
   });
 
   test("unions", () => {
@@ -73,18 +78,16 @@ describe("types", () => {
     const c = T.Object.object(T.Any, { a: one, b: one });
     const d = T.Object.object(T.Any, { a: two.or(three) });
 
-    expect(a.or(a)).toEqual(a);
-    expect(a.and(a)).toEqual(a);
+    eqJSON(a.or(a), a);
+    eqJSON(a.and(a), a);
 
-    expect(a.or(b)).toEqual(a);
-    expect(a.and(b)).toEqual(b);
+    eqJSON(a.or(b), a);
+    eqJSON(a.and(b), b);
 
     expect(a.or(c).type).toBe("union");
-    expect(a.and(c)).toEqual(c);
+    eqJSON(a.and(c), c);
 
-    expect(a.or(d)).toEqual(
-      T.Object.object(T.Any, { a: one.or(two).or(three) })
-    );
+    eqJSON(a.or(d), T.Object.object(T.Any, { a: one.or(two).or(three) }));
   });
 
   test("lists", () => {
@@ -93,16 +96,16 @@ describe("types", () => {
     const c = T.Array.list(T.Any, [one, two]);
     const d = T.Array.list(T.Any, [two.or(three)]);
 
-    expect(a.or(a)).toEqual(a);
-    expect(a.and(a)).toEqual(a);
+    eqJSON(a.or(a), a);
+    eqJSON(a.and(a), a);
 
-    expect(a.or(b)).toEqual(a);
-    expect(a.and(b)).toEqual(b);
+    eqJSON(a.or(b), a);
+    eqJSON(a.and(b), b);
 
     expect(a.or(c).type).toBe("union");
-    expect(a.and(c)).toEqual(c);
+    eqJSON(a.and(c), c);
 
-    expect(a.or(d)).toEqual(T.Array.list(T.Any, [one.or(two).or(three)]));
+    eqJSON(a.or(d), T.Array.list(T.Any, [one.or(two).or(three)]));
 
     const unique1 = T.Array.list(T.Any, [T.String, T.String]);
     const unique2 = T.Array.list(T.Any, [T.String, T.Null]);
@@ -129,7 +132,7 @@ describe("types", () => {
   describe("functions", () => {
     test("vectorize", () => {
       const lit = (arg: T.Type | T.Type[]): T.Type =>
-        Array.isArray(arg) ? T.Array.literal(arg as T.Type[]) : (arg as T.Type);
+        Array.isArray(arg) ? T.Array.literal(arg) : arg;
 
       const or = (...args: (T.Type | T.Type[])[]) =>
         args.map(lit).reduce((a, b) => a.or(b), T.Never);
@@ -141,19 +144,19 @@ describe("types", () => {
           T.Boolean,
           [T.String, one],
           T.Number,
-          [or(T.String, T.Number), T.Number]
+          [or(T.String, T.Number), T.Number],
         ],
         [
           T.Array.list(T.Boolean),
           [T.String, one],
           T.Number,
-          or([], [or(T.String, T.Number)], [or(T.String, T.Number), T.Number])
+          or([], [or(T.String, T.Number)], [or(T.String, T.Number), T.Number]),
         ],
         [
           T.Array.list(T.Boolean),
           T.Array.list(T.String.or(one)),
           T.Number,
-          T.Array.list(T.Number.or(T.String))
+          T.Array.list(T.Number.or(T.String)),
         ],
         [
           T.Array.list(T.Boolean),
@@ -162,19 +165,19 @@ describe("types", () => {
           or(
             [],
             [T.String.or(T.Number)],
-            T.Array.list(T.Number, [T.String.or(T.Number), T.Number])
-          )
+            T.Array.list(T.Number, [T.String.or(T.Number), T.Number]),
+          ),
         ],
         [
           T.Array.list(T.Boolean, [T.Boolean]),
           [T.String, one],
           [T.Number, two],
-          or([or(T.String, T.Number)], [or(T.String, T.Number), or(one, two)])
-        ]
+          or([or(T.String, T.Number)], [or(T.String, T.Number), or(one, two)]),
+        ],
       ].map((row) => row.map(lit) as any);
 
       for (const test of tests) {
-        expect(fn.choice.eval(...(test.slice(0, 3) as any))).toEqual(test[3]);
+        eqJSON(fn.choice.eval(...test.slice(0, 3)), test[3]);
       }
     });
   });

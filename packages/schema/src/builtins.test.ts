@@ -1,5 +1,6 @@
-import { op } from "../src/builtins";
-import * as T from "../src/types";
+import { op } from "./builtins";
+import * as T from "./types";
+import { describe, expect, test } from "bun:test";
 
 const one = T.Number.literal(1);
 const two = T.Number.literal(2);

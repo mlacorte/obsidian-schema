@@ -1,0 +1,22 @@
+{
+  "name": "schema-parser",
+  "module": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "prepare": "bun ./scripts/prepare.ts"
+  },
+  "dependencies": {
+    "@lezer/common": "^1.2.1",
+    "@lezer/highlight": "^1.2.0",
+    "@lezer/lr": "^1.4.0",
+    "emoji-regex": "^10.3.0"
+  },
+  "devDependencies": {
+    "@lezer/generator": "^1.6.0",
+    "bun-types": "latest",
+    "glob": "^10.3.10"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
