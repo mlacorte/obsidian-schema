@@ -1,4 +1,4 @@
-import { ExternalTokenizer, InputStream } from "@lezer/lr";
+import { ExternalTokenizer, type InputStream } from "@lezer/lr";
 import emoji from "emoji-regex";
 
 import { identifier, unknown } from "./schema.terms";

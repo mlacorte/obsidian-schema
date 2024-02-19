@@ -1,45 +1,36 @@
-import { StringFns, UtilFns } from "./typeset";
 import { describe, expect, test } from "bun:test";
 
-const { compare, _or, _and } = StringFns;
-const { union, intersect } = UtilFns;
-
-const as = ["a", "b", "c"];
-const bs = ["b", "c", "d"];
+import { StringFns } from "./typeset";
+import * as UtilFns from "./util";
 
 describe("typeset", () => {
-  test("intersect", () => {
-    const r1: string[] = [];
+  describe("util", () => {
+    const { _compare, _or, _and } = StringFns;
+    const { and, or } = UtilFns;
 
-    for (const val of intersect(as, bs, _and, compare)) {
-      r1.push(val);
-    }
+    const as = ["a", "b", "c"];
+    const bs = ["b", "c", "d"];
 
-    expect(r1).toEqual(["b", "c"]);
+    describe("or", () => {
+      test("forward", () => {
+        const forward = [...or(as, bs, _or, _compare)];
+        expect(forward).toEqual(["a", "b", "c", "d"]);
+      });
+      test("reversed", () => {
+        const reversed = [...or(bs, as, _or, _compare)];
+        expect(reversed).toEqual(["a", "b", "c", "d"]);
+      });
+    });
 
-    const r2: string[] = [];
-
-    for (const val of intersect(bs, as, _and, compare)) {
-      r2.push(val);
-    }
-
-    expect(r2).toEqual(["b", "c"]);
-  });
-  test("union", () => {
-    const r1: string[] = [];
-
-    for (const val of union(as, bs, _or, compare)) {
-      r1.push(val);
-    }
-
-    expect(r1).toEqual(["a", "b", "c", "d"]);
-
-    const r2: string[] = [];
-
-    for (const val of union(bs, as, _or, compare)) {
-      r2.push(val);
-    }
-
-    expect(r2).toEqual(["a", "b", "c", "d"]);
+    describe("and", () => {
+      test("forward", () => {
+        const forward = [...and(as, bs, _and, _compare)];
+        expect(forward).toEqual(["b", "c"]);
+      });
+      test("reversed", () => {
+        const reversed = [...and(bs, as, _and, _compare)];
+        expect(reversed).toEqual(["b", "c"]);
+      });
+    });
   });
 });
