@@ -1,5 +1,5 @@
-import { SyntaxNode, Tree } from "@lezer/common";
-import { ParserConfig } from "@lezer/lr";
+import { type SyntaxNode, Tree, type TreeCursor } from "@lezer/common";
+import { type ParserConfig } from "@lezer/lr";
 
 import { parser } from "./parser/schema.parser";
 
@@ -11,7 +11,10 @@ export function parse(str: string, config: ParserConfig = {}): Tree {
   return parser.configure(config).parse(str);
 }
 
-export function* traverse(tree: Tree, syntax = false) {
+export function* traverse(
+  tree: Tree,
+  syntax = false
+): Generator<TreeCursor, void, unknown> {
   const cursor = tree.cursor();
 
   do {
@@ -21,7 +24,7 @@ export function* traverse(tree: Tree, syntax = false) {
   } while (cursor.next());
 }
 
-export function hasErrors(tree: string | Tree) {
+export function hasErrors(tree: string | Tree): boolean {
   for (const cursor of traverse(tree instanceof Tree ? tree : parse(tree))) {
     if (cursor.type.isError) {
       return true;
@@ -39,7 +42,7 @@ export function children(
 
   for (
     let node = tree instanceof Tree ? tree.topNode.firstChild : tree.firstChild;
-    node;
+    node !== null;
     node = node.nextSibling
   ) {
     if (syntax || isSyntax(node.name)) {
@@ -56,8 +59,8 @@ export function toJSON(
   str: string,
   args: { tree?: Tree; syntax?: boolean } = {}
 ): ParseTreeJSON {
-  const tree = args.tree || parse(str);
-  const syntax = args.syntax || false;
+  const tree = args.tree ?? parse(str);
+  const syntax = args.syntax ?? false;
 
   const toJSONRec = (node: SyntaxNode): ParseTreeJSON => {
     const childTrees = children(node, syntax).map((node) => toJSONRec(node));
@@ -79,7 +82,10 @@ export function prettyPrint(
 ): string {
   const strs: string[] = [];
 
-  const prettyPrintRec = ([name, ...values]: ParseTreeJSON, depth: number) => {
+  const prettyPrintRec = (
+    [name, ...values]: ParseTreeJSON,
+    depth: number
+  ): void => {
     const indent = " ".repeat(depth * 2);
     name = JSON.stringify(name);
 

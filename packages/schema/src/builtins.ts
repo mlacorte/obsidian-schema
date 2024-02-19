@@ -24,7 +24,11 @@ export const op = { lte, gt, gte, eq, neq };
 
 const choice = T.Function.define("choice", [0, 1, 2])
   .add([T.Boolean, T.Any, T.Any], (cond, pass, fail) =>
-    cond.isType() ? pass.or(fail) : cond.value ? pass : fail,
+    /**
+     * TODO: {} should be false
+     */
+    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+    cond.isType() ? pass.or(fail) : cond.value ? pass : fail
   )
   .build();
 

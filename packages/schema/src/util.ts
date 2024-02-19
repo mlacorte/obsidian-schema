@@ -11,15 +11,15 @@ export const enum Cmp {
   Equal = 0b00, // 0
   Subset = 0b01, // 1
   Superset = 0b10, // 2
-  Disjoint = 0b11, // 3
+  Disjoint = 0b11 // 3
 }
 
 export function* and<V>(
   as: V[],
   bs: V[],
   and: (a: V, b: V) => [] | [V],
-  compare: (a: V, b: V) => number,
-) {
+  compare: (a: V, b: V) => number
+): Generator<V, void, unknown> {
   let ai = 0;
   let bi = 0;
 
@@ -49,8 +49,8 @@ export function* or<V>(
   as: V[],
   bs: V[],
   or: (a: V, b: V) => [V] | [V, V],
-  compare: (a: V, b: V) => number,
-) {
+  compare: (a: V, b: V) => number
+): Generator<V, void, unknown> {
   let ai = 0;
   let bi = 0;
 
@@ -85,7 +85,7 @@ export function* or<V>(
 export const compare = <V>(
   as: V[],
   bs: V[],
-  compareFn: (a: V, b: V) => number,
+  compareFn: (a: V, b: V) => number
 ): number => {
   const len = Math.min(as.length, bs.length);
 

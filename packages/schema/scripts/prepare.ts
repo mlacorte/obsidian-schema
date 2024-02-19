@@ -1,7 +1,7 @@
 await Bun.build({
-  entrypoints: ['./src/index.ts'],
-  outdir: './dist',
+  entrypoints: ["./src/index.ts"],
+  outdir: "./dist",
   splitting: true,
-  sourcemap: 'external',
+  sourcemap: "external",
   minify: true,
 });

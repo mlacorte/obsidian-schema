@@ -24,6 +24,6 @@ export const highlight = styleTags({
   Link: tags.link,
   PropertyIdentifier: tags.definition(tags.propertyName),
   "LocalProperty/PropertyIdentifier": tags.definition(
-    tags.local(tags.propertyName)
-  )
+    tags.local(tags.propertyName),
+  ),
 });

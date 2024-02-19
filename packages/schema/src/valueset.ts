@@ -17,17 +17,19 @@ class ValueSet {
     return `<${this.name}:${this._id}>`;
   }
 
-  private constructor(public readonly name: string) {
+  private constructor(
+    public readonly name: string,
+    fn: (self: ValueSet) => I.Set<PossibleValue>
+  ) {
     this._id = $id++;
+    this.vals = fn(this);
   }
 
   private static new(
     name: string,
     fn: (self: ValueSet) => I.Set<PossibleValue>
   ): ValueSet {
-    const valSet = new ValueSet(name);
-    (valSet.vals as I.Set<PossibleValue>) = fn(valSet);
-    return valSet;
+    return new ValueSet(name, fn);
   }
 
   static val(name: string, vals: T.Type[]): ValueSet {
@@ -88,6 +90,7 @@ class ValueSet {
             ]
           )
           .map(({ argVals, conds }) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             const val = fn(...(argVals as any));
             return new PossibleValue({ val, conds });
           })
@@ -107,14 +110,16 @@ class ValueSet {
       id: this.id,
       vals: this.vals
         .toArray()
-        .sort((l, r) => `${l.val}`.localeCompare(`${r.val}`))
+        .sort((l, r) =>
+          `${l.val.toString()}`.localeCompare(`${r.val.toString()}`)
+        )
         .map((p) => ({
           val: p.val,
           conds: p.conds
             .toArray()
             .sort(([lRef, lVal], [rRef, rVal]) =>
               lRef === rRef
-                ? `${lVal}`.localeCompare(`${rVal}`)
+                ? `${lVal.toString()}`.localeCompare(`${rVal.toString()}`)
                 : lRef.localeCompare(rRef)
             )
         }))
@@ -125,11 +130,13 @@ class ValueSet {
     return this.toJS().vals.map((p) => p.val);
   }
 
-  conditions(): [string, T.Type][][] {
+  conditions(): Array<Array<[string, T.Type]>> {
     return this.toJS().vals.map((p) => p.conds);
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/unbound-method
 const $fn = ValueSet.fn;
+// eslint-disable-next-line @typescript-eslint/unbound-method
 const $val = ValueSet.val;
 export { $fn as fn, $val as val };

@@ -1,9 +1,10 @@
+import { describe, expect, test } from "bun:test";
+
 import { children, hasErrors, parse, prettyPrint, toJSON } from "./parser";
-import { describe, test, expect } from "bun:test";
 
 describe("parser", () => {
   test("markdown", () => {
-    const childCount = (str: string) => children(parse(str)).length;
+    const childCount = (str: string): number => children(parse(str)).length;
 
     expect(childCount("")).toBe(0);
     expect(childCount("nonempty")).toBe(1);
@@ -29,7 +30,7 @@ describe("parser", () => {
   });
 
   test("identifiers", () => {
-    const errors = (str: string) => hasErrors(`%{${str}:true}`);
+    const errors = (str: string): boolean => hasErrors(`%{${str}:true}`);
 
     expect(errors("")).toBe(true);
     expect(errors("plain")).toBe(false);
@@ -42,7 +43,7 @@ describe("parser", () => {
   });
 
   test("links", () => {
-    let errors = (str: string) => hasErrors(`%{link:${str}}`);
+    let errors = (str: string): boolean => hasErrors(`%{link:${str}}`);
 
     expect(errors("[[]]")).toBe(false);
     expect(errors("[[Some/Link]]")).toBe(false);

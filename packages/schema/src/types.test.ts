@@ -1,12 +1,13 @@
+import { describe, expect, test } from "bun:test";
+
 import { fn } from "./builtins";
 import * as T from "./types";
-import { describe, expect, test } from "bun:test";
 
 const one = T.Number.literal(1);
 const two = T.Number.literal(2);
 const three = T.Number.literal(3);
 
-const eqJSON = (a: T.Type, b: T.Type) => {
+const eqJSON = (a: T.Type, b: T.Type): void => {
   expect(a.toJSON()).toEqual(b.toJSON());
 };
 
@@ -26,8 +27,8 @@ describe("types", () => {
     expect((never.value as any).toJS()).toEqual([
       {
         message: "Can't combine '1' and '2'.",
-        vars: [],
-      },
+        vars: []
+      }
     ]);
     expect(oneOrTwo.type).toBe("union");
   });
@@ -134,29 +135,29 @@ describe("types", () => {
       const lit = (arg: T.Type | T.Type[]): T.Type =>
         Array.isArray(arg) ? T.Array.literal(arg) : arg;
 
-      const or = (...args: (T.Type | T.Type[])[]) =>
+      const or = (...args: Array<T.Type | T.Type[]>): T.Type =>
         args.map(lit).reduce((a, b) => a.or(b), T.Never);
 
-      const tests: [T.Type, T.Type, T.Type, T.Type][] = [
+      const tests: Array<[T.Type, T.Type, T.Type, T.Type]> = [
         [T.True, one, two, one],
         [[T.True, T.False], one, two, [one, two]],
         [
           T.Boolean,
           [T.String, one],
           T.Number,
-          [or(T.String, T.Number), T.Number],
+          [or(T.String, T.Number), T.Number]
         ],
         [
           T.Array.list(T.Boolean),
           [T.String, one],
           T.Number,
-          or([], [or(T.String, T.Number)], [or(T.String, T.Number), T.Number]),
+          or([], [or(T.String, T.Number)], [or(T.String, T.Number), T.Number])
         ],
         [
           T.Array.list(T.Boolean),
           T.Array.list(T.String.or(one)),
           T.Number,
-          T.Array.list(T.Number.or(T.String)),
+          T.Array.list(T.Number.or(T.String))
         ],
         [
           T.Array.list(T.Boolean),
@@ -165,15 +166,15 @@ describe("types", () => {
           or(
             [],
             [T.String.or(T.Number)],
-            T.Array.list(T.Number, [T.String.or(T.Number), T.Number]),
-          ),
+            T.Array.list(T.Number, [T.String.or(T.Number), T.Number])
+          )
         ],
         [
           T.Array.list(T.Boolean, [T.Boolean]),
           [T.String, one],
           [T.Number, two],
-          or([or(T.String, T.Number)], [or(T.String, T.Number), or(one, two)]),
-        ],
+          or([or(T.String, T.Number)], [or(T.String, T.Number), or(one, two)])
+        ]
       ].map((row) => row.map(lit) as any);
 
       for (const test of tests) {

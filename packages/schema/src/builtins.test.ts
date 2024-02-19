@@ -1,6 +1,6 @@
-import { op } from "./builtins";
-import * as T from "./types";
 import { describe, expect, test } from "bun:test";
+
+import * as T from "./types";
 
 const one = T.Number.literal(1);
 const two = T.Number.literal(2);
@@ -8,7 +8,6 @@ const two = T.Number.literal(2);
 describe("builtins", () => {
   describe("ops", () => {
     test("disabled", () => {
-      const _op = op;
       expect(one.equals(two)).toBe(false);
     });
 

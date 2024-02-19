@@ -1,13 +1,13 @@
 export class Link {
-	equals(other: Link) {
-		return false;
-	}
+  equals(_other: Link): boolean {
+    return false;
+  }
 }
 
 export class Widget {
-	constructor(public $widget: string) {}
+  constructor(public $widget: string) {}
 
-	markdown() {
-		return this.$widget;
-	}
+  markdown(): string {
+    return this.$widget;
+  }
 }

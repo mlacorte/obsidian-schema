@@ -35,7 +35,8 @@ function tryTake(input: InputStream, num: number): string {
 }
 
 export const unknownTokenizer = new ExternalTokenizer((input) => {
-  const isFinished = () => input.next === -1 || lookaheadMatch(input, "%{");
+  const isFinished = (): boolean =>
+    input.next === -1 || lookaheadMatch(input, "%{");
 
   if (isFinished()) {
     return;
