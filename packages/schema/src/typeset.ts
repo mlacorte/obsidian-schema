@@ -1,18 +1,27 @@
 /* eslint-disable @typescript-eslint/unbound-method */
+import type * as L from "luxon";
+
+import type * as Stubs from "./stubs";
 import * as UtilFns from "./util";
-import { Cmp, type json } from "./util";
+import { Cmp } from "./util";
 
 export interface ITypeMap {
-  null: null;
-  boolean: null | boolean;
-  number: null | number;
-  string: null | string;
   array: { known: IType[]; unknown: IType };
+  boolean: null | boolean;
+  date: null | L.DateTime;
+  duration: null | L.Duration;
+  function: (...args: IType[]) => IType;
+  link: Stubs.Link;
+  null: null;
+  number: null | number;
   object: { known: Map<string, IType>; unknown: IType };
+  string: null | string;
+  widget: Stubs.Widget;
 }
-export type IType = ["any"] | ["never", ...string[]] | IVal[];
+export type IType = ["any"] | ["never", ...string[]] | IVals;
+export type IVals = [IVal, ...IVal[]];
 export type IVal = {
-  [K in keyof ITypeMap]: [K, ...Array<ITypeMap[K]>];
+  [K in keyof ITypeMap]: [K, ITypeMap[K], ...Array<ITypeMap[K]>];
 }[keyof ITypeMap];
 
 export const TypeFns = {
@@ -43,7 +52,35 @@ export const TypeFns = {
     if (b[0] === "never") return b;
 
     // vals
-    return UnionFns.and(a, b);
+    const res = UnionFns.and(a, b);
+    if (res.length === 0) return NeverFns.error(a, b);
+    return res as IVals;
+  },
+  string(value: IType): string {
+    // any
+    if (value[0] === "any") return "any";
+
+    // never
+    if (value[0] === "never") return NeverFns.string(value.slice(1));
+
+    // vals
+    return value
+      .flatMap((val) => val.slice(1).map(fns(val[0]).string))
+      .join(" or ");
+  }
+};
+
+export const UnionFns = {
+  or(as: IVals, bs: IVals): IVals {
+    return [...UtilFns.or<IVal>(as, bs, ValFns.or, ValFns.compare)] as IVals;
+  },
+  and(as: IVals, bs: IVals): IVals | [] {
+    return [...UtilFns.and<IVal>(as, bs, ValFns.and, ValFns.compare)] as
+      | IVals
+      | [];
+  },
+  compare(as: IVals, bs: IVals): number {
+    return UtilFns.compare(as, bs, ValFns.compare);
   }
 };
 
@@ -71,24 +108,22 @@ export const ValFns = {
   }
 };
 
-export const UnionFns = {
-  or(as: IVal[], bs: IVal[]): IVal[] {
-    return [...UtilFns.or<IVal>(as, bs, ValFns.or, ValFns.compare)];
-  },
-  and(as: IVal[], bs: IVal[]): IVal[] {
-    return [...UtilFns.and<IVal>(as, bs, ValFns.and, ValFns.compare)];
-  },
-  compare(as: IVal[], bs: IVal[]): number {
-    return UtilFns.compare(as, bs, ValFns.compare);
-  }
-};
-
 export const NeverFns = {
   or(as: string[], bs: string[]): string[] {
     return [...UtilFns.or(as, bs, StringFns._or, StringFns._compare)];
   },
   and(as: string[], bs: string[]): string[] {
     return [...UtilFns.and(as, bs, StringFns._and, StringFns._compare)];
+  },
+  string(val: string[]): string {
+    if (val.length === 0) return "never";
+    return val.join(" or ");
+  },
+  error(a: IType, b: IType): IType {
+    return [
+      "never",
+      `Can't combine '${TypeFns.string(a)}' and '${TypeFns.string(b)}'.`
+    ];
   }
 };
 
@@ -98,7 +133,6 @@ interface IFnsType<T> {
   cmp: (a: T, b: T) => Cmp;
   compare: (a: T, b: T) => number;
   string: (value: T) => string;
-  json: (value: T) => json;
 }
 
 type IFns<K extends keyof ITypeMap> = IFnsType<ITypeMap[K]>;
@@ -118,11 +152,10 @@ interface IValueFns<K extends keyof ITypeMap> {
   _cmp: INonNullFn<K, "cmp">;
   _compare: INonNullFn<K, "compare">;
   _string: INonNullFn<K, "string">;
-  _json: INonNullFn<K, "json">;
 }
 type IValueFnsArgs<K extends keyof ITypeMap> = Optional<
   IValueFns<K>,
-  "_or" | "_and" | "_cmp" | "_string" | "_json"
+  "_or" | "_and" | "_cmp" | "_string"
 >;
 
 const unitFns = <K extends keyof ITypeMap>(
@@ -143,8 +176,7 @@ const unitFns = <K extends keyof ITypeMap>(
     _cmp:
       args._cmp ??
       ((a, b) => (args._compare(a, b) === 0 ? Cmp.Equal : Cmp.Disjoint)),
-    _string: args._string ?? String,
-    _json: args._json ?? ((value) => value as json)
+    _string: args._string ?? JSON.stringify
   };
 
   return {
@@ -171,11 +203,7 @@ const unitFns = <K extends keyof ITypeMap>(
       return fns._compare(a as NonNull, b as NonNull);
     },
     string(value) {
-      return value === null ? key : fns._string(value as NonNull);
-    },
-    json(value): { type: typeof key } | { type: typeof key; value: json } {
-      if (value === null) return { type: key };
-      return { type: key, value: fns._json(value as NonNull) };
+      return value === null ? key : fns._string(value);
     },
     ...fns
   };
@@ -186,8 +214,7 @@ export const NullFns = baseFns<"null">(() => ({
   and: () => [null],
   cmp: () => Cmp.Equal,
   compare: () => 0,
-  string: () => "null",
-  json: () => null
+  string: () => "null"
 }));
 
 export const BooleanFns = unitFns("boolean", () => ({
@@ -207,6 +234,14 @@ export const StringFns = unitFns("string", () => ({
   _compare: (a: string, b: string) => a.localeCompare(b)
 }));
 
+export const DateFns = unitFns("date", () => ({
+  _compare: (a: L.DateTime, b: L.DateTime) => a.toMillis() - b.toMillis()
+}));
+
+export const DurationFns = unitFns("duration", () => ({
+  _compare: (a: L.Duration, b: L.Duration) => a.toMillis() - b.toMillis()
+}));
+
 export const ArrayFns = baseFns<"array">(() => {
   return {
     or(_a, _b) {
@@ -222,9 +257,6 @@ export const ArrayFns = baseFns<"array">(() => {
       throw new Error("TODO");
     },
     string(_value) {
-      throw new Error("TODO");
-    },
-    json(_value) {
       throw new Error("TODO");
     }
   };
@@ -246,20 +278,28 @@ export const ObjectFns = baseFns<"object">(() => {
     },
     string(_value) {
       throw new Error("TODO");
-    },
-    json(_value) {
-      throw new Error("TODO");
     }
   };
 });
 
 export const Fns = {
-  null: NullFns,
-  boolean: BooleanFns,
-  number: NumberFns,
-  string: StringFns,
   array: ArrayFns,
-  object: ObjectFns
+  boolean: BooleanFns,
+  date: DateFns,
+  duration: DurationFns,
+  function: () => {
+    throw new Error("TODO");
+  },
+  link: () => {
+    throw new Error("TODO");
+  },
+  null: NullFns,
+  number: NumberFns,
+  object: ObjectFns,
+  string: StringFns,
+  widget: () => {
+    throw new Error("TODO");
+  }
 };
 
 const fns = <K extends keyof typeof Fns>(key: K): IFnsType<unknown> =>
