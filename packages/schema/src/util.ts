@@ -82,6 +82,40 @@ export function* or<V>(
   while (bi < bs.length) yield bs[bi++];
 }
 
+export const cmp = <V>(
+  as: V[],
+  bs: V[],
+  compareFn: (a: V, b: V) => number
+): Cmp => {
+  let res = Cmp.Equal;
+  let ai = 0;
+  let bi = 0;
+
+  while (ai < as.length && bi < bs.length) {
+    const sort = compareFn(as[ai], bs[bi]);
+
+    if (sort === 0) {
+      ai++;
+      bi++;
+      continue;
+    }
+
+    if (sort < 0) {
+      ai++;
+      res |= Cmp.Superset;
+    } else {
+      bi++;
+      res |= Cmp.Subset;
+    }
+
+    if (res === Cmp.Disjoint) return Cmp.Disjoint;
+  }
+
+  if (ai < as.length) res |= Cmp.Superset;
+  if (bi < bs.length) res |= Cmp.Subset;
+  return res;
+};
+
 export const compare = <V>(
   as: V[],
   bs: V[],

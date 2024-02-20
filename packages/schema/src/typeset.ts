@@ -37,7 +37,7 @@ export const TypeFns = {
     if (b[0] === "never") return a;
 
     // vals
-    return UnionFns.or(a, b);
+    return [...UtilFns.or<IVal>(a, b, ValFns.or, ValFns.compare)] as IVals;
   },
   and(a: IType, b: IType): IType {
     // any
@@ -52,9 +52,33 @@ export const TypeFns = {
     if (b[0] === "never") return b;
 
     // vals
-    const res = UnionFns.and(a, b);
+    const res = [...UtilFns.and<IVal>(a, b, ValFns.and, ValFns.compare)];
     if (res.length === 0) return NeverFns.error(a, b);
     return res as IVals;
+  },
+  compare(a: IType, b: IType): number {
+    // any
+    if (a[0] === "any" && b[0] !== "any") return 1;
+    if (b[0] === "any" && a[0] !== "any") return -1;
+
+    // never
+    if (a[0] === "never" && b[0] !== "never") return -1;
+    if (b[0] === "never" && a[0] !== "never") return 1;
+
+    // vals
+    return UtilFns.compare(a as IVals, b as IVals, ValFns.compare);
+  },
+  cmp(a: IType, b: IType): Cmp {
+    // any
+    if (a[0] === "any" && b[0] !== "any") return Cmp.Superset;
+    if (b[0] === "any" && a[0] !== "any") return Cmp.Subset;
+
+    // never
+    if (a[0] === "never" && b[0] !== "never") return Cmp.Subset;
+    if (b[0] === "never" && a[0] !== "never") return Cmp.Superset;
+
+    // vals
+    throw new Error("TODO");
   },
   string(value: IType): string {
     // any
@@ -67,20 +91,6 @@ export const TypeFns = {
     return value
       .flatMap((val) => val.slice(1).map(fns(val[0]).string))
       .join(" or ");
-  }
-};
-
-export const UnionFns = {
-  or(as: IVals, bs: IVals): IVals {
-    return [...UtilFns.or<IVal>(as, bs, ValFns.or, ValFns.compare)] as IVals;
-  },
-  and(as: IVals, bs: IVals): IVals | [] {
-    return [...UtilFns.and<IVal>(as, bs, ValFns.and, ValFns.compare)] as
-      | IVals
-      | [];
-  },
-  compare(as: IVals, bs: IVals): number {
-    return UtilFns.compare(as, bs, ValFns.compare);
   }
 };
 

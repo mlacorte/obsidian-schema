@@ -6,7 +6,7 @@ import * as UtilFns from "./util";
 
 describe("util", () => {
   const { _compare, _or, _and } = StringFns;
-  const { and, or } = UtilFns;
+  const { Cmp, and, or, cmp } = UtilFns;
 
   const as = ["a", "b", "c"];
   const bs = ["b", "c", "d"];
@@ -30,6 +30,34 @@ describe("util", () => {
     test("reversed", () => {
       const reversed = [...and(bs, as, _and, _compare)];
       expect(reversed).toEqual(["b", "c"]);
+    });
+  });
+
+  describe("cmp", () => {
+    const abc = ["a", "b", "c"];
+    const ab = ["a", "b"];
+    const bc = ["b", "c"];
+    const b = ["b"];
+
+    test("equal", () => {
+      expect(cmp(abc, abc, _compare)).toBe(Cmp.Equal);
+    });
+
+    test("superset", () => {
+      expect(cmp(abc, ab, _compare)).toBe(Cmp.Superset);
+      expect(cmp(abc, bc, _compare)).toBe(Cmp.Superset);
+      expect(cmp(abc, b, _compare)).toBe(Cmp.Superset);
+    });
+
+    test("subset", () => {
+      expect(cmp(ab, abc, _compare)).toBe(Cmp.Subset);
+      expect(cmp(bc, abc, _compare)).toBe(Cmp.Subset);
+      expect(cmp(b, abc, _compare)).toBe(Cmp.Subset);
+    });
+
+    test("disjoint", () => {
+      expect(cmp(ab, bc, _compare)).toBe(Cmp.Disjoint);
+      expect(cmp(bc, ab, _compare)).toBe(Cmp.Disjoint);
     });
   });
 });
