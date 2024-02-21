@@ -1,12 +1,3 @@
-export type json =
-  | null
-  | string
-  | number
-  | boolean
-  | Date
-  | json[]
-  | { [key: string]: json };
-
 export const enum Cmp {
   Equal = 0b00, // 0
   Subset = 0b01, // 1
@@ -85,20 +76,27 @@ export function* or<V>(
 export const cmp = <V>(
   as: V[],
   bs: V[],
-  compareFn: (a: V, b: V) => number
+  compareFn: (a: V, b: V) => number,
+  cmpFn: (a: V, b: V) => Cmp
 ): Cmp => {
   let res = Cmp.Equal;
   let ai = 0;
   let bi = 0;
 
   while (ai < as.length && bi < bs.length) {
-    const sort = compareFn(as[ai], bs[bi]);
+    const a = as[ai];
+    const b = bs[bi];
+    const cmp = cmpFn(a, b);
 
-    if (sort === 0) {
+    if (cmp !== Cmp.Disjoint) {
+      res |= cmp;
+      if (res === Cmp.Disjoint) return Cmp.Disjoint;
       ai++;
       bi++;
       continue;
     }
+
+    const sort = compareFn(a, b);
 
     if (sort < 0) {
       ai++;

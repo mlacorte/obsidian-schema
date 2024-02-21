@@ -4,8 +4,16 @@ import { describe, expect, test } from "bun:test";
 import { type IType, NeverFns, StringFns, TypeFns } from "./typeset";
 import * as UtilFns from "./util";
 
+const list = (...known: IType[]): IType => [
+  ["array", { unknown: ["any"], known }]
+];
+
+const eq = (a: IType, b: IType): void => {
+  expect(TypeFns.string(a)).toBe(TypeFns.string(b));
+};
+
 describe("util", () => {
-  const { _compare, _or, _and } = StringFns;
+  const { _compare, _cmp, _or, _and } = StringFns;
   const { Cmp, and, or, cmp } = UtilFns;
 
   const as = ["a", "b", "c"];
@@ -40,24 +48,24 @@ describe("util", () => {
     const b = ["b"];
 
     test("equal", () => {
-      expect(cmp(abc, abc, _compare)).toBe(Cmp.Equal);
+      expect(cmp(abc, abc, _compare, _cmp)).toBe(Cmp.Equal);
     });
 
     test("superset", () => {
-      expect(cmp(abc, ab, _compare)).toBe(Cmp.Superset);
-      expect(cmp(abc, bc, _compare)).toBe(Cmp.Superset);
-      expect(cmp(abc, b, _compare)).toBe(Cmp.Superset);
+      expect(cmp(abc, ab, _compare, _cmp)).toBe(Cmp.Superset);
+      expect(cmp(abc, bc, _compare, _cmp)).toBe(Cmp.Superset);
+      expect(cmp(abc, b, _compare, _cmp)).toBe(Cmp.Superset);
     });
 
     test("subset", () => {
-      expect(cmp(ab, abc, _compare)).toBe(Cmp.Subset);
-      expect(cmp(bc, abc, _compare)).toBe(Cmp.Subset);
-      expect(cmp(b, abc, _compare)).toBe(Cmp.Subset);
+      expect(cmp(ab, abc, _compare, _cmp)).toBe(Cmp.Subset);
+      expect(cmp(bc, abc, _compare, _cmp)).toBe(Cmp.Subset);
+      expect(cmp(b, abc, _compare, _cmp)).toBe(Cmp.Subset);
     });
 
     test("disjoint", () => {
-      expect(cmp(ab, bc, _compare)).toBe(Cmp.Disjoint);
-      expect(cmp(bc, ab, _compare)).toBe(Cmp.Disjoint);
+      expect(cmp(ab, bc, _compare, _cmp)).toBe(Cmp.Disjoint);
+      expect(cmp(bc, ab, _compare, _cmp)).toBe(Cmp.Disjoint);
     });
   });
 });
@@ -69,7 +77,7 @@ describe("typeset", () => {
   describe("boolean", () => {
     test("promotion", () => {
       const promotion = or([["boolean", true]], [["boolean", false]]);
-      expect(promotion).toEqual([["boolean", null]]);
+      eq(promotion, [["boolean", null]]);
     });
   });
 
@@ -78,11 +86,11 @@ describe("typeset", () => {
     const numType: IType = [["number", null]];
 
     test("or", () => {
-      expect(or(strVal, numType)).toEqual([...numType, ...strVal]);
+      eq(or(strVal, numType), [...numType, ...strVal]);
     });
 
     test("and", () => {
-      expect(and(strVal, numType)).toEqual(error(strVal, numType));
+      eq(and(strVal, numType), error(strVal, numType));
     });
   });
 
@@ -91,11 +99,11 @@ describe("typeset", () => {
     const string: IType = [["string", null]];
 
     test("or", () => {
-      expect(or(any, string)).toEqual(["any"]);
+      eq(or(any, string), ["any"]);
     });
 
     test("and", () => {
-      expect(and(any, string)).toEqual([["string", null]]);
+      eq(and(any, string), [["string", null]]);
     });
   });
 
@@ -104,11 +112,11 @@ describe("typeset", () => {
     const number: IType = [["number", 1]];
 
     test("or", () => {
-      expect(or(never, number)).toEqual([["number", 1]]);
+      eq(or(never, number), [["number", 1]]);
     });
 
     test("and", () => {
-      expect(and(never, number)).toEqual(["never"]);
+      eq(and(never, number), ["never"]);
     });
   });
 
@@ -118,20 +126,64 @@ describe("typeset", () => {
 
     describe("or", () => {
       test("self", () => {
-        expect(or($null, $null)).toEqual($null);
+        eq(or($null, $null), $null);
       });
       test("other", () => {
-        expect(or($null, num)).toEqual([...$null, ...num]);
+        eq(or($null, num), [...$null, ...num]);
       });
     });
 
     describe("and", () => {
       test("self", () => {
-        expect(and($null, $null)).toEqual($null);
+        eq(and($null, $null), $null);
       });
       test("other", () => {
-        expect(and($null, num)).toEqual(error($null, num));
+        eq(and($null, num), error($null, num));
       });
+    });
+  });
+
+  describe("lists", () => {
+    const one: IType = [["number", 1]];
+    const two: IType = [["number", 2]];
+    const three: IType = [["number", 3]];
+
+    const a = list(or(one, two));
+    const b = list(one);
+    const c = list(one, two);
+    const d = list(or(two, three));
+
+    describe("identity", () => {
+      test("or", () => {
+        eq(or(a, a), a);
+      });
+      test("and", () => {
+        eq(and(a, a), a);
+      });
+    });
+
+    describe("subset", () => {
+      test("or", () => {
+        eq(or(a, c), list(or(one, two), ["any"]));
+      });
+      test("and", () => {
+        eq(and(a, b), b);
+        eq(and(a, c), list(one, two));
+      });
+    });
+
+    describe("intersect", () => {
+      test("or", () => {
+        eq(or(a, d), list(or(one, or(two, three))));
+      });
+
+      test("and", () => {
+        eq(and(a, d), list(two));
+      });
+    });
+
+    describe("disjoint", () => {
+      expect(and(b, d)[0]).toEqual("never");
     });
   });
 });

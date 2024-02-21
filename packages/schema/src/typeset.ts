@@ -58,10 +58,14 @@ export const TypeFns = {
   },
   compare(a: IType, b: IType): number {
     // any
+    if (a[0] === "any" && b[0] === "any") return 0;
     if (a[0] === "any" && b[0] !== "any") return 1;
     if (b[0] === "any" && a[0] !== "any") return -1;
 
     // never
+    if (a[0] === "never" && b[0] === "never") {
+      return NeverFns.compare(a.slice(1), b.slice(1));
+    }
     if (a[0] === "never" && b[0] !== "never") return -1;
     if (b[0] === "never" && a[0] !== "never") return 1;
 
@@ -70,15 +74,19 @@ export const TypeFns = {
   },
   cmp(a: IType, b: IType): Cmp {
     // any
+    if (a[0] === "any" && b[0] === "any") return Cmp.Equal;
     if (a[0] === "any" && b[0] !== "any") return Cmp.Superset;
     if (b[0] === "any" && a[0] !== "any") return Cmp.Subset;
 
     // never
+    if (a[0] === "never" && b[0] === "never") {
+      return NeverFns.cmp(a.slice(1), b.slice(1));
+    }
     if (a[0] === "never" && b[0] !== "never") return Cmp.Subset;
     if (b[0] === "never" && a[0] !== "never") return Cmp.Superset;
 
     // vals
-    throw new Error("TODO");
+    return UtilFns.cmp(a as IVals, b as IVals, ValFns.cmp, ValFns.compare);
   },
   string(value: IType): string {
     // any
@@ -111,6 +119,12 @@ export const ValFns = {
     const res = [a[0], ...UtilFns.and(a.slice(1), b.slice(1), and, compare)];
     return res.length === 1 ? [] : [res as IVal];
   },
+  cmp(a: IVal, b: IVal): Cmp {
+    const typeSort = StringFns._compare(a[0], b[0]);
+    if (typeSort !== 0) return Cmp.Disjoint;
+    const { cmp, compare } = fns(a[0]);
+    return UtilFns.cmp(a.slice(1), b.slice(1), compare, cmp);
+  },
   compare(a: IVal, b: IVal): number {
     const typeSort = StringFns._compare(a[0], b[0]);
     if (typeSort !== 0) return typeSort;
@@ -124,6 +138,12 @@ export const NeverFns = {
   },
   and(as: string[], bs: string[]): string[] {
     return [...UtilFns.and(as, bs, StringFns._and, StringFns._compare)];
+  },
+  cmp(as: string[], bs: string[]): Cmp {
+    return UtilFns.cmp(as, bs, StringFns._compare, StringFns._cmp);
+  },
+  compare(as: string[], bs: string[]): number {
+    return UtilFns.compare(as, bs, StringFns._compare);
   },
   string(val: string[]): string {
     if (val.length === 0) return "never";
@@ -253,21 +273,77 @@ export const DurationFns = unitFns("duration", () => ({
 }));
 
 export const ArrayFns = baseFns<"array">(() => {
+  const cmp = (as: ITypeMap["array"], bs: ITypeMap["array"]): Cmp => {
+    const known = UtilFns.cmp(as.known, bs.known, TypeFns.compare, TypeFns.cmp);
+    if (known === Cmp.Disjoint) return known;
+    return TypeFns.cmp(as.unknown, bs.unknown);
+  };
+
+  const compare = (as: ITypeMap["array"], bs: ITypeMap["array"]): number => {
+    const known = UtilFns.compare(as.known, bs.known, TypeFns.compare);
+    if (known !== 0) return known;
+    return TypeFns.compare(as.unknown, bs.unknown);
+  };
+
+  const isNever = (obj: ITypeMap["array"], key: number): boolean => {
+    const val = obj.known[key];
+    return val !== undefined && val[0] === "never";
+  };
+
+  const get = (obj: ITypeMap["array"], key: number): IType => {
+    if (key > obj.known.length && obj.unknown[0] === "never") {
+      return ["never"];
+    }
+    return obj.known[key] ?? TypeFns.or(obj.unknown, [["null", null]]);
+  };
+
   return {
-    or(_a, _b) {
-      throw new Error("TODO");
+    or(as, bs) {
+      if (cmp(as, bs) === Cmp.Disjoint) {
+        // TODO: add optimization
+        return compare(as, bs) < 0 ? [as, bs] : [bs, as];
+      }
+
+      const unknown = TypeFns.or(as.unknown, bs.unknown);
+      const known: IType[] = [];
+      const len = Math.max(as.known.length, bs.known.length);
+
+      for (let i = 0; i < len; i++) {
+        known.push(TypeFns.or(get(as, i), get(bs, i)));
+      }
+
+      return [{ known, unknown }];
     },
-    and(_a, _b) {
-      throw new Error("TODO");
+    and(as, bs) {
+      const known: IType[] = [];
+      const len = Math.max(as.known.length, bs.known.length);
+
+      for (let i = 0; i < len; i++) {
+        // allow user created "nevers"
+        if (isNever(as, i) || isNever(bs, i)) {
+          known.push(["never"]);
+          continue;
+        }
+
+        const val = TypeFns.and(get(as, i), get(bs, i));
+        if (val[0] === "never") return [];
+        known.push(val);
+      }
+
+      // TODO: refactor so that no error messages get created
+      let unknown = TypeFns.and(as.unknown, bs.unknown);
+      unknown = unknown[0] === "never" ? ["never"] : unknown;
+
+      return [{ known, unknown }];
     },
-    cmp(_a, _b) {
-      throw new Error("TODO");
-    },
-    compare(_a, _b) {
-      throw new Error("TODO");
-    },
-    string(_value) {
-      throw new Error("TODO");
+    cmp,
+    compare,
+    string(value) {
+      const strs = value.known.map(TypeFns.string);
+      if (value.unknown[0] !== "never") {
+        strs.push(`of ${TypeFns.string(value.unknown)}`);
+      }
+      return `[${strs.join(", ")}]`;
     }
   };
 });
