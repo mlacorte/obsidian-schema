@@ -4,8 +4,16 @@ import { describe, expect, test } from "bun:test";
 import { type IType, NeverFns, StringFns, TypeFns } from "./typeset";
 import * as UtilFns from "./util";
 
+const one: IType = [["number", 1]];
+const two: IType = [["number", 2]];
+const three: IType = [["number", 3]];
+
 const list = (...known: IType[]): IType => [
   ["array", { unknown: ["any"], known }]
+];
+
+const object = (...known: Array<[string, IType]>): IType => [
+  ["object", { unknown: ["any"], known: new Map(known) }]
 ];
 
 const eq = (a: IType, b: IType): void => {
@@ -143,11 +151,49 @@ describe("typeset", () => {
     });
   });
 
-  describe("lists", () => {
-    const one: IType = [["number", 1]];
-    const two: IType = [["number", 2]];
-    const three: IType = [["number", 3]];
+  describe("objects", () => {
+    const a = object(["a", or(one, two)]);
+    const b = object(["a", one]);
+    const c = object(["a", one], ["b", two]);
+    const d = object(["a", or(two, three)]);
 
+    describe("identity", () => {
+      test("or", () => {
+        eq(or(a, a), a);
+      });
+      test("and", () => {
+        eq(and(a, a), a);
+      });
+    });
+
+    describe("subset", () => {
+      test("or", () => {
+        eq(or(a, c), object(["a", or(one, two)], ["b", ["any"]]));
+      });
+      test("and", () => {
+        eq(and(a, b), b);
+        eq(and(a, c), object(["a", one], ["b", two]));
+      });
+    });
+
+    describe("intersect", () => {
+      test("or", () => {
+        eq(or(a, d), object(["a", or(one, or(two, three))]));
+      });
+
+      test("and", () => {
+        eq(and(a, d), object(["a", two]));
+      });
+    });
+
+    describe("disjoint", () => {
+      test("and", () => {
+        expect(and(b, d)[0]).toEqual("never");
+      });
+    });
+  });
+
+  describe("lists", () => {
     const a = list(or(one, two));
     const b = list(one);
     const c = list(one, two);

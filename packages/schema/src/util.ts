@@ -9,6 +9,7 @@ export const enum Cmp {
 export type IDisjoint = Cmp.DisjointLt | Cmp.DisjointGt;
 export type INonDisjoint = Cmp.Subset | Cmp.Equal | Cmp.Superset;
 
+// TODO: convert args to iterators
 export function* and<V>(
   as: V[],
   bs: V[],
@@ -40,6 +41,7 @@ export function* and<V>(
   }
 }
 
+// TODO: convert args to iterators
 export function* or<V>(
   as: V[],
   bs: V[],
@@ -89,6 +91,7 @@ export const cmpJoin = (prev: INonDisjoint, curr: Cmp): Cmp => {
   return curr;
 };
 
+// TODO: convert args to iterators
 export const cmp = <V>(
   as: V[],
   bs: V[],
@@ -133,3 +136,15 @@ export const cmp = <V>(
   if (bi < bs.length) return cmpJoin(res, Cmp.Subset);
   return res;
 };
+
+export function* map<A, B>(
+  iter: IterableIterator<A>,
+  fn: (val: A) => B
+): IterableIterator<B> {
+  let curr = iter.next();
+
+  while (curr.done !== true) {
+    yield fn(curr.value);
+    curr = iter.next();
+  }
+}

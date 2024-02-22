@@ -245,30 +245,42 @@ export const DurationFns = unitFns("duration", () => ({
   }
 }));
 
-export const ArrayFns = baseFns<"array">(() => {
+type IKey<K extends "array" | "object"> = K extends "array" ? number : string;
+type IKnown<K extends "array" | "object"> = ITypeMap[K]["known"];
+interface ICollectionFnsArgs<K extends "array" | "object"> {
+  _get: <T>(obj: IKnown<K>, key: IKey<K>, never: T) => IType | T;
+  _keysOr: (a: IKey<K>, b: IKey<K>) => [IKey<K>] | [IKey<K>, IKey<K>];
+  _unionKeys?: (as: IKnown<K>, bs: IKnown<K>) => IterableIterator<IKey<K>>;
+  _new: (iter?: IterableIterator<[IKey<K>, IType]>) => IKnown<K>;
+  _stringKey: (key: IKey<K>) => string;
+  _stringWrap: [string, string];
+}
+
+export const collectionFns = <K extends "array" | "object">(
+  argsFn: () => ICollectionFnsArgs<K>
+): IFns<K> => {
+  type IKeys = IterableIterator<IKey<K>>;
+  const args = argsFn();
+
   const get = <T = never>(
-    obj: ITypeMap["array"],
-    key: number,
+    obj: ITypeMap[K],
+    key: IKey<K>,
     never: T = null as T
   ): IType | T => {
-    if (key in obj.known) return obj.known[key];
+    const val = args._get(obj.known, key, never);
+    if (val !== never) return val;
     if (obj.unknown[0] === "never") return never;
     return TypeFns.or(obj.unknown, [["null", null]]);
   };
 
-  const cmp = (
-    as: ITypeMap["array"],
-    bs: ITypeMap["array"],
-    sortOnly = false
-  ): Cmp => {
-    const len = Math.max(as.known.length, bs.known.length);
+  const cmp = (as: ITypeMap[K], bs: ITypeMap[K], sortOnly = false): Cmp => {
     let res: Cmp = Cmp.Equal;
 
-    for (let i = 0; i < len; i++) {
-      const a = get(as, i, null);
+    for (const key of unionKeys(as.known, bs.known)) {
+      const a = get(as, key, null);
       if (a === null) return UtilFns.cmpJoin(res, Cmp.Subset);
 
-      const b = get(bs, i, null);
+      const b = get(bs, key, null);
       if (b === null) return UtilFns.cmpJoin(res, Cmp.Superset);
 
       const cmp = TypeFns.cmp(a, b, sortOnly);
@@ -281,66 +293,82 @@ export const ArrayFns = baseFns<"array">(() => {
     return UtilFns.cmpJoin(res, TypeFns.cmp(as.unknown, bs.unknown, sortOnly));
   };
 
+  const unionKeys =
+    args._unionKeys ??
+    ((as, bs) =>
+      UtilFns.or(
+        [...(as.keys() as IKeys)],
+        [...(bs.keys() as IKeys)],
+        args._keysOr
+      ));
+
+  function* unionVals(
+    as: ITypeMap[K],
+    bs: ITypeMap[K]
+  ): IterableIterator<[IKey<K>, IType]> {
+    for (const key of unionKeys(as.known, bs.known)) {
+      yield [key, TypeFns.or(get(as, key, ["never"]), get(bs, key, ["never"]))];
+    }
+  }
+
   return {
     or(as, bs) {
       const unknown = TypeFns.or(as.unknown, bs.unknown);
-      const known: IType[] = [];
-      const len = Math.max(as.known.length, bs.known.length);
-
-      for (let i = 0; i < len; i++) {
-        known.push(TypeFns.or(get(as, i, ["never"]), get(bs, i, ["never"])));
-      }
-
-      return [{ known, unknown }];
+      const known = args._new(unionVals(as, bs));
+      return [{ known, unknown }] as [ITypeMap[K]];
     },
     and(as, bs) {
-      const known: IType[] = [];
-      const len = Math.max(as.known.length, bs.known.length);
+      const res: Array<[IKey<K>, IType]> = [];
 
-      for (let i = 0; i < len; i++) {
-        const a = get(as, i, null);
+      for (const key of unionKeys(as.known, bs.known)) {
+        const a = get(as, key, null);
         if (a === null) return [];
 
-        const b = get(bs, i, null);
+        const b = get(bs, key, null);
         if (b === null) return [];
 
         const val = TypeFns.and(a, b);
         if (val[0] === "never") return [];
 
-        known.push(val);
+        res.push([key, val]);
       }
 
+      const known = args._new(res.values());
       const unknown = TypeFns.and(as.unknown, bs.unknown);
-
-      return [{ known, unknown }];
+      return [{ known, unknown }] as [ITypeMap[K]];
     },
     cmp,
     string(value) {
-      const strs = value.known.map(TypeFns.string);
+      const strs: string[] = [];
+      for (const key of value.known.keys() as IKeys) {
+        const val: IType = get(value, key, ["never"]);
+        strs.push(`${args._stringKey(key)}${TypeFns.string(val)}`);
+      }
       if (value.unknown[0] !== "never") {
         strs.push(`of ${TypeFns.string(value.unknown)}`);
       }
-      return `[${strs.join(", ")}]`;
+      return `${args._stringWrap[0]}${strs.join(", ")}${args._stringWrap[1]}`;
     }
   };
-});
+};
 
-export const ObjectFns = baseFns<"object">(() => {
-  return {
-    or(_a, _b) {
-      throw new Error("TODO");
-    },
-    and(_a, _b) {
-      throw new Error("TODO");
-    },
-    cmp(_a, _b) {
-      throw new Error("TODO");
-    },
-    string(_value) {
-      throw new Error("TODO");
-    }
-  };
-});
+export const ArrayFns = collectionFns<"array">(() => ({
+  _get: (obj, key, never) => obj[key] ?? never,
+  _keysOr: NumberFns._or,
+  _unionKeys: (as, bs) => (as.length < bs.length ? bs : as).keys(),
+  _new: (iter) =>
+    iter === undefined ? [] : [...UtilFns.map(iter, (val) => val[1])],
+  _stringKey: () => "",
+  _stringWrap: ["[", "]"]
+}));
+
+export const ObjectFns = collectionFns<"object">(() => ({
+  _get: (obj, key, never) => obj.get(key) ?? never,
+  _keysOr: StringFns._or,
+  _new: (iter) => (iter === undefined ? new Map() : new Map(iter)),
+  _stringKey: (key) => `${key}: `,
+  _stringWrap: ["{ ", " }"]
+}));
 
 export const Fns = {
   array: ArrayFns,
