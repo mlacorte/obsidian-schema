@@ -37,7 +37,7 @@ export const TypeFns = {
     if (b[0] === "never") return a;
 
     // vals
-    return [...UtilFns.or<IVal>(a, b, ValFns.or, ValFns.compare)] as IVals;
+    return [...UtilFns.or<IVal>(a, b, ValFns.or)] as IVals;
   },
   and(a: IType, b: IType): IType {
     // any
@@ -52,27 +52,11 @@ export const TypeFns = {
     if (b[0] === "never") return b;
 
     // vals
-    const res = [...UtilFns.and<IVal>(a, b, ValFns.and, ValFns.compare)];
+    const res = [...UtilFns.and<IVal>(a, b, ValFns.and, ValFns.cmp)];
     if (res.length === 0) return NeverFns.error(a, b);
     return res as IVals;
   },
-  compare(a: IType, b: IType): number {
-    // any
-    if (a[0] === "any" && b[0] === "any") return 0;
-    if (a[0] === "any" && b[0] !== "any") return 1;
-    if (b[0] === "any" && a[0] !== "any") return -1;
-
-    // never
-    if (a[0] === "never" && b[0] === "never") {
-      return NeverFns.compare(a.slice(1), b.slice(1));
-    }
-    if (a[0] === "never" && b[0] !== "never") return -1;
-    if (b[0] === "never" && a[0] !== "never") return 1;
-
-    // vals
-    return UtilFns.compare(a as IVals, b as IVals, ValFns.compare);
-  },
-  cmp(a: IType, b: IType): Cmp {
+  cmp(a: IType, b: IType, sortOnly = false): Cmp {
     // any
     if (a[0] === "any" && b[0] === "any") return Cmp.Equal;
     if (a[0] === "any" && b[0] !== "any") return Cmp.Superset;
@@ -80,13 +64,13 @@ export const TypeFns = {
 
     // never
     if (a[0] === "never" && b[0] === "never") {
-      return NeverFns.cmp(a.slice(1), b.slice(1));
+      return NeverFns.cmp(a.slice(1), b.slice(1), sortOnly);
     }
     if (a[0] === "never" && b[0] !== "never") return Cmp.Subset;
     if (b[0] === "never" && a[0] !== "never") return Cmp.Superset;
 
     // vals
-    return UtilFns.cmp(a as IVals, b as IVals, ValFns.cmp, ValFns.compare);
+    return UtilFns.cmp(a as IVals, b as IVals, ValFns.cmp, sortOnly);
   },
   string(value: IType): string {
     // any
@@ -104,50 +88,39 @@ export const TypeFns = {
 
 export const ValFns = {
   or(a: IVal, b: IVal): [IVal] | [IVal, IVal] {
-    if (a[0] === b[0]) {
-      const { or, compare } = fns(a[0]);
-      return [
-        [a[0], ...UtilFns.or(a.slice(1), b.slice(1), or, compare)] as IVal
-      ];
-    } else {
-      return StringFns._compare(a[0], b[0]) < 0 ? [a, b] : [b, a];
+    if (a[0] !== b[0]) {
+      return StringFns._cmp(a[0], b[0]) < 0 ? [a, b] : [b, a];
     }
+
+    return [
+      [a[0], ...UtilFns.or(a.slice(1), b.slice(1), fns(a[0]).or)] as IVal
+    ];
   },
   and(a: IVal, b: IVal): [] | [IVal] {
     if (a[0] !== b[0]) return [];
-    const { and, compare } = fns(a[0]);
-    const res = [a[0], ...UtilFns.and(a.slice(1), b.slice(1), and, compare)];
+    const { and, cmp } = fns(a[0]);
+    const res = [a[0], ...UtilFns.and(a.slice(1), b.slice(1), and, cmp)];
     return res.length === 1 ? [] : [res as IVal];
   },
-  cmp(a: IVal, b: IVal): Cmp {
-    const typeSort = StringFns._compare(a[0], b[0]);
-    if (typeSort !== 0) return Cmp.Disjoint;
-    const { cmp, compare } = fns(a[0]);
-    return UtilFns.cmp(a.slice(1), b.slice(1), compare, cmp);
-  },
-  compare(a: IVal, b: IVal): number {
-    const typeSort = StringFns._compare(a[0], b[0]);
-    if (typeSort !== 0) return typeSort;
-    return UtilFns.compare(a.slice(1), b.slice(1), fns(a[0]).compare);
+  cmp(a: IVal, b: IVal, sortOnly = false): Cmp {
+    const cmpVal = StringFns._cmp(a[0], b[0], sortOnly);
+    return UtilFns.cmp(a.slice(1), b.slice(1), fns(a[0]).cmp, sortOnly, cmpVal);
   }
 };
 
 export const NeverFns = {
   or(as: string[], bs: string[]): string[] {
-    return [...UtilFns.or(as, bs, StringFns._or, StringFns._compare)];
+    return [...UtilFns.or(as, bs, StringFns._or)];
   },
   and(as: string[], bs: string[]): string[] {
-    return [...UtilFns.and(as, bs, StringFns._and, StringFns._compare)];
+    return [...UtilFns.and(as, bs, StringFns._and, StringFns._cmp)];
   },
-  cmp(as: string[], bs: string[]): Cmp {
-    return UtilFns.cmp(as, bs, StringFns._compare, StringFns._cmp);
-  },
-  compare(as: string[], bs: string[]): number {
-    return UtilFns.compare(as, bs, StringFns._compare);
+  cmp(as: string[], bs: string[], sortOnly = false): Cmp {
+    return UtilFns.cmp(as, bs, StringFns._cmp, sortOnly);
   },
   string(val: string[]): string {
     if (val.length === 0) return "never";
-    return val.join(" or ");
+    return val.map((s) => `error(${JSON.stringify(s)})`).join(" or ");
   },
   error(a: IType, b: IType): IType {
     return [
@@ -160,8 +133,7 @@ export const NeverFns = {
 interface IFnsType<T> {
   or: (a: T, b: T) => [T] | [T, T];
   and: (a: T, b: T) => [] | [T];
-  cmp: (a: T, b: T) => Cmp;
-  compare: (a: T, b: T) => number;
+  cmp: (a: T, b: T, sortOnly?: boolean) => Cmp;
   string: (value: T) => string;
 }
 
@@ -180,12 +152,11 @@ interface IValueFns<K extends keyof ITypeMap> {
   _or: INonNullFn<K, "or">;
   _and: INonNullFn<K, "and">;
   _cmp: INonNullFn<K, "cmp">;
-  _compare: INonNullFn<K, "compare">;
   _string: INonNullFn<K, "string">;
 }
 type IValueFnsArgs<K extends keyof ITypeMap> = Optional<
   IValueFns<K>,
-  "_or" | "_and" | "_cmp" | "_string"
+  "_or" | "_and" | "_string"
 >;
 
 const unitFns = <K extends keyof ITypeMap>(
@@ -199,13 +170,11 @@ const unitFns = <K extends keyof ITypeMap>(
     _or:
       args._or ??
       ((a, b) => {
-        const sort = args._compare(a, b);
-        return sort === 0 ? [a] : sort < 0 ? [a, b] : [b, a];
+        const sort = args._cmp(a, b, true);
+        return sort === Cmp.Equal ? [a] : sort < Cmp.Equal ? [a, b] : [b, a];
       }),
-    _and: args._and ?? ((a, b) => (args._compare(a, b) === 0 ? [a] : [])),
-    _cmp:
-      args._cmp ??
-      ((a, b) => (args._compare(a, b) === 0 ? Cmp.Equal : Cmp.Disjoint)),
+    _and: args._and ?? ((a, b) => (args._cmp(a, b, true) === 0 ? [a] : [])),
+    _cmp: args._cmp,
     _string: args._string ?? JSON.stringify
   };
 
@@ -220,17 +189,11 @@ const unitFns = <K extends keyof ITypeMap>(
       if (b === null) return [a];
       return fns._and(a as NonNull, b as NonNull);
     },
-    cmp(a, b) {
+    cmp(a, b, sortOnly = false) {
       if (a === null && b === null) return Cmp.Equal;
       if (a === null) return Cmp.Superset;
       if (b === null) return Cmp.Subset;
-      return fns._cmp(a as NonNull, b as NonNull);
-    },
-    compare(a, b) {
-      if (a === null && b === null) return 0;
-      if (a === null) return 1;
-      if (b === null) return -1;
-      return fns._compare(a as NonNull, b as NonNull);
+      return fns._cmp(a as NonNull, b as NonNull, sortOnly);
     },
     string(value) {
       return value === null ? key : fns._string(value);
@@ -243,7 +206,6 @@ export const NullFns = baseFns<"null">(() => ({
   or: () => [null],
   and: () => [null],
   cmp: () => Cmp.Equal,
-  compare: () => 0,
   string: () => "null"
 }));
 
@@ -253,63 +215,80 @@ export const BooleanFns = unitFns("boolean", () => ({
     if (a === null || b === null || (a && !b) || (b && !a)) return [null];
     return [a && b];
   },
-  _compare: (a: boolean, b: boolean) => (a === b ? 0 : a < b ? -1 : 1)
+  _cmp: (a: boolean, b: boolean) =>
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
 }));
 
 export const NumberFns = unitFns("number", () => ({
-  _compare: (a: number, b: number) => (a === b ? 0 : a < b ? -1 : 1)
+  _cmp: (a: number, b: number) =>
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
 }));
 
 export const StringFns = unitFns("string", () => ({
-  _compare: (a: string, b: string) => a.localeCompare(b)
+  _cmp: (a: string, b: string) => {
+    const cmp = a.localeCompare(b);
+    return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  }
 }));
 
 export const DateFns = unitFns("date", () => ({
-  _compare: (a: L.DateTime, b: L.DateTime) => a.toMillis() - b.toMillis()
+  _cmp: (a: L.DateTime, b: L.DateTime) => {
+    const cmp = a.toMillis() - b.toMillis();
+    return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  }
 }));
 
 export const DurationFns = unitFns("duration", () => ({
-  _compare: (a: L.Duration, b: L.Duration) => a.toMillis() - b.toMillis()
+  _cmp: (a: L.Duration, b: L.Duration) => {
+    const cmp = a.toMillis() - b.toMillis();
+    return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  }
 }));
 
 export const ArrayFns = baseFns<"array">(() => {
-  const cmp = (as: ITypeMap["array"], bs: ITypeMap["array"]): Cmp => {
-    const known = UtilFns.cmp(as.known, bs.known, TypeFns.compare, TypeFns.cmp);
-    if (known === Cmp.Disjoint) return known;
-    return TypeFns.cmp(as.unknown, bs.unknown);
+  const get = <T = never>(
+    obj: ITypeMap["array"],
+    key: number,
+    never: T = null as T
+  ): IType | T => {
+    if (key in obj.known) return obj.known[key];
+    if (obj.unknown[0] === "never") return never;
+    return TypeFns.or(obj.unknown, [["null", null]]);
   };
 
-  const compare = (as: ITypeMap["array"], bs: ITypeMap["array"]): number => {
-    const known = UtilFns.compare(as.known, bs.known, TypeFns.compare);
-    if (known !== 0) return known;
-    return TypeFns.compare(as.unknown, bs.unknown);
-  };
+  const cmp = (
+    as: ITypeMap["array"],
+    bs: ITypeMap["array"],
+    sortOnly = false
+  ): Cmp => {
+    const len = Math.max(as.known.length, bs.known.length);
+    let res: Cmp = Cmp.Equal;
 
-  const isNever = (obj: ITypeMap["array"], key: number): boolean => {
-    const val = obj.known[key];
-    return val !== undefined && val[0] === "never";
-  };
+    for (let i = 0; i < len; i++) {
+      const a = get(as, i, null);
+      if (a === null) return UtilFns.cmpJoin(res, Cmp.Subset);
 
-  const get = (obj: ITypeMap["array"], key: number): IType => {
-    if (key > obj.known.length && obj.unknown[0] === "never") {
-      return ["never"];
+      const b = get(bs, i, null);
+      if (b === null) return UtilFns.cmpJoin(res, Cmp.Superset);
+
+      const cmp = TypeFns.cmp(a, b, sortOnly);
+      if (sortOnly && cmp !== Cmp.Equal) return cmp;
+
+      res = UtilFns.cmpJoin(res, cmp);
+      if (UtilFns.isDisjoint(res)) return res;
     }
-    return obj.known[key] ?? TypeFns.or(obj.unknown, [["null", null]]);
+
+    return UtilFns.cmpJoin(res, TypeFns.cmp(as.unknown, bs.unknown, sortOnly));
   };
 
   return {
     or(as, bs) {
-      if (cmp(as, bs) === Cmp.Disjoint) {
-        // TODO: add optimization
-        return compare(as, bs) < 0 ? [as, bs] : [bs, as];
-      }
-
       const unknown = TypeFns.or(as.unknown, bs.unknown);
       const known: IType[] = [];
       const len = Math.max(as.known.length, bs.known.length);
 
       for (let i = 0; i < len; i++) {
-        known.push(TypeFns.or(get(as, i), get(bs, i)));
+        known.push(TypeFns.or(get(as, i, ["never"]), get(bs, i, ["never"])));
       }
 
       return [{ known, unknown }];
@@ -319,25 +298,23 @@ export const ArrayFns = baseFns<"array">(() => {
       const len = Math.max(as.known.length, bs.known.length);
 
       for (let i = 0; i < len; i++) {
-        // allow user created "nevers"
-        if (isNever(as, i) || isNever(bs, i)) {
-          known.push(["never"]);
-          continue;
-        }
+        const a = get(as, i, null);
+        if (a === null) return [];
 
-        const val = TypeFns.and(get(as, i), get(bs, i));
+        const b = get(bs, i, null);
+        if (b === null) return [];
+
+        const val = TypeFns.and(a, b);
         if (val[0] === "never") return [];
+
         known.push(val);
       }
 
-      // TODO: refactor so that no error messages get created
-      let unknown = TypeFns.and(as.unknown, bs.unknown);
-      unknown = unknown[0] === "never" ? ["never"] : unknown;
+      const unknown = TypeFns.and(as.unknown, bs.unknown);
 
       return [{ known, unknown }];
     },
     cmp,
-    compare,
     string(value) {
       const strs = value.known.map(TypeFns.string);
       if (value.unknown[0] !== "never") {
@@ -357,9 +334,6 @@ export const ObjectFns = baseFns<"object">(() => {
       throw new Error("TODO");
     },
     cmp(_a, _b) {
-      throw new Error("TODO");
-    },
-    compare(_a, _b) {
       throw new Error("TODO");
     },
     string(_value) {

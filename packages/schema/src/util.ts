@@ -1,15 +1,19 @@
 export const enum Cmp {
-  Equal = 0b00, // 0
-  Subset = 0b01, // 1
-  Superset = 0b10, // 2
-  Disjoint = 0b11 // 3
+  DisjointLt = -2,
+  Subset = -1,
+  Equal = 0,
+  Superset = 1,
+  DisjointGt = 2
 }
+
+export type IDisjoint = Cmp.DisjointLt | Cmp.DisjointGt;
+export type INonDisjoint = Cmp.Subset | Cmp.Equal | Cmp.Superset;
 
 export function* and<V>(
   as: V[],
   bs: V[],
   and: (a: V, b: V) => [] | [V],
-  compare: (a: V, b: V) => number
+  cmpFn: (a: V, b: V, sortOnly?: boolean) => Cmp
 ): Generator<V, void, unknown> {
   let ai = 0;
   let bi = 0;
@@ -28,7 +32,7 @@ export function* and<V>(
     }
 
     // disjoint
-    if (compare(a, b) < 0) {
+    if (cmpFn(a, b, true) < 0) {
       ai++;
     } else {
       bi++;
@@ -39,8 +43,7 @@ export function* and<V>(
 export function* or<V>(
   as: V[],
   bs: V[],
-  or: (a: V, b: V) => [V] | [V, V],
-  compare: (a: V, b: V) => number
+  or: (a: V, b: V) => [V] | [V, V]
 ): Generator<V, void, unknown> {
   let ai = 0;
   let bi = 0;
@@ -59,7 +62,7 @@ export function* or<V>(
     }
 
     // disjoint
-    if (compare(a, b) < 0) {
+    if (union[0] === a) {
       yield a;
       ai++;
     } else {
@@ -73,58 +76,60 @@ export function* or<V>(
   while (bi < bs.length) yield bs[bi++];
 }
 
+export const isDisjoint = (val: Cmp): val is IDisjoint =>
+  val === Cmp.DisjointLt || val === Cmp.DisjointGt;
+
+export const isNonDisjoint = (val: Cmp): val is INonDisjoint =>
+  !isDisjoint(val);
+
+export const cmpJoin = (prev: INonDisjoint, curr: Cmp): Cmp => {
+  if (curr === Cmp.Equal) return prev;
+  if (prev < Cmp.Equal && curr > Cmp.Equal) return Cmp.DisjointLt;
+  if (prev > Cmp.Equal && curr < Cmp.Equal) return Cmp.DisjointGt;
+  return curr;
+};
+
 export const cmp = <V>(
   as: V[],
   bs: V[],
-  compareFn: (a: V, b: V) => number,
-  cmpFn: (a: V, b: V) => Cmp
+  cmpFn: (a: V, b: V, sortOnly?: boolean) => Cmp,
+  sortOnly = false,
+  orig: Cmp = Cmp.Equal
 ): Cmp => {
-  let res = Cmp.Equal;
+  if (sortOnly && orig !== Cmp.Equal) return orig;
+  if (isDisjoint(orig)) return orig;
+
+  let res: Cmp = orig;
   let ai = 0;
   let bi = 0;
 
   while (ai < as.length && bi < bs.length) {
     const a = as[ai];
     const b = bs[bi];
-    const cmp = cmpFn(a, b);
+    const cmp = cmpFn(a, b, sortOnly);
 
-    if (cmp !== Cmp.Disjoint) {
-      res |= cmp;
-      if (res === Cmp.Disjoint) return Cmp.Disjoint;
+    if (sortOnly && cmp !== Cmp.Equal) return cmp;
+
+    if (isNonDisjoint(cmp)) {
+      res = cmpJoin(res, cmp);
+      if (isDisjoint(res)) return res;
       ai++;
       bi++;
       continue;
     }
 
-    const sort = compareFn(a, b);
-
-    if (sort < 0) {
+    if (cmp < Cmp.Equal) {
       ai++;
-      res |= Cmp.Superset;
+      res = cmpJoin(res, Cmp.Superset);
     } else {
       bi++;
-      res |= Cmp.Subset;
+      res = cmpJoin(res, Cmp.Subset);
     }
 
-    if (res === Cmp.Disjoint) return Cmp.Disjoint;
+    if (isDisjoint(res)) return res;
   }
 
-  if (ai < as.length) res |= Cmp.Superset;
-  if (bi < bs.length) res |= Cmp.Subset;
+  if (ai < as.length) return cmpJoin(res, Cmp.Superset);
+  if (bi < bs.length) return cmpJoin(res, Cmp.Subset);
   return res;
-};
-
-export const compare = <V>(
-  as: V[],
-  bs: V[],
-  compareFn: (a: V, b: V) => number
-): number => {
-  const len = Math.min(as.length, bs.length);
-
-  for (let i = 0; i < len; i++) {
-    const sort = compareFn(as[i], bs[i]);
-    if (sort !== 0) return sort;
-  }
-
-  return as.length - bs.length;
 };
