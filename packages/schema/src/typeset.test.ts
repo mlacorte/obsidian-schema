@@ -1,27 +1,19 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, test } from "bun:test";
 
-import { type IType, NeverFns, StringFns, TypeFns } from "./typeset";
+import * as T from "./typeset";
 import * as UtilFns from "./util";
 
-const one: IType = [["number", 1]];
-const two: IType = [["number", 2]];
-const three: IType = [["number", 3]];
+const one = T.Number(1);
+const two = T.Number(2);
+const three = T.Number(3);
 
-const list = (...known: IType[]): IType => [
-  ["array", { unknown: ["any"], known }]
-];
-
-const object = (...known: Array<[string, IType]>): IType => [
-  ["object", { unknown: ["any"], known: new Map(known) }]
-];
-
-const eq = (a: IType, b: IType): void => {
-  expect(TypeFns.string(a)).toBe(TypeFns.string(b));
+const eq = (a: T.Type, b: T.Type): void => {
+  expect(a.toString()).toBe(b.toString());
 };
 
 describe("util", () => {
-  const { _cmp, _or, _and } = StringFns;
+  const { _cmp, _or, _and } = T.StringFns;
   const { Cmp, and, or, cmp } = UtilFns;
 
   const as = ["a", "b", "c"];
@@ -79,158 +71,150 @@ describe("util", () => {
 });
 
 describe("typeset", () => {
-  const { and, or } = TypeFns;
-  const { error } = NeverFns;
+  const { error: msg } = T.NeverFns;
 
   describe("boolean", () => {
     test("promotion", () => {
-      const promotion = or([["boolean", true]], [["boolean", false]]);
-      eq(promotion, [["boolean", null]]);
+      eq(T.True.or(T.False), T.Boolean);
     });
   });
 
   describe("unions", () => {
-    const strVal: IType = [["string", "a"]];
-    const numType: IType = [["number", null]];
+    const a = T.String("a");
+    const number = T.Number;
 
     test("or", () => {
-      eq(or(strVal, numType), [...numType, ...strVal]);
+      eq(a.or(number), number.or(a));
     });
 
     test("and", () => {
-      eq(and(strVal, numType), error(strVal, numType));
+      eq(a.and(number), T.Never.error(msg(a.value, number.value)));
     });
   });
 
   describe("any", () => {
-    const any: IType = ["any"];
-    const string: IType = [["string", null]];
-
     test("or", () => {
-      eq(or(any, string), ["any"]);
+      eq(T.Any.or(T.String), T.Any);
     });
 
     test("and", () => {
-      eq(and(any, string), [["string", null]]);
+      eq(T.Any.and(T.String), T.String);
     });
   });
 
   describe("never", () => {
-    const never: IType = ["never"];
-    const number: IType = [["number", 1]];
-
     test("or", () => {
-      eq(or(never, number), [["number", 1]]);
+      eq(T.Never.or(T.Number), T.Number);
     });
 
     test("and", () => {
-      eq(and(never, number), ["never"]);
+      eq(T.Never.and(T.Number), T.Never);
     });
   });
 
   describe("null", () => {
-    const $null: IType = [["null", null]];
-    const num: IType = [["number", null]];
-
     describe("or", () => {
       test("self", () => {
-        eq(or($null, $null), $null);
+        eq(T.Null.or(T.Null), T.Null);
       });
       test("other", () => {
-        eq(or($null, num), [...$null, ...num]);
+        eq(T.Null.or(T.Number).and(T.Null), T.Null);
       });
     });
 
     describe("and", () => {
       test("self", () => {
-        eq(and($null, $null), $null);
+        eq(T.Null.and(T.Null), T.Null);
       });
       test("other", () => {
-        eq(and($null, num), error($null, num));
+        eq(
+          T.Null.and(T.Number),
+          T.Never.error(msg(T.Null.value, T.Number.value))
+        );
       });
     });
   });
 
   describe("objects", () => {
-    const a = object(["a", or(one, two)]);
-    const b = object(["a", one]);
-    const c = object(["a", one], ["b", two]);
-    const d = object(["a", or(two, three)]);
+    const a = T.Object({ a: one.or(two) }, T.Any);
+    const b = T.Object({ a: one }, T.Any);
+    const c = T.Object({ a: one, b: two }, T.Any);
+    const d = T.Object({ a: two.or(three) }, T.Any);
 
     describe("identity", () => {
       test("or", () => {
-        eq(or(a, a), a);
+        eq(a.or(a), a);
       });
       test("and", () => {
-        eq(and(a, a), a);
+        eq(a.and(a), a);
       });
     });
 
     describe("subset", () => {
       test("or", () => {
-        eq(or(a, c), object(["a", or(one, two)], ["b", ["any"]]));
+        eq(a.or(c), T.Object({ a: one.or(two), b: T.Any }, T.Any));
       });
       test("and", () => {
-        eq(and(a, b), b);
-        eq(and(a, c), object(["a", one], ["b", two]));
+        eq(a.and(b), b);
+        eq(a.and(c), T.Object({ a: one, b: two }, T.Any));
       });
     });
 
     describe("intersect", () => {
       test("or", () => {
-        eq(or(a, d), object(["a", or(one, or(two, three))]));
+        eq(a.or(d), T.Object({ a: one.or(two).or(three) }, T.Any));
       });
 
       test("and", () => {
-        eq(and(a, d), object(["a", two]));
+        eq(a.and(d), T.Object({ a: two }, T.Any));
       });
     });
 
     describe("disjoint", () => {
       test("and", () => {
-        expect(and(b, d)[0]).toEqual("never");
+        expect(b.and(d).value[0]).toEqual("never");
       });
     });
   });
 
   describe("lists", () => {
-    const a = list(or(one, two));
-    const b = list(one);
-    const c = list(one, two);
-    const d = list(or(two, three));
+    const a = T.Array([one.or(two)], T.Any);
+    const b = T.Array([one], T.Any);
+    const c = T.Array([one, two], T.Any);
+    const d = T.Array([two.or(three)], T.Any);
 
     describe("identity", () => {
       test("or", () => {
-        eq(or(a, a), a);
+        eq(a.or(a), a);
       });
       test("and", () => {
-        eq(and(a, a), a);
+        eq(a.and(a), a);
       });
     });
 
     describe("subset", () => {
       test("or", () => {
-        eq(or(a, c), list(or(one, two), ["any"]));
+        eq(a.or(c), T.Array([one.or(two), T.Any], T.Any));
       });
       test("and", () => {
-        eq(and(a, b), b);
-        eq(and(a, c), list(one, two));
+        eq(a.and(b), b);
+        eq(a.and(c), T.Array([one, two], T.Any));
       });
     });
 
     describe("intersect", () => {
       test("or", () => {
-        eq(or(a, d), list(or(one, or(two, three))));
+        eq(a.or(d), T.Array([one.or(two).or(three)], T.Any));
       });
 
       test("and", () => {
-        eq(and(a, d), list(two));
+        eq(a.and(d), T.Array([two], T.Any));
       });
     });
 
     describe("disjoint", () => {
       test("and", () => {
-        expect(and(b, d)[0]).toEqual("never");
+        expect(b.and(d).value[0]).toEqual("never");
       });
     });
   });

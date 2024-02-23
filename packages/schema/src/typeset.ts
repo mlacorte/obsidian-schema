@@ -24,6 +24,31 @@ export type IVal = {
   [K in keyof ITypeMap]: [K, ITypeMap[K], ...Array<ITypeMap[K]>];
 }[keyof ITypeMap];
 
+const isType = Symbol("type");
+
+export interface Type {
+  [isType]: true;
+  value: IType;
+  or: (other: Type) => Type;
+  and: (other: Type) => Type;
+  cmp: (other: Type) => Cmp;
+  toString: () => string;
+}
+
+export const type: {
+  (value: IType): Type;
+  <T>(value: IType, self: T): Type & T;
+} = <T>(value: IType, self?: T): Type | (Type & T) => {
+  const res = (self ?? {}) as unknown as Type;
+  res[isType] = true;
+  res.value = value;
+  res.or = (other) => type(TypeFns.or(value, other.value));
+  res.and = (other) => type(TypeFns.and(value, other.value));
+  res.cmp = (other) => TypeFns.cmp(value, other.value);
+  res.toString = () => TypeFns.string(value);
+  return res;
+};
+
 export const TypeFns = {
   or(a: IType, b: IType): IType {
     // any
@@ -53,7 +78,7 @@ export const TypeFns = {
 
     // vals
     const res = [...UtilFns.and<IVal>(a, b, ValFns.and, ValFns.cmp)];
-    if (res.length === 0) return NeverFns.error(a, b);
+    if (res.length === 0) return ["never", NeverFns.error(a, b)];
     return res as IVals;
   },
   cmp(a: IType, b: IType, sortOnly = false): Cmp {
@@ -122,11 +147,8 @@ export const NeverFns = {
     if (val.length === 0) return "never";
     return val.map((s) => `error(${JSON.stringify(s)})`).join(" or ");
   },
-  error(a: IType, b: IType): IType {
-    return [
-      "never",
-      `Can't combine '${TypeFns.string(a)}' and '${TypeFns.string(b)}'.`
-    ];
+  error(a: IType, b: IType): string {
+    return `Can't combine '${TypeFns.string(a)}' and '${TypeFns.string(b)}'.`;
   }
 };
 
@@ -270,7 +292,7 @@ export const collectionFns = <K extends "array" | "object">(
     const val = args._get(obj.known, key, never);
     if (val !== never) return val;
     if (obj.unknown[0] === "never") return never;
-    return TypeFns.or(obj.unknown, [["null", null]]);
+    return TypeFns.or(obj.unknown, NullType.value);
   };
 
   const cmp = (as: ITypeMap[K], bs: ITypeMap[K], sortOnly = false): Cmp => {
@@ -307,7 +329,10 @@ export const collectionFns = <K extends "array" | "object">(
     bs: ITypeMap[K]
   ): IterableIterator<[IKey<K>, IType]> {
     for (const key of unionKeys(as.known, bs.known)) {
-      yield [key, TypeFns.or(get(as, key, ["never"]), get(bs, key, ["never"]))];
+      yield [
+        key,
+        TypeFns.or(get(as, key, NeverType.value), get(bs, key, NeverType.value))
+      ];
     }
   }
 
@@ -341,7 +366,7 @@ export const collectionFns = <K extends "array" | "object">(
     string(value) {
       const strs: string[] = [];
       for (const key of value.known.keys() as IKeys) {
-        const val: IType = get(value, key, ["never"]);
+        const val: IType = get(value, key, NeverType.value);
         strs.push(`${args._stringKey(key)}${TypeFns.string(val)}`);
       }
       if (value.unknown[0] !== "never") {
@@ -370,14 +395,27 @@ export const ObjectFns = collectionFns<"object">(() => ({
   _stringWrap: ["{ ", " }"]
 }));
 
+export const FunctionFns = baseFns<"function">(() => {
+  const cmp = (a: ITypeMap["function"], b: ITypeMap["function"]): Cmp =>
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt;
+
+  return {
+    or: (a, b) => {
+      const cmpVal = cmp(a, b);
+      return cmpVal === Cmp.Equal ? [a] : cmpVal < Cmp.Equal ? [a, b] : [b, a];
+    },
+    and: (a, b) => (cmp(a, b) === Cmp.Equal ? [a] : []),
+    cmp,
+    string: () => "<function>"
+  };
+});
+
 export const Fns = {
   array: ArrayFns,
   boolean: BooleanFns,
   date: DateFns,
   duration: DurationFns,
-  function: () => {
-    throw new Error("TODO");
-  },
+  function: FunctionFns,
   link: () => {
     throw new Error("TODO");
   },
@@ -392,3 +430,83 @@ export const Fns = {
 
 const fns = <K extends keyof typeof Fns>(key: K): IFnsType<unknown> =>
   Fns[key] as IFnsType<unknown>;
+
+const AnyType = type(["any"]);
+
+const NeverType = type(["never"], {
+  error: (msg: string) => type(["never", msg])
+});
+
+const ArrayType = type(
+  [["array", { known: [], unknown: ["any"] }]],
+  (known: Type[], unknown: Type = NeverType) =>
+    type([
+      ["array", { known: known.map((k) => k.value), unknown: unknown.value }]
+    ])
+);
+
+const BooleanType = type([["boolean", null]], (val: boolean) =>
+  type([["boolean", val]])
+);
+
+const TrueType = BooleanType(true);
+const FalseType = BooleanType(false);
+
+const DateType = type([["date", null]], (date: L.DateTime) =>
+  type([["date", date]])
+);
+
+const DurationType = type([["duration", null]], (duration: L.Duration) =>
+  type([["duration", duration]])
+);
+
+const FunctionType = type([["function", () => AnyType.value]]);
+
+const LinkType = (() => {
+  throw new Error("TODO");
+}) as unknown as Type;
+
+const NullType = type([["null", null]]);
+
+const NumberType = type([["number", null]], (val: number) =>
+  type([["number", val]])
+);
+
+const ObjectType = type(
+  [["object", { known: new Map(), unknown: ["any"] }]],
+  (known: Record<string, Type>, unknown: Type = NeverType) => {
+    const knownVals = new Map<string, IType>();
+
+    for (const key of Object.keys(known).sort(StringFns._cmp)) {
+      knownVals.set(key, known[key].value);
+    }
+
+    return type([["object", { known: knownVals, unknown: unknown.value }]]);
+  }
+);
+
+const StringType = type([["string", null]], (val: string) =>
+  type([["string", val]])
+);
+
+const WidgetType = (() => {
+  throw new Error("TODO");
+}) as unknown as Type;
+
+export {
+  AnyType as Any,
+  ArrayType as Array,
+  BooleanType as Boolean,
+  DateType as Date,
+  DurationType as Duration,
+  FalseType as False,
+  FunctionType as Function,
+  LinkType as Link,
+  NeverType as Never,
+  NullType as Null,
+  NumberType as Number,
+  ObjectType as Object,
+  StringType as String,
+  TrueType as True,
+  WidgetType as Widget
+};
