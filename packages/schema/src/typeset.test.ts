@@ -1,19 +1,32 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, test } from "bun:test";
 
-import * as T from "./typeset";
+import {
+  $any,
+  $array,
+  $boolean,
+  $false,
+  $never,
+  $null,
+  $number,
+  $object,
+  $string,
+  $true,
+  NeverFns,
+  StringFns,
+  type Type
+} from "./typeset";
 import * as UtilFns from "./util";
 
-const one = T.Number(1);
-const two = T.Number(2);
-const three = T.Number(3);
+const $one = $number(1);
+const $two = $number(2);
+const $three = $number(3);
 
-const eq = (a: T.Type, b: T.Type): void => {
+const eq = (a: Type, b: Type): void => {
   expect(a.toString()).toBe(b.toString());
 };
 
 describe("util", () => {
-  const { _cmp, _or, _and } = T.StringFns;
+  const { _cmp, _or, _and } = StringFns;
   const { Cmp, and, or, cmp } = UtilFns;
 
   const as = ["a", "b", "c"];
@@ -71,150 +84,150 @@ describe("util", () => {
 });
 
 describe("typeset", () => {
-  const { error: msg } = T.NeverFns;
-
   describe("boolean", () => {
     test("promotion", () => {
-      eq(T.True.or(T.False), T.Boolean);
+      eq($true.or($false), $boolean);
     });
   });
 
   describe("unions", () => {
-    const a = T.String("a");
-    const number = T.Number;
+    const $a = $string("a");
 
     test("or", () => {
-      eq(a.or(number), number.or(a));
+      eq($a.or($number), $number.or($a));
     });
 
     test("and", () => {
-      eq(a.and(number), T.Never.error(msg(a.value, number.value)));
+      eq(
+        $a.and($number),
+        $never.error(NeverFns.error($a.value, $number.value))
+      );
     });
   });
 
   describe("any", () => {
     test("or", () => {
-      eq(T.Any.or(T.String), T.Any);
+      eq($any.or($string), $any);
     });
 
     test("and", () => {
-      eq(T.Any.and(T.String), T.String);
+      eq($any.and($string), $string);
     });
   });
 
   describe("never", () => {
     test("or", () => {
-      eq(T.Never.or(T.Number), T.Number);
+      eq($never.or($number), $number);
     });
 
     test("and", () => {
-      eq(T.Never.and(T.Number), T.Never);
+      eq($never.and($number), $never);
     });
   });
 
   describe("null", () => {
     describe("or", () => {
       test("self", () => {
-        eq(T.Null.or(T.Null), T.Null);
+        eq($null.or($null), $null);
       });
       test("other", () => {
-        eq(T.Null.or(T.Number).and(T.Null), T.Null);
+        eq($null.or($number).and($null), $null);
       });
     });
 
     describe("and", () => {
       test("self", () => {
-        eq(T.Null.and(T.Null), T.Null);
+        eq($null.and($null), $null);
       });
       test("other", () => {
         eq(
-          T.Null.and(T.Number),
-          T.Never.error(msg(T.Null.value, T.Number.value))
+          $null.and($number),
+          $never.error(NeverFns.error($null.value, $number.value))
         );
       });
     });
   });
 
   describe("objects", () => {
-    const a = T.Object({ a: one.or(two) }, T.Any);
-    const b = T.Object({ a: one }, T.Any);
-    const c = T.Object({ a: one, b: two }, T.Any);
-    const d = T.Object({ a: two.or(three) }, T.Any);
+    const $a12 = $object({ a: $one.or($two) }, $any);
+    const $a1 = $object({ a: $one }, $any);
+    const $a1b2 = $object({ a: $one, b: $two }, $any);
+    const $a23 = $object({ a: $two.or($three) }, $any);
 
     describe("identity", () => {
       test("or", () => {
-        eq(a.or(a), a);
+        eq($a12.or($a12), $a12);
       });
       test("and", () => {
-        eq(a.and(a), a);
+        eq($a12.and($a12), $a12);
       });
     });
 
     describe("subset", () => {
       test("or", () => {
-        eq(a.or(c), T.Object({ a: one.or(two), b: T.Any }, T.Any));
+        eq($a12.or($a1b2), $object({ a: $one.or($two), b: $any }, $any));
       });
       test("and", () => {
-        eq(a.and(b), b);
-        eq(a.and(c), T.Object({ a: one, b: two }, T.Any));
+        eq($a12.and($a1), $a1);
+        eq($a12.and($a1b2), $object({ a: $one, b: $two }, $any));
       });
     });
 
     describe("intersect", () => {
       test("or", () => {
-        eq(a.or(d), T.Object({ a: one.or(two).or(three) }, T.Any));
+        eq($a12.or($a23), $object({ a: $one.or($two).or($three) }, $any));
       });
 
       test("and", () => {
-        eq(a.and(d), T.Object({ a: two }, T.Any));
+        eq($a12.and($a23), $object({ a: $two }, $any));
       });
     });
 
     describe("disjoint", () => {
       test("and", () => {
-        expect(b.and(d).value[0]).toEqual("never");
+        expect($a1.and($a23).value[0].type).toEqual("never");
       });
     });
   });
 
   describe("lists", () => {
-    const a = T.Array([one.or(two)], T.Any);
-    const b = T.Array([one], T.Any);
-    const c = T.Array([one, two], T.Any);
-    const d = T.Array([two.or(three)], T.Any);
+    const $a12 = $array([$one.or($two)], $any);
+    const $a1 = $array([$one], $any);
+    const $a1b2 = $array([$one, $two], $any);
+    const $a23 = $array([$two.or($three)], $any);
 
     describe("identity", () => {
       test("or", () => {
-        eq(a.or(a), a);
+        eq($a12.or($a12), $a12);
       });
       test("and", () => {
-        eq(a.and(a), a);
+        eq($a12.and($a12), $a12);
       });
     });
 
     describe("subset", () => {
       test("or", () => {
-        eq(a.or(c), T.Array([one.or(two), T.Any], T.Any));
+        eq($a12.or($a1b2), $array([$one.or($two), $any], $any));
       });
       test("and", () => {
-        eq(a.and(b), b);
-        eq(a.and(c), T.Array([one, two], T.Any));
+        eq($a12.and($a1), $a1);
+        eq($a12.and($a1b2), $array([$one, $two], $any));
       });
     });
 
     describe("intersect", () => {
       test("or", () => {
-        eq(a.or(d), T.Array([one.or(two).or(three)], T.Any));
+        eq($a12.or($a23), $array([$one.or($two).or($three)], $any));
       });
 
       test("and", () => {
-        eq(a.and(d), T.Array([two], T.Any));
+        eq($a12.and($a23), $array([$two], $any));
       });
     });
 
     describe("disjoint", () => {
       test("and", () => {
-        expect(b.and(d).value[0]).toEqual("never");
+        expect($a1.and($a23).value[0].type).toEqual("never");
       });
     });
   });
