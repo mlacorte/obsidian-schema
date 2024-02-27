@@ -788,10 +788,7 @@ export const $never = $type(
   type("never", null),
   callable({
     $: (msg: string) => $type(type("never", msg)),
-    andError: (a: Type, b: Type) =>
-      $never(
-        `Can't combine '${TypeFns.string(a.value)}' and '${TypeFns.string(b.value)}'.`
-      )
+    andError: (a: Type, b: Type) => $never(NeverFns.error(a.value, b.value))
   })
 );
 
@@ -824,14 +821,17 @@ export const $duration = $type(type("duration", null), (duration: L.Duration) =>
 export const $function = $type<
   [{ type: "function"; values: [(...args: IType[]) => IType] }],
   IFnDec<Type>
->([{ type: "function", values: [() => $any.value] }], (...args: [any, any]) => {
-  const res = define("<lambda>", [])
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    .add(...args)
-    .build();
+>(
+  type("function", () => $any.value),
+  (...args: [any, any]) => {
+    const res = define("<lambda>", [])
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      .add(...args)
+      .build();
 
-  return $type(type("function", res));
-});
+    return $type(type("function", res));
+  }
+);
 
 export const $link = (() => {
   throw new Error("TODO");
@@ -839,13 +839,12 @@ export const $link = (() => {
 
 export const $null = $type(type("null", null));
 
-export const $number = $type(
-  [{ type: "number", values: [null] }],
-  (val: number) => $type([{ type: "number", values: [val] }])
+export const $number = $type(type("number", null), (val: number) =>
+  $type(type("number", val))
 );
 
 export const $object = $type(
-  type("object", { known: new Map<string, IType>(), unknown: $any.value }),
+  ObjectFns.new([], $any.value),
   (known: Record<string, Type>, unknown?: Type) => {
     const knownVals: Array<[string, IType]> = [];
 
@@ -857,9 +856,8 @@ export const $object = $type(
   }
 );
 
-export const $string = $type(
-  [{ type: "string", values: [null] }],
-  (val: string) => $type(type("string", val))
+export const $string = $type(type("string", null), (val: string) =>
+  $type(type("string", val))
 );
 
 export const $widget = (() => {
