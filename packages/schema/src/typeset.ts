@@ -86,11 +86,6 @@ export const callable = <T extends { $: (...args: any[]) => any }>(
   return fn;
 };
 
-export const $test = callable({
-  $: () => "foo",
-  bar: () => "bar"
-});
-
 export const TypeFns = {
   or(as: IType, bs: IType): IType {
     const a = as[0];
@@ -555,7 +550,7 @@ type IOptional = Type[] | [...Type[], IVararg];
 type IVararg = [Type];
 
 interface IFnDec<T> {
-  (args: IArgs, fn: IFn<ISingleType>): T;
+  (args: IArgs, fn: IFn<IType>): T;
   (args: IArgs, type: Type, valufy: number[], valFn: IFn<any>): T;
 }
 
@@ -675,7 +670,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
 
   const add: IFnBuilder["add"] = (
     args: IArgs,
-    typeOrFn: Type | IFn<ISingleType>,
+    typeOrFn: Type | IFn<IType>,
     valufy?: number[],
     valFn?: IFn<any>
   ): IFnBuilder => {
@@ -700,7 +695,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
     // valufy function
     let fn =
       typeof typeOrFn === "function"
-        ? typeOrFn
+        ? (typeOrFn as IFn<ISingleType>)
         : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           valufyFn(typeOrFn, valufy!, valFn!);
 

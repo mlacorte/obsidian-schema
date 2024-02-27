@@ -11,6 +11,7 @@ import {
   $object,
   $string,
   $true,
+  isType,
   StringFns,
   type Type
 } from "./typeset";
@@ -223,5 +224,48 @@ describe("typeset", () => {
         expect($a1.and($a23).value[0].type).toEqual("never");
       });
     });
+  });
+
+  describe("functions", () => {
+    const lit = (arg: Type | Type[]): Type => (isType(arg) ? arg : $array(arg));
+    const or = (...args: Array<Type | Type[]>): Type =>
+      args.map(lit).reduce((a, b) => a.or(b), $never);
+
+    const tests = [
+      [$true, $one, $two, $one],
+      [[$true, $false], $one, $two, [$one, $two]],
+      [$boolean, [$string, $one], $number, [$string.or($number), $number]],
+      [
+        $array([], $boolean),
+        [$string, $one],
+        $number,
+        or([], [$string.or($number)], [$string.or($number), $number])
+      ],
+      [
+        $array([], $boolean),
+        $array([], $string.or($one)),
+        $number,
+        $array([], $number.or($string))
+      ],
+      [
+        $array([], $boolean),
+        $array([$string, $one], $number),
+        $number,
+        or(
+          [],
+          [$string.or($number)],
+          $array([$string.or($number), $number], $number)
+        )
+      ]
+    ].map((row) => row.map(lit) as [Type, Type, Type, Type]);
+
+    for (const types of tests) {
+      const s = types.map((t) => t.toString());
+      const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
+
+      test(name, () => {
+        eq(types[0], $never("TODO"));
+      });
+    }
   });
 });
