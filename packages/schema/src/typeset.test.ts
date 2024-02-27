@@ -179,7 +179,7 @@ describe("typeset", () => {
 
     describe("disjoint", () => {
       test("and", () => {
-        expect($a1.and($a23).value[0].type).toEqual("never");
+        expect($a1.and($a23).type).toEqual("never");
       });
     });
   });
@@ -221,7 +221,7 @@ describe("typeset", () => {
 
     describe("disjoint", () => {
       test("and", () => {
-        expect($a1.and($a23).value[0].type).toEqual("never");
+        expect($a1.and($a23).type).toEqual("never");
       });
     });
   });
