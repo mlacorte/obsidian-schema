@@ -11,7 +11,6 @@ import {
   $object,
   $string,
   $true,
-  NeverFns,
   StringFns,
   type Type
 } from "./typeset";
@@ -98,10 +97,7 @@ describe("typeset", () => {
     });
 
     test("and", () => {
-      eq(
-        $a.and($number),
-        $never.error(NeverFns.error($a.value, $number.value))
-      );
+      eq($a.and($number), $never.andError($a, $number));
     });
   });
 
@@ -140,10 +136,7 @@ describe("typeset", () => {
         eq($null.and($null), $null);
       });
       test("other", () => {
-        eq(
-          $null.and($number),
-          $never.error(NeverFns.error($null.value, $number.value))
-        );
+        eq($null.and($number), $never.andError($null, $number));
       });
     });
   });
