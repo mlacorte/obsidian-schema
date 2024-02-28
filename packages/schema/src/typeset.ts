@@ -1,81 +1,86 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import type * as L from "luxon";
+import * as L from "luxon";
 
 import type * as Stubs from "./stubs";
 import * as UtilFns from "./util";
 import { Cmp } from "./util";
 
-export interface ITypeMap {
+export type IKey = keyof ITypeMap;
+
+export interface ITypeMap<IsVal extends boolean = false> {
   any: null;
-  never: null | string;
-  array: { known: Type[]; unknown: Type };
-  boolean: null | boolean;
-  date: null | L.DateTime;
-  duration: null | L.Duration;
-  function: (...args: Type[]) => Type;
+  never: (IsVal extends true ? never : null) | string;
+  array: {
+    known: Array<Type<IKey, IsVal>>;
+    unknown: Type<IKey, IsVal>;
+  };
+  boolean: (IsVal extends true ? never : null) | boolean;
+  date: (IsVal extends true ? never : null) | L.DateTime;
+  duration: (IsVal extends true ? never : null) | L.Duration;
+  function: (...args: Array<Type<IKey, IsVal>>) => Type<IKey, IsVal>;
   link: Stubs.Link;
   null: null;
-  number: null | number;
-  object: { known: Map<string, Type>; unknown: Type };
-  string: null | string;
+  number: (IsVal extends true ? never : null) | number;
+  object: {
+    known: Map<string, Type<IKey, IsVal>>;
+    unknown: Type<IKey, IsVal>;
+  };
+  string: (IsVal extends true ? never : null) | string;
   widget: Stubs.Widget;
 }
-export type IType<K extends keyof ITypeMap = keyof ITypeMap> = [
-  IVal<K>,
-  ...Array<IVal<K>>
+export type IType<K extends IKey = IKey, IsVal extends boolean = false> = [
+  IVal<K, IsVal>,
+  ...Array<IVal<K, IsVal>>
 ];
-export type IVal<K extends keyof ITypeMap = keyof ITypeMap> = {
-  [V in K]: { type: V; values: IValues<V> };
+export type IVal<K extends IKey = IKey, IsVal extends boolean = false> = {
+  [V in K]: { type: V; values: IValues<V, IsVal> };
 }[K];
-export type IValues<K extends keyof ITypeMap = keyof ITypeMap> = [
-  ITypeMap[K],
-  ...Array<ITypeMap[K]>
+export type IValues<K extends IKey = IKey, IsVal extends boolean = false> = [
+  ITypeMap<IsVal>[K],
+  ...Array<ITypeMap<IsVal>[K]>
 ];
 
 const $isType = Symbol("type");
 export const isType = (obj: object): obj is Type => $isType in obj;
 
-export interface Type<K extends keyof ITypeMap = keyof ITypeMap> {
+export interface Type<K extends IKey = IKey, IsVal extends boolean = false> {
   [$isType]: true;
-  types: IType<K>;
+  types: IType<K, IsVal>;
   get type(): K;
-  get value(): ITypeMap[K];
-  get values(): Array<ITypeMap[K]>;
+  get values(): Array<ITypeMap<IsVal>[K]>;
+  get value(): ITypeMap<IsVal>[K];
   or: (other: Type) => Type;
   and: (other: Type) => Type;
   cmp: (other: Type, sortOnly?: boolean) => Cmp;
   toString: () => string;
-  isType: () => boolean;
-  splitTypes: () => Iterable<Type>;
+  isType: () => this is Type<K, true>;
+  splitTypes: () => Iterable<Type<K, IsVal>>;
+  clone: () => Type<K, IsVal>;
 }
 
 export const type: {
-  <K extends keyof ITypeMap>(types: IType<K>): Type<K>;
-  <K extends keyof ITypeMap, T>(types: IType<K>, self: T): Type<K> & T;
-} = <K extends keyof ITypeMap, T>(
-  types: IType<K>,
-  self?: T
-): Type<K> | (Type & T) => {
-  const res = (self ?? {}) as unknown as Type<any>;
-  res[$isType] = true;
-  res.types = types as any;
-  Object.defineProperty(res, "type", { get: () => res.types[0].type });
-  Object.defineProperty(res, "value", { get: () => res.types[0].values[0] });
-  Object.defineProperty(res, "values", { get: () => res.types[0].values });
-  res.or = (other) => type(TypeFns.or(res.types, other.types));
-  res.and = (other) => type(TypeFns.and(res.types, other.types));
-  res.cmp = (other, sortOnly = false) =>
-    TypeFns.cmp(res.types, other.types, sortOnly);
-  res.toString = () => TypeFns.string(res.types);
-  res.isType = () => TypeFns.isType(res.types);
-  res.splitTypes = () => UtilFns.map(TypeFns.splitTypes(res.types), type);
-  return res;
+  <K extends IKey>(types: IType<K>): Type<K>;
+  <K extends IKey, T>(types: IType<K>, self: T): Type<K> & T;
+} = <K extends IKey, T>(types: IType<K>, self?: T): Type<K> | (Type & T) => {
+  const obj = (self ?? {}) as Type<any>;
+  obj[$isType] = true;
+  obj.types = types;
+  Object.defineProperty(obj, "type", { get: () => obj.types[0].type });
+  Object.defineProperty(obj, "values", { get: () => obj.types[0].values });
+  Object.defineProperty(obj, "value", { get: () => obj.types[0].values[0] });
+  obj.or = (other) => type(TypeFns.or(obj.types, other.types));
+  obj.and = (other) => type(TypeFns.and(obj.types, other.types));
+  obj.cmp = (other, sortOnly = false) =>
+    TypeFns.cmp(obj.types, other.types, sortOnly);
+  obj.toString = () => TypeFns.string(obj.types);
+  obj.isType = () => TypeFns.isType(obj.types);
+  obj.splitTypes = () => UtilFns.map(TypeFns.splitTypes(obj.types), type);
+  obj.clone = () => type(TypeFns.clone(obj.types));
+  return obj;
 };
 
-export const val = <K extends keyof ITypeMap>(
-  key: K,
-  value: ITypeMap[K]
-): IType<K> => [{ type: key, values: [value] }] as IType<K>;
+export const val = <K extends IKey>(key: K, value: ITypeMap[K]): IType<K> =>
+  [{ type: key, values: [value] }] as IType<K>;
 
 export const callable = <T extends { $: (...args: any[]) => any }>(
   obj: T
@@ -89,9 +94,6 @@ export const callable = <T extends { $: (...args: any[]) => any }>(
 
   return fn;
 };
-
-export const clone = <K extends keyof ITypeMap>(self: Type<K>): Type<K> =>
-  type(structuredClone(self.types));
 
 export const TypeFns = {
   or(as: IType, bs: IType): IType {
@@ -142,23 +144,40 @@ export const TypeFns = {
     // vals
     return UtilFns.cmp(as, bs, ValFns.cmp, sortOnly);
   },
-  string: (values: IType) =>
-    values
-      .flatMap((val) => val.values.map((v) => getFns(val.type).string(v)))
+  string: (types: IType) =>
+    types
+      .flatMap((t) => t.values.map((v) => getFns(t.type).string(v)))
       .join(" or "),
-  isType(values: IType): boolean {
-    if (values.length > 0) return true;
-    for (const val of values) {
-      if (ValFns.isType(val)) return true;
+  isType(types: IType): boolean {
+    if (types.length > 1) return true;
+    for (const t of types) {
+      const { isType } = getFns(t.type);
+      for (const v of t.values) {
+        if (isType(v)) return true;
+      }
     }
     return false;
   },
-  *splitTypes(values: IType): Iterable<IType> {
-    for (const val of values) {
-      for (const res of ValFns.splitTypes(val)) {
-        yield res;
+  *splitTypes(types: IType): Iterable<IType> {
+    for (const t of types) {
+      const { splitTypes } = getFns(t.type);
+      for (const v of t.values) {
+        for (const single of splitTypes(v) as Iterable<ITypeMap[IKey]>) {
+          yield val(t.type, single);
+        }
       }
     }
+  },
+  clone(types: IType): IType {
+    return [
+      ...types.map((t) => {
+        const { clone } = getFns(t.type);
+        return {
+          type: t.type,
+          values: [...t.values.map(clone)]
+        };
+      })
+    ] as IType;
   }
 };
 
@@ -193,11 +212,7 @@ export const ValFns = {
       sortOnly,
       cmpVal
     );
-  },
-  string: (value: IVal) => getFns(value.type).string(value.values),
-  isType: (value: IVal) => getFns(value.type).isType(value.values),
-  splitTypes: (value: IVal) =>
-    getFns(value.type).splitTypes(value.values) as Iterable<IType>
+  }
 };
 
 interface IFnsType<T> {
@@ -207,33 +222,34 @@ interface IFnsType<T> {
   string: (value: T) => string;
   isType: (value: T) => boolean;
   splitTypes: (value: T) => Iterable<T>;
+  clone: (value: T) => T;
 }
 
-type IFns<K extends keyof ITypeMap> = IFnsType<ITypeMap[K]>;
+type IFns<K extends IKey> = IFnsType<ITypeMap[K]>;
 
-const baseFns = <K extends keyof ITypeMap>(fn: () => IFns<K>): IFns<K> => fn();
+const baseFns = <K extends IKey>(fn: () => IFns<K>): IFns<K> => fn();
 
-type INonNullFn<
-  K extends keyof ITypeMap,
-  Fn extends keyof IFnsType<K>
-> = IFnsType<Exclude<ITypeMap[K], null>>[Fn];
+type INonNullFn<K extends IKey, Fn extends keyof IFnsType<K>> = IFnsType<
+  Exclude<ITypeMap[K], null>
+>[Fn];
 
 type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
 
-interface IUnitFns<K extends keyof ITypeMap> {
+interface IUnitFns<K extends IKey> {
   _or: INonNullFn<K, "or">;
   _and: INonNullFn<K, "and">;
   _cmp: INonNullFn<K, "cmp">;
   _string: INonNullFn<K, "string">;
+  _clone: INonNullFn<K, "clone">;
 }
-type IUntFnsArgs<K extends keyof ITypeMap> = Optional<
+type IUnitFnsArgs<K extends IKey> = Optional<
   IUnitFns<K>,
-  "_or" | "_and" | "_string"
+  "_or" | "_and" | "_string" | "_clone"
 >;
 
-const unitFns = <K extends keyof ITypeMap, T>(
+const unitFns = <K extends IKey, T>(
   key: K,
-  argsFn: () => Partial<IFns<K>> & IUntFnsArgs<K> & T
+  argsFn: () => Partial<IFns<K>> & IUnitFnsArgs<K> & T
 ): IFns<K> & IUnitFns<K> & T => {
   type NonNull = Exclude<ITypeMap[K], null>;
   const args = argsFn();
@@ -247,7 +263,8 @@ const unitFns = <K extends keyof ITypeMap, T>(
       }),
     _and: args._and ?? ((a, b) => (args._cmp(a, b, true) === 0 ? [a] : [])),
     _cmp: args._cmp,
-    _string: args._string ?? JSON.stringify
+    _string: args._string ?? JSON.stringify,
+    _clone: args._clone ?? ((v) => v)
   };
 
   return {
@@ -276,6 +293,9 @@ const unitFns = <K extends keyof ITypeMap, T>(
     splitTypes(value) {
       return [value];
     },
+    clone(value) {
+      return value === null ? null : fns._clone(value as NonNull);
+    },
     ...fns
   };
 };
@@ -286,7 +306,8 @@ export const AnyFns = baseFns<"any">(() => ({
   cmp: () => Cmp.Equal,
   string: () => "any",
   isType: () => true,
-  splitTypes: () => [null].values()
+  splitTypes: () => [null],
+  clone: () => null
 }));
 
 export const NeverFns = unitFns("never", () => ({
@@ -304,7 +325,8 @@ export const NullFns = baseFns<"null">(() => ({
   cmp: () => Cmp.Equal,
   string: () => "null",
   isType: () => false,
-  splitTypes: () => [null].values()
+  splitTypes: () => [null],
+  clone: () => null
 }));
 
 export const BooleanFns = unitFns("boolean", () => ({
@@ -333,46 +355,64 @@ export const DateFns = unitFns("date", () => ({
   _cmp: (a: L.DateTime, b: L.DateTime) => {
     const cmp = a.toMillis() - b.toMillis();
     return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
-  }
+  },
+  _clone: (v) => L.DateTime.fromMillis(v.toMillis())
 }));
 
 export const DurationFns = unitFns("duration", () => ({
   _cmp: (a: L.Duration, b: L.Duration) => {
     const cmp = a.toMillis() - b.toMillis();
     return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  },
+  _clone: (v) => L.Duration.fromMillis(v.toMillis())
+}));
+
+export const LinkFns = unitFns("link", () => ({
+  _cmp: (_a, _b) => {
+    throw new Error("TODO");
   }
 }));
 
-type IKey<K extends "array" | "object"> = K extends "array" ? number : string;
-type IKnown<K extends "array" | "object"> = ITypeMap[K]["known"];
+export const WidgetFns = unitFns("widget", () => ({
+  _cmp: (_a, _b) => {
+    throw new Error("TODO");
+  }
+}));
+
+type IColKeyVal<K extends "array" | "object"> = K extends "array"
+  ? number
+  : string;
+type IColKnown<K extends "array" | "object"> = ITypeMap[K]["known"];
 interface ICollectionFnsArgs<K extends "array" | "object"> {
-  _get: <T>(obj: IKnown<K>, key: IKey<K>, never: T) => Type | T;
-  _keysOr: (a: IKey<K>, b: IKey<K>) => [IKey<K>] | [IKey<K>, IKey<K>];
-  _size: (obj: IKnown<K>) => number;
-  _unionKeys?: (as: IKnown<K>, bs: IKnown<K>) => Iterable<IKey<K>>;
-  _new: (iter?: Iterable<[IKey<K>, Type]>) => IKnown<K>;
-  _stringKey: (key: IKey<K>) => string;
+  _get: <T>(obj: IColKnown<K>, key: IColKeyVal<K>, never: T) => Type | T;
+  _keysOr: (
+    a: IColKeyVal<K>,
+    b: IColKeyVal<K>
+  ) => [IColKeyVal<K>] | [IColKeyVal<K>, IColKeyVal<K>];
+  _size: (obj: IColKnown<K>) => number;
+  _unionKeys?: (as: IColKnown<K>, bs: IColKnown<K>) => Iterable<IColKeyVal<K>>;
+  _new: (iter?: Iterable<[IColKeyVal<K>, Type]>) => IColKnown<K>;
+  _stringKey: (key: IColKeyVal<K>) => string;
   _stringWrap: [string, string];
 }
 
 interface ICollectionFns<K extends "array" | "object"> {
   size: (obj: ITypeMap[K]) => number;
   knownSize: (obj: ITypeMap[K]) => number;
-  get: (obj: ITypeMap[K], key: IKey<K>) => Type;
+  get: (obj: ITypeMap[K], key: IColKeyVal<K>) => Type;
 }
 
 export const collectionFns = <K extends "array" | "object", V>(
   key: K,
   argsFn: () => ICollectionFnsArgs<K>,
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   extendFns: () => V = () => ({}) as V
 ): IFns<K> & ICollectionFns<K> & V => {
-  type IKeys = Iterable<IKey<K>>;
+  type IColKeyVals = Iterable<IColKeyVal<K>>;
   const args = argsFn();
 
   const _get = <T = never>(
     obj: ITypeMap[K],
-    key: IKey<K>,
+    key: IColKeyVal<K>,
     never: T = null as T
   ): Type | T => {
     const val = args._get(obj.known, key, never);
@@ -405,15 +445,15 @@ export const collectionFns = <K extends "array" | "object", V>(
     args._unionKeys ??
     ((as, bs) =>
       UtilFns.or(
-        [...(as.keys() as IKeys)],
-        [...(bs.keys() as IKeys)],
+        [...(as.keys() as IColKeyVals)],
+        [...(bs.keys() as IColKeyVals)],
         args._keysOr
       ));
 
   function* unionVals(
     as: ITypeMap[K],
     bs: ITypeMap[K]
-  ): Iterable<[IKey<K>, Type]> {
+  ): Iterable<[IColKeyVal<K>, Type]> {
     for (const key of unionKeys(as.known, bs.known)) {
       yield [key, _get(as, key, $never).or(_get(bs, key, $never))];
     }
@@ -426,7 +466,7 @@ export const collectionFns = <K extends "array" | "object", V>(
       return [{ known, unknown }] as [ITypeMap[K]];
     },
     and(as, bs) {
-      const res: Array<[IKey<K>, Type]> = [];
+      const res: Array<[IColKeyVal<K>, Type]> = [];
 
       for (const key of unionKeys(as.known, bs.known)) {
         const a = _get(as, key, null);
@@ -448,7 +488,7 @@ export const collectionFns = <K extends "array" | "object", V>(
     cmp,
     string(obj) {
       const strs: string[] = [];
-      for (const key of obj.known.keys() as IKeys) {
+      for (const key of obj.known.keys() as IColKeyVals) {
         const value: Type = _get(obj, key, $never);
         strs.push(`${args._stringKey(key)}${value.toString()}`);
       }
@@ -468,25 +508,38 @@ export const collectionFns = <K extends "array" | "object", V>(
     },
     isType(obj) {
       if (obj.unknown.type !== "never") return true;
-      for (const key of obj.known.keys() as IKeys) {
+      for (const key of obj.known.keys() as IColKeyVals) {
         const val = args._get(obj.known, key, null as never);
         if (val.isType()) return true;
       }
       return false;
     },
     *splitTypes(obj): Iterable<ITypeMap[K]> {
-      const combos: Array<Iterable<any>> = [obj.unknown.splitTypes()];
+      // combos[0] => Iterable<Type>
+      // combos.slice(1) => Iterable<[IColKeyVal<K>, Type]>
+      const combos: Array<Iterable<unknown>> = [obj.unknown.splitTypes()];
 
-      for (const key of obj.known.keys() as IKeys) {
-        combos.push(
-          UtilFns.map(_get(obj, key).splitTypes(), (val) => [key, val])
-        );
+      for (const key of obj.known.keys() as IColKeyVals) {
+        combos.push(UtilFns.map(_get(obj, key).splitTypes(), (v) => [key, v]));
       }
 
-      for (const [unknown, ...known] of UtilFns.cartesian(combos)) {
-        const res = { known: args._new(known), unknown };
-        yield res as ITypeMap[K];
+      for (const obj of UtilFns.cartesian(combos)) {
+        const unknown = obj[0] as Type;
+        const knownVals = obj.slice(1) as Array<[IColKeyVal<K>, Type]>;
+        const known = args._new(knownVals) as any; // IColKnown<K>
+        yield { known, unknown };
       }
+    },
+    clone(obj): ITypeMap[K] {
+      const unknown = obj.unknown.clone();
+      const knownVals: Array<[any, Type]> = [];
+
+      for (const key of obj.known.keys() as IColKeyVals) {
+        knownVals.push([key, _get(obj, key).clone()]);
+      }
+
+      const known = args._new(knownVals);
+      return { known, unknown } as ITypeMap[K];
     },
     ...extendFns()
   };
@@ -544,7 +597,8 @@ export const FunctionFns = baseFns<"function">(() => {
     cmp,
     string: () => "<function>",
     isType: () => false,
-    splitTypes: (val) => [val].values()
+    splitTypes: (val) => [val],
+    clone: (fn) => fn.bind({})
   };
 });
 
@@ -554,7 +608,7 @@ type IOptional = Type[] | [...Type[], IVararg];
 type IVararg = [Type];
 
 interface IFnDec<T> {
-  (args: IArgs, fn: IFn<Type>): T;
+  (args: IArgs, fn: IFn<Type<any>>): T;
   (args: IArgs, type: Type, valufy: number[], valFn: IFn<any>): T;
 }
 
@@ -609,7 +663,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
 
       for (const pos of vectorize) {
         const arg = args[pos];
-        if (arg.type !== "array") continue;
+        if (arg.type !== "array" || pos >= args.length) continue;
         vecMap.set(pos, arg as Type<"array">);
       }
 
@@ -633,7 +687,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
           subArgs[vecPos] = ArrayFns.get($vecArg.value, subPos);
         }
 
-        $res = clone($res);
+        $res = $res.clone();
         $res.value.known.push(fn(...subArgs));
 
         if (subPos + 1 >= min) {
@@ -647,7 +701,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
         const subArgs = [...args];
 
         for (const [vecPos, vecArg] of vecMap.entries()) {
-          subArgs[vecPos] = ArrayFns.get(vecArg.value, max);
+          subArgs[vecPos] = vecArg.value.known[max] ?? vecArg.value.unknown;
         }
 
         results[lastPos] = $array(last.value.known, fn(...subArgs));
@@ -749,16 +803,12 @@ export const Fns = {
   date: DateFns,
   duration: DurationFns,
   function: FunctionFns,
-  link: () => {
-    throw new Error("TODO");
-  },
+  link: LinkFns,
   null: NullFns,
   number: NumberFns,
   object: ObjectFns,
   string: StringFns,
-  widget: () => {
-    throw new Error("TODO");
-  }
+  widget: WidgetFns
 };
 
 const getFns = <K extends keyof typeof Fns>(key: K): IFnsType<unknown> =>
@@ -776,7 +826,7 @@ export const $never = type(
 
 export const $array = type(
   ArrayFns.new([], $any),
-  <K extends Type, U extends Type = typeof $never>(known: K[], unknown?: U) =>
+  <K extends Type, U extends Type>(known: K[], unknown?: U) =>
     type(ArrayFns.new(known, unknown ?? $never))
 );
 

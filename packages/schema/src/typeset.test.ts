@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { $fn } from "./builtinset";
 import {
   $any,
   $array,
@@ -79,6 +80,32 @@ describe("util", () => {
     test("disjoint", () => {
       expect(cmp(ab, bc, _cmp)).toBe(Cmp.DisjointGt);
       expect(cmp(bc, ab, _cmp)).toBe(Cmp.DisjointLt);
+    });
+  });
+
+  describe("cartesian", () => {
+    const cartesian = <T>(a: T[][]): T[][] => [...UtilFns.cartesian(a)];
+
+    test("single", () => {
+      const input = [[1], [2], [3]];
+      const output = [...UtilFns.cartesian(input)];
+      expect(output).toEqual([[1, 2, 3]]);
+    });
+
+    test("double", () => {
+      expect(cartesian([[0, 1], [2], [3]])).toEqual([
+        [0, 2, 3],
+        [1, 2, 3]
+      ]);
+    });
+
+    test("double-double", () => {
+      expect(cartesian([[0, 1], [2], [3, 4]])).toEqual([
+        [0, 2, 3],
+        [1, 2, 3],
+        [0, 2, 4],
+        [1, 2, 4]
+      ]);
     });
   });
 });
@@ -264,7 +291,7 @@ describe("typeset", () => {
       const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
 
       test(name, () => {
-        eq(types[0], $never("TODO"));
+        eq($fn.choice(...types.slice(0, 3)), types[3]);
       });
     }
   });
