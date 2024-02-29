@@ -42,13 +42,9 @@ export const $function = (
   }
 
   const set: IPossibleType[] = [];
-  const argCombos = [
-    ...cartesian(
-      args.map((arg) =>
-        arg.set.map((possible) => ({ id: arg.id, ...possible }))
-      )
-    )
-  ];
+  const argCombos = cartesian(
+    args.map((arg) => arg.set.map((possible) => ({ id: arg.id, ...possible })))
+  );
 
   outer: for (const argCombo of argCombos) {
     const deps = new Map<id, Type>();
