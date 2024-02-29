@@ -1,49 +1,47 @@
-import * as T from "./types";
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+import {
+  $any,
+  $boolean,
+  $link,
+  $never,
+  $null,
+  $string,
+  define,
+  type Type
+} from "./types";
 
-const lte = T.Function.define("lte", [])
-  .add([T.Any, T.Any], () => T.Never.error("TODO: implement 'lte'"))
+const lte = define("lte", [])
+  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) <= 0))
   .build();
 
-const gt = T.Function.define("gt", [])
-  .add([T.Any, T.Any], () => T.Never.error("TODO: implement 'gt'"))
+const gt = define("gt", [])
+  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) > 0))
   .build();
 
-const gte = T.Function.define("gte", [])
-  .add([T.Any, T.Any], () => T.Never.error("TODO: implement 'gte'"))
+const gte = define("gte", [])
+  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) >= 0))
   .build();
 
-const eq = T.Function.define("eq", [])
-  .add([T.Any, T.Any], () => T.Never.error("TODO: implement 'eq'"))
+const eq = define("eq", [])
+  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) === 0))
   .build();
 
-const neq = T.Function.define("neq", [])
-  .add([T.Any, T.Any], () => T.Never.error("TODO: implement 'neq'"))
+const neq = define("neq", [])
+  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) !== 0))
   .build();
 
-export const op = { lte, gt, gte, eq, neq };
+export const $op = { lte, gt, gte, eq, neq };
 
-const choice = T.Function.define("choice", [0, 1, 2])
-  .add([T.Boolean, T.Any, T.Any], (cond, pass, fail) =>
-    /**
-     * TODO: {} should be false
-     */
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-    cond.isType() ? pass.or(fail) : cond.value ? pass : fail
+const choice = define("choice", [0, 1, 2])
+  .add([$boolean, $any, $any], (cond: Type<"boolean">, pass, fail) =>
+    cond.isType() ? pass.or(fail) : cond.value! ? pass : fail
   )
   .build();
 
-// const elink: T.FunctionType = T.Function.define("elink", [0])
-//   .add([T.String, T.String], T.Link, [0, 1], (a: string, d: string) =>
-//     T.Widget.literal(Widgets.externalLink(a, d))
-//   )
-//   .add([T.String, [T.Null]], (s) => elink.eval(s, s))
-//   .add([T.Null, [T.Any]], () => T.Null)
-//   .build();
-
-const elink: T.FunctionType = T.Function.define("elink", [0])
-  .add([T.String, T.String], T.Link, [0, 1], () => T.Never.error("TODO"))
-  .add([T.String, [T.Null]], () => T.Never.error("TODO"))
-  .add([T.Null, [T.Any]], () => T.Never.error("TODO"))
+const elink = define("elink", [0])
+  .add([$string, $string], $link, [0, 1], () => $never("TODO"))
+  .add([$string, [$null]], () => $never("TODO"))
+  .add([$null, [$any]], () => $never("TODO"))
   .build();
 
-export const fn = { choice, elink };
+export const $fn = { choice, elink };

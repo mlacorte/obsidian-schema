@@ -37,7 +37,8 @@ module.exports = {
     "simple-import-sort/imports": "error",
     "simple-import-sort/exports": "error",
     // custom
-    "@typescript-eslint/consistent-type-assertions": "off"
+    "@typescript-eslint/consistent-type-assertions": "off",
+    "@typescript-eslint/no-non-null-assertion": "off"
   },
   ignorePatterns: [
     "**/dist/**/*.js",

@@ -1,991 +1,780 @@
-import I from "immutable";
-import type * as L from "luxon";
+/* eslint-disable @typescript-eslint/unbound-method */
+import * as L from "luxon";
 
-import { type Link, type Widget } from "./stubs";
+import type * as Stubs from "./stubs";
+import * as UtilFns from "./util";
+import { Cmp } from "./util";
 
-interface TypeMap {
-  null: { type: NullType; value: null };
-  number: { type: NumberType; value: number | AnyType };
-  string: { type: StringType; value: string | AnyType };
-  boolean: { type: BooleanType; value: boolean | AnyType };
-  date: { type: DateType; value: L.DateTime | AnyType };
-  duration: { type: DurationType; value: L.Duration | AnyType };
-  link: { type: LinkType; value: Link | AnyType };
-  widget: { type: WidgetType; value: Widget | AnyType };
-  object: { type: ObjectType; value: ObjectVal };
-  array: { type: ArrayType; value: ArrayVal };
-  function: { type: FunctionType; value: FunctionVal };
-  union: { type: UnionType; value: I.Map<ValueKey, I.Set<ValueType>> };
-  any: { type: AnyType; value: AnyType };
-  never: { type: NeverType; value: I.Set<NeverVal> };
+export type IKey = keyof ITypeMap;
+
+export interface ITypeMap<IsVal extends boolean = false> {
+  any: null;
+  never: (IsVal extends true ? never : null) | string;
+  array: {
+    known: Array<Type<IKey, IsVal>>;
+    unknown: Type<IKey, IsVal>;
+  };
+  boolean: (IsVal extends true ? never : null) | boolean;
+  date: (IsVal extends true ? never : null) | L.DateTime;
+  duration: (IsVal extends true ? never : null) | L.Duration;
+  function: (...args: Array<Type<IKey, IsVal>>) => Type<IKey, IsVal>;
+  link: Stubs.Link;
+  null: null;
+  number: (IsVal extends true ? never : null) | number;
+  object: {
+    known: Map<string, Type<IKey, IsVal>>;
+    unknown: Type<IKey, IsVal>;
+  };
+  string: (IsVal extends true ? never : null) | string;
+  widget: Stubs.Widget;
+}
+export type IType<K extends IKey = IKey, IsVal extends boolean = false> = [
+  IVal<K, IsVal>,
+  ...Array<IVal<K, IsVal>>
+];
+export type IVal<K extends IKey = IKey, IsVal extends boolean = false> = {
+  [V in K]: { type: V; values: IValues<V, IsVal> };
+}[K];
+export type IValues<K extends IKey = IKey, IsVal extends boolean = false> = [
+  ITypeMap<IsVal>[K],
+  ...Array<ITypeMap<IsVal>[K]>
+];
+
+const $isType = Symbol("type");
+export const isType = (obj: object): obj is Type => $isType in obj;
+
+export interface Type<K extends IKey = IKey, IsVal extends boolean = false> {
+  [$isType]: true;
+  types: IType<K, IsVal>;
+  get type(): K;
+  get values(): Array<ITypeMap<IsVal>[K]>;
+  get value(): ITypeMap<IsVal>[K];
+  or: (other: Type) => Type;
+  and: (other: Type) => Type;
+  cmp: (other: Type, sortOnly?: boolean) => Cmp;
+  toString: () => string;
+  isType: () => this is Type<K, true>;
+  splitTypes: () => Iterable<Type<K, IsVal>>;
+  clone: () => Type<K, IsVal>;
 }
 
-type SimpleKey =
-  | "null"
-  | "number"
-  | "string"
-  | "boolean"
-  | "date"
-  | "duration"
-  | "link"
-  | "widget";
-type CompositeKey = "object" | "array";
-type ValueKey = SimpleKey | CompositeKey | "function";
-type TypeKey = keyof TypeMap;
+export const type: {
+  <K extends IKey>(types: IType<K>): Type<K>;
+  <K extends IKey, T>(types: IType<K>, self: T): Type<K> & T;
+} = <K extends IKey, T>(types: IType<K>, self?: T): Type<K> | (Type & T) => {
+  const obj = (self ?? {}) as Type<any>;
+  obj[$isType] = true;
+  obj.types = types;
+  Object.defineProperty(obj, "type", { get: () => obj.types[0].type });
+  Object.defineProperty(obj, "values", { get: () => obj.types[0].values });
+  Object.defineProperty(obj, "value", { get: () => obj.types[0].values[0] });
+  obj.or = (other) => type(TypeFns.or(obj.types, other.types));
+  obj.and = (other) => type(TypeFns.and(obj.types, other.types));
+  obj.cmp = (other, sortOnly = false) =>
+    TypeFns.cmp(obj.types, other.types, sortOnly);
+  obj.toString = () => TypeFns.string(obj.types);
+  obj.isType = () => TypeFns.isType(obj.types);
+  obj.splitTypes = () => UtilFns.map(TypeFns.splitTypes(obj.types), type);
+  obj.clone = () => type(TypeFns.clone(obj.types));
+  return obj;
+};
 
-type TypeOf<K extends TypeKey = TypeKey> = TypeMap[K]["type"];
-type ValueOf<K extends TypeKey> = TypeMap[K]["value"];
+export const val = <K extends IKey>(key: K, value: ITypeMap[K]): IType<K> =>
+  [{ type: key, values: [value] }] as IType<K>;
 
-export type Type = TypeOf<TypeKey>;
-type ValueType = TypeOf<ValueKey>;
+export const callable = <T extends { $: (...args: any[]) => any }>(
+  obj: T
+): T["$"] & Omit<T, "$"> => {
+  const fn = obj.$ as T["$"] & Omit<T, "$">;
+  delete (obj as any).$;
 
-export const enum Cmp {
-  Equal = 0b00, // 0
-  Subset = 0b01, // 1
-  Superset = 0b10, // 2
-  Disjoint = 0b11 // 3
-}
-
-abstract class TypeBase<K extends TypeKey> implements I.ValueObject {
-  constructor(
-    public type: K,
-    public value: ValueOf<K>
-  ) {}
-
-  equals(other: unknown): boolean {
-    return (
-      other instanceof TypeBase && this.cmp(other as TypeOf<K>) === Cmp.Equal
-    );
+  for (const key of Object.keys(obj) as Array<keyof Omit<T, "$">>) {
+    fn[key] = obj[key] as any;
   }
 
-  hashCode(): number {
-    return 0x42108460 ^ I.hash(this.type) ^ I.hash(this.value);
-  }
+  return fn;
+};
 
-  isValue(): boolean {
-    return !this.isType();
-  }
+export const TypeFns = {
+  or(as: IType, bs: IType): IType {
+    // short circuit on identity
+    if (as === bs) return as;
 
-  abstract or(other: Type): Type;
-  abstract and(other: Type): Type;
-  abstract cmp(other: Type): Cmp;
-  abstract toString(): string;
-  abstract toJSON(): unknown;
-  abstract isType(): boolean;
-  abstract types(): I.Seq.Indexed<Type>;
-}
+    const a = as[0];
+    const b = bs[0];
 
-// any
-class AnyType extends TypeBase<"any"> {
-  constructor() {
-    super("any", undefined as unknown as AnyType);
-    this.value = this;
-  }
+    // any
+    if (a.type === "any") return as;
+    if (b.type === "any") return bs;
 
-  or(_other: Type): Type {
-    return TAny;
-  }
+    // never
+    if (a.type === "never") return bs;
+    if (b.type === "never") return as;
 
-  and(other: Type): Type {
-    return other;
-  }
+    // vals
+    return [...UtilFns.or<IVal>(as, bs, ValFns.or)] as IType;
+  },
+  and(as: IType, bs: IType): IType {
+    // short circuit on identity
+    if (as === bs) return as;
 
-  cmp(other: Type): Cmp {
-    return other instanceof AnyType ? Cmp.Equal : Cmp.Superset;
-  }
+    const a = as[0];
+    const b = bs[0];
 
-  toString(): string {
-    return "any";
-  }
+    // any
+    if (a.type === "any") return bs;
+    if (b.type === "any") return as;
 
-  toJSON(): unknown {
-    return { type: "any" };
-  }
+    // never
+    if (a.type === "never") return as;
+    if (b.type === "never") return bs;
 
-  isType(): true {
-    return true;
-  }
+    // vals
+    const res = [...UtilFns.and<IVal>(as, bs, ValFns.and, ValFns.cmp)];
+    return res.length === 0
+      ? [{ type: "never", values: [NeverFns.error(as, bs)] }]
+      : (res as IType);
+  },
+  cmp(as: IType, bs: IType, sortOnly = false): Cmp {
+    // short circuit on identity
+    if (as === bs) return Cmp.Equal;
 
-  types(): I.Seq.Indexed<Type> {
-    return I.Seq([this]);
-  }
-}
+    const a = as[0];
+    const b = bs[0];
 
-const TAny = new AnyType();
+    // any
+    if (a.type === "any") return Cmp.Superset;
+    if (b.type === "any") return Cmp.Subset;
 
-// never
-class NeverVal extends I.Record({
-  message: "",
-  vars: I.Set<string>()
-}) {}
+    // never
+    if (a.type === "never") return Cmp.Subset;
+    if (b.type === "never") return Cmp.Superset;
 
-class NeverType extends TypeBase<"never"> {
-  constructor(value: ValueOf<"never"> = I.Set()) {
-    super("never", value);
-  }
-
-  error(message: string, vars: string[] = []): NeverType {
-    return message === undefined
-      ? TNever
-      : new NeverType(
-          this.value.add(new NeverVal({ message, vars: I.Set(vars) }))
-        );
-  }
-
-  andError(a: Type, b: Type): NeverType {
-    return TNever.error(
-      `Can't combine '${a.toString()}' and '${b.toString()}'.`
-    );
-  }
-
-  or(other: Type): Type {
-    return other instanceof NeverType
-      ? new NeverType(this.value.union(other.value).sort())
-      : other;
-  }
-
-  and(other: Type): Type {
-    return other instanceof NeverType
-      ? new NeverType(this.value.intersect(other.value).sort())
-      : this;
-  }
-
-  cmp(other: Type): Cmp {
-    return other instanceof NeverType
-      ? this.value.equals(other.value)
-        ? Cmp.Equal
-        : Cmp.Disjoint
-      : Cmp.Subset;
-  }
-
-  toString(): string {
-    if (this.value.size === 0) {
-      return "never";
+    // vals
+    return UtilFns.cmp(as, bs, ValFns.cmp, sortOnly);
+  },
+  string: (types: IType) =>
+    types
+      .flatMap((t) => t.values.map((v) => getFns(t.type).string(v)))
+      .join(" or "),
+  isType(types: IType): boolean {
+    if (types.length > 1) return true;
+    for (const t of types) {
+      const { isType } = getFns(t.type);
+      for (const v of t.values) {
+        if (isType(v)) return true;
+      }
     }
-
-    return this.value
-      .toSeq()
-      .map((v) => {
-        const message = JSON.stringify(v.message);
-        const vars = v.vars.isEmpty() ? `, [${v.vars.join(", ")}]` : "";
-        return `error(${message}${vars})`;
-      })
-      .join(" and ");
-  }
-
-  toJSON(): unknown {
-    return {
-      type: "never",
-      value: this.value
-        .toArray()
-        .map((v) => ({ message: v.message, vars: v.vars.toArray() }))
-    };
-  }
-
-  isType(): true {
-    return true;
-  }
-
-  types(): I.Seq.Indexed<Type> {
-    return I.Seq([this]);
-  }
-}
-
-const TNever = new NeverType();
-
-abstract class ValueBase<K extends ValueKey> extends TypeBase<K> {
-  or(other: Type): Type {
-    return other instanceof AnyType
-      ? other
-      : other instanceof NeverType
-        ? (this as unknown as TypeOf<K>)
-        : UnionType.or(this as unknown as TypeOf<K>, other);
-  }
-
-  and(other: Type): Type {
-    return other instanceof AnyType
-      ? (this as unknown as TypeOf<K>)
-      : other instanceof NeverType
-        ? other
-        : UnionType.and(this as unknown as TypeOf<K>, other);
-  }
-
-  cmp(other: Type): Cmp {
-    return other instanceof AnyType
-      ? Cmp.Subset
-      : other instanceof NeverType
-        ? Cmp.Superset
-        : UnionType.cmp(this as unknown as TypeOf<K>, other);
-  }
-
-  types(): I.Seq.Indexed<Type> {
-    return I.Seq([this as unknown as TypeOf<K>]);
-  }
-
-  protected abstract _or(
-    other: TypeOf<K>
-  ): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>];
-  protected abstract _and(other: TypeOf<K>): [] | [TypeOf<K>];
-  protected abstract _cmp(other: TypeOf<K>): Cmp;
-}
-
-type IsType<T> = T extends NullType ? T : T & { value: AnyType };
-type IsValue<T extends { value: unknown }> = T extends NullType
-  ? T
-  : T & { value: Exclude<T["value"], AnyType> };
-
-abstract class UnitBase<K extends SimpleKey> extends ValueBase<K> {
-  constructor(type: K, value?: ValueOf<K>) {
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-    super(type, value === undefined ? TAny : value);
-  }
-
-  _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
-    const cmp = this.cmp(other);
-
-    return cmp === Cmp.Disjoint
-      ? [this as unknown as TypeOf<K>, other]
-      : cmp === Cmp.Subset
-        ? [other]
-        : [this as unknown as TypeOf<K>];
-  }
-
-  _and(other: TypeOf<K>): [] | [TypeOf<K>] {
-    const cmp = this.cmp(other);
-
-    return cmp === Cmp.Disjoint
-      ? []
-      : cmp === Cmp.Subset
-        ? [this as unknown as TypeOf<K>]
-        : [other];
-  }
-
-  toString(): string {
-    return this.isType() ? this.type : JSON.stringify(this.value);
-  }
-
-  toJSON(): unknown {
-    return this.isValue()
-      ? { type: this.type, value: this.value }
-      : { type: this.type };
-  }
-
-  _cmp(other: TypeOf<K>): Cmp {
-    const ltype = this.isType();
-    const rtype = other.isType();
-
-    return ltype && rtype
-      ? Cmp.Equal
-      : ltype
-        ? Cmp.Superset
-        : rtype
-          ? Cmp.Subset
-          : this._equals(
-                this.value as Exclude<ValueOf<K>, AnyType>,
-                other.value as Exclude<ValueOf<K>, AnyType>
-              )
-            ? Cmp.Equal
-            : Cmp.Disjoint;
-  }
-
-  isType(): this is IsType<this> {
-    return (this.value as any) instanceof AnyType;
-  }
-
-  isValue(): this is IsValue<this> {
-    return !this.isType();
-  }
-
-  wrap(val: ValueOf<K> | TypeOf<K>): TypeOf<K> {
-    return val instanceof UnitBase ? val : this.literal(val);
-  }
-
-  protected _equals(
-    a: Exclude<ValueOf<K>, AnyType>,
-    b: Exclude<ValueOf<K>, AnyType>
-  ): boolean {
-    return a === b;
-  }
-
-  abstract literal(val: ValueOf<K>): TypeOf<K>;
-}
-
-class NullType extends UnitBase<"null"> {
-  constructor() {
-    super("null", null);
-  }
-
-  literal(_val: null): NullType {
-    return TNull;
-  }
-
-  protected override _equals(_a: null, _b: null): boolean {
-    return true;
-  }
-}
-
-class NumberType extends UnitBase<"number"> {
-  constructor(value?: ValueOf<"number">) {
-    super("number", value);
-  }
-
-  literal(value: number): IsValue<NumberType> {
-    return new NumberType(value) as IsValue<NumberType>;
-  }
-}
-
-class StringType extends UnitBase<"string"> {
-  constructor(value?: ValueOf<"string">) {
-    super("string", value);
-  }
-
-  literal(value: string): IsValue<StringType> {
-    return new StringType(value) as IsValue<StringType>;
-  }
-}
-
-class BooleanType extends UnitBase<"boolean"> {
-  constructor(value?: ValueOf<"boolean">) {
-    super("boolean", value);
-  }
-
-  literal(value: boolean): IsValue<BooleanType> {
-    return new BooleanType(value) as IsValue<BooleanType>;
-  }
-
-  override _or(other: BooleanType): [BooleanType] {
-    const cmp = this.cmp(other);
-
-    return cmp === Cmp.Disjoint
-      ? [TBoolean] // true | false = boolean
-      : cmp === Cmp.Subset
-        ? [other]
-        : [this];
-  }
-}
-
-class DateType extends UnitBase<"date"> {
-  constructor(value?: ValueOf<"date">) {
-    super("date", value);
-  }
-
-  literal(value: L.DateTime): IsValue<DateType> {
-    return new DateType(value) as IsValue<DateType>;
-  }
-
-  protected override _equals(a: Link, b: Link): boolean {
-    return a.equals(b);
-  }
-}
-
-class DurationType extends UnitBase<"duration"> {
-  constructor(value?: ValueOf<"duration">) {
-    super("duration", value);
-  }
-
-  literal(value: L.Duration): IsValue<DurationType> {
-    return new DurationType(value) as IsValue<DurationType>;
-  }
-
-  protected override _equals(a: L.Duration, b: L.Duration): boolean {
-    return a.equals(b);
-  }
-}
-
-class LinkType extends UnitBase<"link"> {
-  constructor(value?: ValueOf<"link">) {
-    super("link", value);
-  }
-
-  literal(value: Link): IsValue<LinkType> {
-    return new LinkType(value) as IsValue<LinkType>;
-  }
-}
-
-class WidgetType extends UnitBase<"widget"> {
-  constructor(value?: ValueOf<"widget">) {
-    super("widget", value);
-  }
-
-  literal(value: Widget): IsValue<WidgetType> {
-    return new WidgetType(value) as IsValue<WidgetType>;
-  }
-
-  protected override _equals(a: Widget, b: Widget): boolean {
-    return a.$widget === b.$widget;
-  }
-}
-
-const TNull = new NullType();
-const TNumber = new NumberType() as IsType<NumberType>;
-const TString = new StringType() as IsType<StringType>;
-const TBoolean = new BooleanType() as IsType<BooleanType>;
-const TDate = new DateType() as IsType<DateType>;
-const TDuration = new DurationType() as IsType<DurationType>;
-const TLink = new LinkType() as IsType<LinkType>;
-const TWidget = new WidgetType() as IsType<WidgetType>;
-
-const TTrue = TBoolean.literal(true);
-const TFalse = TBoolean.literal(false);
-
-// union
-class UnionType extends TypeBase<"union"> {
-  private constructor(value: ValueOf<"union">) {
-    super("union", value);
-  }
-
-  private static vals(val: ValueType | UnionType): ValueOf<"union"> {
-    return val instanceof UnionType
-      ? val.value
-      : I.Map([[val.type, I.Set([val])]]);
-  }
-
-  private static shrink(vals: ValueOf<"union">, def: Type): Type {
-    const size = vals.map((s) => s.size).reduce((l, r) => l + r, 0);
-
-    switch (size) {
-      case 0:
-        return def;
-      case 1:
-        return vals.first<I.Set<ValueType>>().first<ValueType>();
-      default:
-        return new UnionType(vals);
-    }
-  }
-
-  static or(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Type {
-    return UnionType.shrink(
-      UnionType.vals(ltype).mergeWith(
-        (ls, rs) => ls.flatMap((l) => rs.flatMap((r) => (l as any)._or(r))),
-        UnionType.vals(rtype)
-      ),
-      TNever
-    );
-  }
-
-  static and(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Type {
-    const lvals = UnionType.vals(ltype);
-    const rvals = UnionType.vals(rtype);
-
-    return UnionType.shrink(
-      I.Set.union<ValueKey>([lvals.keySeq(), rvals.keySeq()])
-        .toMap()
-        .flatMap((k) => {
-          const res: I.Set<ValueType> = (
-            lvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
-          ).flatMap((l) =>
-            (
-              rvals.get(k, I.Set()) as I.Set<NumberType /* ValueType */>
-            ).flatMap((r) => l._and(r))
-          );
-          return res.isEmpty() ? [] : [[k, res]];
-        }),
-      TNever.andError(ltype, rtype)
-    );
-  }
-
-  static cmp(ltype: ValueType | UnionType, rtype: ValueType | UnionType): Cmp {
-    const lvals = UnionType.vals(ltype);
-    const rvals = UnionType.vals(rtype);
-    const keys = I.Set.intersect<ValueKey>([lvals.keySeq(), rvals.keySeq()]);
-
-    let res =
-      (keys.size < rvals.size ? Cmp.Subset : Cmp.Equal) |
-      (keys.size < lvals.size ? Cmp.Superset : Cmp.Equal);
-
-    if (res === Cmp.Disjoint) {
-      return Cmp.Disjoint;
-    }
-
-    for (const key of keys) {
-      const lval = lvals.get(key) as I.Set<NumberType /* ValueType */>;
-      const rval = rvals.get(key) as I.Set<NumberType /* ValueType */>;
-
-      for (const l of lval) {
-        let curr = Cmp.Disjoint;
-
-        for (const r of rval) {
-          const next = l._cmp(r);
-
-          if (next === Cmp.Disjoint) {
-            continue;
-          }
-
-          if (curr === Cmp.Disjoint) {
-            curr = next;
-            continue;
-          }
-
-          curr |= next;
-
-          if (curr === Cmp.Disjoint) {
-            return Cmp.Disjoint;
-          }
-        }
-
-        res |= curr;
-
-        if (res === Cmp.Disjoint) {
-          return Cmp.Disjoint;
+    return false;
+  },
+  *splitTypes(types: IType): Iterable<IType> {
+    for (const t of types) {
+      const { splitTypes } = getFns(t.type);
+      for (const v of t.values) {
+        for (const single of splitTypes(v) as Iterable<ITypeMap[IKey]>) {
+          yield val(t.type, single);
         }
       }
     }
+  },
+  clone(types: IType): IType {
+    return [
+      ...types.map((t) => {
+        const { clone } = getFns(t.type);
+        return {
+          type: t.type,
+          values: [...t.values.map(clone)]
+        };
+      })
+    ] as IType;
+  }
+};
+
+export const ValFns = {
+  or(a: IVal, b: IVal): [IVal] | [IVal, IVal] {
+    if (a.type !== b.type) {
+      return StringFns._cmp(a.type, b.type) < 0 ? [a, b] : [b, a];
+    }
+
+    return [
+      {
+        type: a.type,
+        values: [...UtilFns.or(a.values, b.values, getFns(a.type).or)]
+      }
+    ] as [IVal];
+  },
+  and(a: IVal, b: IVal): [] | [IVal] {
+    if (a.type !== b.type) return [];
+
+    const { and, cmp } = getFns(a.type);
+    const values = [...UtilFns.and(a.values, b.values, and, cmp)];
+    if (values.length === 0) return [];
+
+    return [{ type: a.type, values }] as [IVal];
+  },
+  cmp(a: IVal, b: IVal, sortOnly = false): Cmp {
+    const cmpVal = StringFns._cmp(a.type, b.type, sortOnly);
+    return UtilFns.cmp(
+      a.values,
+      b.values,
+      getFns(a.type).cmp,
+      sortOnly,
+      cmpVal
+    );
+  }
+};
+
+interface IFnsType<T> {
+  or: (a: T, b: T) => [T] | [T, T];
+  and: (a: T, b: T) => [] | [T];
+  cmp: (a: T, b: T, sortOnly?: boolean) => Cmp;
+  string: (value: T) => string;
+  isType: (value: T) => boolean;
+  splitTypes: (value: T) => Iterable<T>;
+  clone: (value: T) => T;
+}
+
+type IFns<K extends IKey> = IFnsType<ITypeMap[K]>;
+
+const baseFns = <K extends IKey>(fn: () => IFns<K>): IFns<K> => fn();
+
+type INonNullFn<K extends IKey, Fn extends keyof IFnsType<K>> = IFnsType<
+  Exclude<ITypeMap[K], null>
+>[Fn];
+
+type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
+
+interface IUnitFns<K extends IKey> {
+  _or: INonNullFn<K, "or">;
+  _and: INonNullFn<K, "and">;
+  _cmp: INonNullFn<K, "cmp">;
+  _string: INonNullFn<K, "string">;
+  _clone: INonNullFn<K, "clone">;
+}
+type IUnitFnsArgs<K extends IKey> = Optional<
+  IUnitFns<K>,
+  "_or" | "_and" | "_string" | "_clone"
+>;
+
+const unitFns = <K extends IKey, T>(
+  key: K,
+  argsFn: () => Partial<IFns<K>> & IUnitFnsArgs<K> & T
+): IFns<K> & IUnitFns<K> & T => {
+  type NonNull = Exclude<ITypeMap[K], null>;
+  const args = argsFn();
+  const fns = {
+    ...args,
+    _or:
+      args._or ??
+      ((a, b) => {
+        const sort = args._cmp(a, b, true);
+        return sort === Cmp.Equal ? [a] : sort < Cmp.Equal ? [a, b] : [b, a];
+      }),
+    _and: args._and ?? ((a, b) => (args._cmp(a, b, true) === 0 ? [a] : [])),
+    _cmp: args._cmp,
+    _string: args._string ?? JSON.stringify,
+    _clone: args._clone ?? ((v) => v)
+  };
+
+  return {
+    or(a, b) {
+      if (a === null) return [a];
+      if (b === null) return [b];
+      return fns._or(a as NonNull, b as NonNull);
+    },
+    and(a, b) {
+      if (a === null) return [b];
+      if (b === null) return [a];
+      return fns._and(a as NonNull, b as NonNull);
+    },
+    cmp(a, b, sortOnly = false) {
+      if (a === null && b === null) return Cmp.Equal;
+      if (a === null) return Cmp.Superset;
+      if (b === null) return Cmp.Subset;
+      return fns._cmp(a as NonNull, b as NonNull, sortOnly);
+    },
+    string(value) {
+      return value === null ? key : fns._string(value);
+    },
+    isType(value) {
+      return value === null;
+    },
+    splitTypes(value) {
+      return [value];
+    },
+    clone(value) {
+      return value === null ? null : fns._clone(value as NonNull);
+    },
+    ...fns
+  };
+};
+
+export const AnyFns = baseFns<"any">(() => ({
+  or: () => [null],
+  and: () => [null],
+  cmp: () => Cmp.Equal,
+  string: () => "any",
+  isType: () => true,
+  splitTypes: () => [null],
+  clone: () => null
+}));
+
+export const NeverFns = unitFns("never", () => ({
+  _cmp: (a, b, sortOnly) => StringFns._cmp(a, b, sortOnly),
+  _string: (msg) => `error(${JSON.stringify(msg)})`,
+  isType: () => true,
+  error(a: IType, b: IType): string {
+    return `Can't combine '${TypeFns.string(a)}' and '${TypeFns.string(b)}'.`;
+  }
+}));
+
+export const NullFns = baseFns<"null">(() => ({
+  or: () => [null],
+  and: () => [null],
+  cmp: () => Cmp.Equal,
+  string: () => "null",
+  isType: () => false,
+  splitTypes: () => [null],
+  clone: () => null
+}));
+
+export const BooleanFns = unitFns("boolean", () => ({
+  // promote true | false to boolean
+  or(a, b) {
+    if (a === null || b === null || (a && !b) || (b && !a)) return [null];
+    return [a && b];
+  },
+  _cmp: (a: boolean, b: boolean) =>
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
+}));
+
+export const NumberFns = unitFns("number", () => ({
+  _cmp: (a: number, b: number) =>
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
+}));
+
+export const StringFns = unitFns("string", () => ({
+  _cmp: (a: string, b: string) => {
+    const cmp = a.localeCompare(b);
+    return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  }
+}));
+
+export const DateFns = unitFns("date", () => ({
+  _cmp: (a: L.DateTime, b: L.DateTime) => {
+    const cmp = a.toMillis() - b.toMillis();
+    return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  },
+  _clone: (v) => L.DateTime.fromMillis(v.toMillis())
+}));
+
+export const DurationFns = unitFns("duration", () => ({
+  _cmp: (a: L.Duration, b: L.Duration) => {
+    const cmp = a.toMillis() - b.toMillis();
+    return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
+  },
+  _clone: (v) => L.Duration.fromMillis(v.toMillis())
+}));
+
+export const LinkFns = unitFns("link", () => ({
+  _cmp: (_a, _b) => {
+    throw new Error("TODO");
+  }
+}));
+
+export const WidgetFns = unitFns("widget", () => ({
+  _cmp: (_a, _b) => {
+    throw new Error("TODO");
+  }
+}));
+
+type IColKeyVal<K extends "array" | "object"> = K extends "array"
+  ? number
+  : string;
+type IColKnown<K extends "array" | "object"> = ITypeMap[K]["known"];
+interface ICollectionFnsArgs<K extends "array" | "object"> {
+  _get: <T>(obj: IColKnown<K>, key: IColKeyVal<K>, never: T) => Type | T;
+  _keysOr: (
+    a: IColKeyVal<K>,
+    b: IColKeyVal<K>
+  ) => [IColKeyVal<K>] | [IColKeyVal<K>, IColKeyVal<K>];
+  _size: (obj: IColKnown<K>) => number;
+  _unionKeys?: (as: IColKnown<K>, bs: IColKnown<K>) => Iterable<IColKeyVal<K>>;
+  _new: (iter?: Iterable<[IColKeyVal<K>, Type]>) => IColKnown<K>;
+  _stringKey: (key: IColKeyVal<K>) => string;
+  _stringWrap: [string, string];
+}
+
+interface ICollectionFns<K extends "array" | "object"> {
+  size: (obj: ITypeMap[K]) => number;
+  knownSize: (obj: ITypeMap[K]) => number;
+  get: (obj: ITypeMap[K], key: IColKeyVal<K>) => Type;
+}
+
+export const collectionFns = <K extends "array" | "object", V>(
+  key: K,
+  argsFn: () => ICollectionFnsArgs<K>,
+  extendFns: () => V = () => ({}) as V
+): IFns<K> & ICollectionFns<K> & V => {
+  type IColKeyVals = Iterable<IColKeyVal<K>>;
+  const args = argsFn();
+
+  const _get = <T = never>(
+    obj: ITypeMap[K],
+    key: IColKeyVal<K>,
+    never: T = null as T
+  ): Type | T => {
+    const val = args._get(obj.known, key, never);
+    if (val !== never) return val;
+    if (obj.unknown.type === "never") return never;
+    return obj.unknown.or($null);
+  };
+
+  const cmp = (as: ITypeMap[K], bs: ITypeMap[K], sortOnly = false): Cmp => {
+    let res: Cmp = Cmp.Equal;
+
+    for (const key of unionKeys(as.known, bs.known)) {
+      const a = _get(as, key, null);
+      if (a === null) return UtilFns.cmpJoin(res, Cmp.Subset);
+
+      const b = _get(bs, key, null);
+      if (b === null) return UtilFns.cmpJoin(res, Cmp.Superset);
+
+      const cmp = a.cmp(b, sortOnly);
+      if (sortOnly && cmp !== Cmp.Equal) return cmp;
+
+      res = UtilFns.cmpJoin(res, cmp);
+      if (UtilFns.isDisjoint(res)) return res;
+    }
+
+    return UtilFns.cmpJoin(res, as.unknown.cmp(bs.unknown, sortOnly));
+  };
+
+  const unionKeys =
+    args._unionKeys ??
+    ((as, bs) =>
+      UtilFns.or(
+        [...(as.keys() as IColKeyVals)],
+        [...(bs.keys() as IColKeyVals)],
+        args._keysOr
+      ));
+
+  function* unionVals(
+    as: ITypeMap[K],
+    bs: ITypeMap[K]
+  ): Iterable<[IColKeyVal<K>, Type]> {
+    for (const key of unionKeys(as.known, bs.known)) {
+      yield [key, _get(as, key, $never).or(_get(bs, key, $never))];
+    }
+  }
+
+  return {
+    or(as, bs) {
+      const unknown = as.unknown.or(bs.unknown);
+      const known = args._new(unionVals(as, bs));
+      return [{ known, unknown }] as [ITypeMap[K]];
+    },
+    and(as, bs) {
+      const res: Array<[IColKeyVal<K>, Type]> = [];
+
+      for (const key of unionKeys(as.known, bs.known)) {
+        const a = _get(as, key, null);
+        if (a === null) return [];
+
+        const b = _get(bs, key, null);
+        if (b === null) return [];
+
+        const val = a.and(b);
+        if (val.type === "never") return [];
+
+        res.push([key, val]);
+      }
+
+      const known = args._new(res.values());
+      const unknown = as.unknown.and(bs.unknown);
+      return [{ known, unknown }] as [ITypeMap[K]];
+    },
+    cmp,
+    string(obj) {
+      const strs: string[] = [];
+      for (const key of obj.known.keys() as IColKeyVals) {
+        const value: Type = _get(obj, key, $never);
+        strs.push(`${args._stringKey(key)}${value.toString()}`);
+      }
+      if (obj.unknown.type !== "never") {
+        strs.push(`of ${obj.unknown.toString()}`);
+      }
+      return `${args._stringWrap[0]}${strs.join(", ")}${args._stringWrap[1]}`;
+    },
+    get(obj, key) {
+      return _get(obj, key, $never);
+    },
+    size(obj) {
+      return obj.unknown.type === "never" ? args._size(obj.known) : Infinity;
+    },
+    knownSize(obj) {
+      return args._size(obj.known);
+    },
+    isType(obj) {
+      if (obj.unknown.type !== "never") return true;
+      for (const key of obj.known.keys() as IColKeyVals) {
+        const val = args._get(obj.known, key, null as never);
+        if (val.isType()) return true;
+      }
+      return false;
+    },
+    *splitTypes(obj): Iterable<ITypeMap[K]> {
+      // combos[0] => Iterable<Type>
+      // combos.slice(1) => Iterable<[IColKeyVal<K>, Type]>
+      const combos: Array<Iterable<unknown>> = [obj.unknown.splitTypes()];
+
+      for (const key of obj.known.keys() as IColKeyVals) {
+        combos.push(UtilFns.map(_get(obj, key).splitTypes(), (v) => [key, v]));
+      }
+
+      for (const obj of UtilFns.cartesian(combos)) {
+        const unknown = obj[0] as Type;
+        const knownVals = obj.slice(1) as Array<[IColKeyVal<K>, Type]>;
+        const known = args._new(knownVals) as any; // IColKnown<K>
+        yield { known, unknown };
+      }
+    },
+    clone(obj): ITypeMap[K] {
+      const unknown = obj.unknown.clone();
+      const knownVals: Array<[any, Type]> = [];
+
+      for (const key of obj.known.keys() as IColKeyVals) {
+        knownVals.push([key, _get(obj, key).clone()]);
+      }
+
+      const known = args._new(knownVals);
+      return { known, unknown } as ITypeMap[K];
+    },
+    ...extendFns()
+  };
+};
+
+export const ArrayFns = collectionFns(
+  "array",
+  () => ({
+    _get: (obj, key, never) => obj[key] ?? never,
+    _keysOr: NumberFns._or,
+    _unionKeys: (as, bs) => (as.length < bs.length ? bs : as).keys(),
+    _size: (obj) => obj.length,
+    _new: (iter) =>
+      iter === undefined ? [] : [...UtilFns.map(iter, (val) => val[1])],
+    _stringKey: () => "",
+    _stringWrap: ["[", "]"]
+  }),
+  () => ({
+    new(known: Type[], unknown?: Type): IType<"array"> {
+      return val("array", { known, unknown: unknown ?? $never });
+    }
+  })
+);
+
+export const ObjectFns = collectionFns(
+  "object",
+  () => ({
+    _get: (obj, key, never) => obj.get(key) ?? never,
+    _keysOr: StringFns._or,
+    _size: (obj) => obj.size,
+    _new: (iter) => (iter === undefined ? new Map() : new Map(iter)),
+    _stringKey: (key) => `${key}: `,
+    _stringWrap: ["{ ", " }"]
+  }),
+  () => ({
+    new(known: Array<[string, Type]>, unknown?: Type): IType<"object"> {
+      return val("object", {
+        known: new Map(known),
+        unknown: unknown ?? $never
+      });
+    }
+  })
+);
+
+export const FunctionFns = baseFns<"function">(() => {
+  const cmp = (a: ITypeMap["function"], b: ITypeMap["function"]): Cmp =>
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt;
+
+  return {
+    or: (a, b) => {
+      const cmpVal = cmp(a, b);
+      return cmpVal === Cmp.Equal ? [a] : cmpVal < Cmp.Equal ? [a, b] : [b, a];
+    },
+    and: (a, b) => (cmp(a, b) === Cmp.Equal ? [a] : []),
+    cmp,
+    string: () => "<function>",
+    isType: () => false,
+    splitTypes: (val) => [val],
+    clone: (fn) => fn.bind({})
+  };
+});
+
+type IFn<T> = (...args: T[]) => Type;
+type IArgs = Type[] | [...Type[], IOptional];
+type IOptional = Type[] | [...Type[], IVararg];
+type IVararg = [Type];
+
+interface IFnDec<T> {
+  (args: IArgs, fn: IFn<Type<any>>): T;
+  (args: IArgs, type: Type, valufy: number[], valFn: IFn<any>): T;
+}
+
+interface IFnBuilder {
+  add: IFnDec<IFnBuilder>;
+  build: () => IFn<Type>;
+}
+
+export const define = (name: string, vectorize: number[]): IFnBuilder => {
+  const fns: Array<{
+    types: Type<"array">;
+    fn: IFn<Type>;
+  }> = [];
+
+  // utility
+  const splitArgs = (
+    args: IArgs
+  ): { required: Type[]; optional: Type[]; vararg: Type | null } => {
+    const res = {
+      required: args as Type[],
+      optional: [] as Type[],
+      vararg: null as Type | null
+    };
+
+    const optional = args.at(-1) ?? [];
+    if (isType(optional)) return res;
+    res.required = args.slice(0, -1) as Type[];
+
+    const vararg = optional.at(-1) ?? [null];
+    if (isType(vararg)) return res;
+    res.optional = optional.slice(0, -1) as Type[];
+    res.vararg = vararg[0];
 
     return res;
-  }
+  };
 
-  types(): I.Seq.Indexed<Type> {
-    return this.value.valueSeq().flatMap((v) => v);
-  }
-
-  or(other: Type): Type {
-    return other instanceof AnyType
-      ? other
-      : other instanceof NeverType
-        ? this
-        : UnionType.or(this, other);
-  }
-
-  and(other: Type): Type {
-    return other instanceof AnyType
-      ? this
-      : other instanceof NeverType
-        ? other
-        : UnionType.and(this, other);
-  }
-
-  cmp(other: Type): Cmp {
-    return other instanceof AnyType
-      ? Cmp.Subset
-      : other instanceof NeverType
-        ? Cmp.Superset
-        : UnionType.cmp(this, other);
-  }
-
-  toString(): string {
-    return this.types()
-      .map((t) => `${t.toString()}`)
-      .join(" or ");
-  }
-
-  toJSON(): unknown {
-    return {
-      type: "union",
-      value: this.value
-        .map((s) =>
-          /**
-           * TODO: sort this properly
-           */
-          // eslint-disable-next-line @typescript-eslint/require-array-sort-compare
-          s
-            .flatMap((v) =>
-              v.value instanceof AnyType ? [] : [(v.toJSON() as any).value]
-            )
-            .toArray()
-            .sort()
-        )
-        .toObject()
+  const valufyFn =
+    (def: Type, valufy: number[], fn: IFn<any>): IFn<Type> =>
+    (...args: Type[]): Type => {
+      for (const pos of valufy.filter((pos) => pos < args.length)) {
+        const arg = args[pos];
+        if (arg.isType()) return def;
+        args[pos] = arg.value as any;
+      }
+      return fn(...args);
     };
-  }
 
-  isType(): true {
-    return true;
-  }
-}
+  const vectorizeFn =
+    (fn: IFn<Type>): IFn<Type> =>
+    (...args: Type[]): Type => {
+      const vecMap = new Map<number, Type<"array">>();
 
-type KeyOf<K extends CompositeKey> = K extends "object" ? string : number;
-type KeyType<K extends CompositeKey> = K extends "object"
-  ? StringType
-  : NumberType;
-type KnownVal<K extends CompositeKey> = ValueOf<K>["known"];
-
-abstract class CompositeBase<K extends CompositeKey> extends ValueBase<K> {
-  private _allTypes: Type | null = null;
-
-  get(key: KeyOf<K> | KeyType<K>): Type {
-    const _this = this as unknown as ObjectType; /* CompositeType */
-    const _key = this.wrapKey(key) as StringType; /* KeyType<K> */
-
-    return _key.isValue()
-      ? _this.value.known.get(_key.value, _this.value.unknown.or(TNull))
-      : this.allTypes;
-  }
-
-  protected get allTypes(): Type {
-    if (this._allTypes === null) {
-      this._allTypes = this.value.known
-        .valueSeq()
-        .reduce((a, b) => a.or(b), this.value.unknown.or(TNull));
-    }
-
-    return this._allTypes;
-  }
-
-  get size(): NumberType {
-    return this.value.unknown instanceof NeverType
-      ? TNumber.literal(this.value.known.size)
-      : TNumber;
-  }
-
-  protected _or(other: TypeOf<K>): [TypeOf<K>] | [TypeOf<K>, TypeOf<K>] {
-    const _this = this as unknown as ObjectType; /* CompositeType */
-    const _other = other as unknown as ObjectType; /* CompositeType */
-
-    const [cmp, canNormalize] = _this.cmpAndCheckNormalize(_other);
-
-    const normalize = (): TypeOf<K> =>
-      this.new(
-        this.mergeKnown(this.value.known, other.value.known),
-        this.value.unknown.or(other.value.unknown)
-      );
-
-    return cmp === Cmp.Disjoint
-      ? canNormalize
-        ? [normalize()]
-        : [_this, _other]
-      : cmp === Cmp.Subset
-        ? [_other]
-        : [_this];
-  }
-
-  protected _and(other: TypeOf<K>): [] | [TypeOf<K>] {
-    const _this = this as unknown as ObjectType; /* CompositeType */
-    const _other = other as unknown as ObjectType; /* CompositeType */
-
-    const isError = (a: Type, b: Type, res: Type): boolean =>
-      res instanceof NeverType &&
-      !(a instanceof NeverType || b instanceof NeverType);
-
-    const unknown = _this.value.unknown.and(_other.value.unknown);
-
-    if (isError(_this.value.unknown, _other.value.unknown, unknown)) {
-      return [];
-    }
-
-    let known = this.emptyKnown().asMutable();
-
-    for (const key of this.knownKeys(this.value.known, other.value.known)) {
-      const _key = key as string; /* CompositeKey */
-
-      const l = _this.get(_key);
-      const r = _other.get(_key);
-      const val = l.and(r);
-
-      if (isError(l, r, val)) {
-        return [];
+      for (const pos of vectorize) {
+        const arg = args[pos];
+        if (arg.type !== "array" || pos >= args.length) continue;
+        vecMap.set(pos, arg as Type<"array">);
       }
 
-      this.appendKnown(known, key, val);
-    }
+      const vecs = [...vecMap.values()].map((t) => t.value);
+      if (vecs.length === 0) return fn(...args);
 
-    known = known.asImmutable();
+      const maxOrInfinity = Math.min(...vecs.map(ArrayFns.size));
+      const min = Math.min(...vecs.map(ArrayFns.knownSize));
+      const max =
+        maxOrInfinity !== Infinity
+          ? maxOrInfinity
+          : Math.max(...vecs.map(ArrayFns.knownSize));
 
-    return [this.new(known, unknown)];
-  }
+      let $res = $array([]);
+      const results: Array<Type<"array">> = min === 0 ? [$res] : [];
 
-  protected _cmp(other: TypeOf<K>): Cmp {
-    return this.cmpAndCheckNormalize(other)[0];
-  }
+      for (let subPos = 0; subPos < max; subPos++) {
+        const subArgs: Type[] = [...args];
 
-  protected cmpAndCheckNormalize(other: TypeOf<K>): [Cmp, boolean] {
-    const _this = this as unknown as ObjectType; /* CompositeType */
-    const _other = other as unknown as ObjectType; /* CompositeType */
+        for (const [vecPos, $vecArg] of vecMap.entries()) {
+          subArgs[vecPos] = ArrayFns.get($vecArg.value, subPos);
+        }
 
-    const knownSizes = (l: number): boolean =>
-      this.value.known.size === l && other.value.known.size === l;
+        $res = $res.clone();
+        $res.value.known.push(fn(...subArgs));
 
-    let res = this.value.unknown.cmp(other.value.unknown);
-
-    if (res === Cmp.Disjoint) {
-      return [Cmp.Disjoint, knownSizes(0)];
-    }
-
-    const canNormalize = res === Cmp.Equal && knownSizes(1);
-
-    for (const key of this.knownKeys(this.value.known, other.value.known)) {
-      const _key = key as string; /* CompositeKey */
-
-      res |= _this.get(_key).cmp(_other.get(_key));
-
-      if (res === Cmp.Disjoint) {
-        return [Cmp.Disjoint, canNormalize];
+        if (subPos + 1 >= min) {
+          results.push($res);
+        }
       }
-    }
 
-    return [res, false];
-  }
+      if (maxOrInfinity === Infinity) {
+        const lastPos = results.length - 1;
+        const last = results[lastPos];
+        const subArgs = [...args];
 
-  isKnown(): this is Exclude<this, { value: { unknown: NeverType } }> {
-    return this.value.unknown instanceof NeverType;
-  }
+        for (const [vecPos, vecArg] of vecMap.entries()) {
+          subArgs[vecPos] = vecArg.value.known[max] ?? vecArg.value.unknown;
+        }
 
-  isType(): boolean {
-    return !this.isKnown() || this.value.known.some((t) => t.isType());
-  }
+        results[lastPos] = $array(last.value.known, fn(...subArgs));
+      }
 
-  protected mergeKnown(as: KnownVal<K>, bs: KnownVal<K>): KnownVal<K> {
-    const _as = as as KnownVal<"object" /* CompositeKey */>;
-    const _bs = bs as KnownVal<"object" /* CompositeKey */>;
+      return results.reduce<Type>((a, b) => a.or(b), $never);
+    };
 
-    const res = this.emptyKnown().asMutable();
-
-    for (const key of this.knownKeys(_as, _bs)) {
-      const _key = key as string; /* KeyOf<K> */
-
-      const a = _as.get(_key, TNever);
-      const b = _bs.get(_key, TNever);
-
-      this.appendKnown(res, key, a.or(b));
-    }
-
-    return res.asImmutable();
-  }
-
-  toJSON(): unknown {
-    const known = this.value.known.isEmpty()
-      ? {}
-      : { known: this.knownToJSON() };
-
-    const unknown =
-      this.value.unknown instanceof NeverType
-        ? {}
-        : { unknown: this.value.unknown.toJSON() };
-
-    return { type: this.type, value: { ...known, ...unknown } };
-  }
-
-  toString(): string {
-    const { known, unknown } = this.value;
-    const empty = this.literals.join("").replace(/ +/g, "");
-
-    const emptyKnown = known.isEmpty();
-    const emptyUnknown = unknown instanceof NeverType;
-
-    return emptyKnown && emptyUnknown
-      ? empty
-      : emptyKnown
-        ? `${this.unknownCtr}(${unknown.toString()})`
-        : `${this.literals[0]}${known
-            .map((t, k) => this.toStringIndexed(k as KeyOf<K>, t))
-            .join(", ")}${
-            emptyUnknown ? "" : `, ...${this.unknownCtr}(${unknown.toString()})`
-          }${this.literals[1]}`;
-  }
-
-  protected abstract wrapKey(key: KeyOf<K> | KeyType<K>): KeyType<K>;
-  protected abstract new(known: KnownVal<K>, unknown: Type): TypeOf<K>;
-  protected abstract emptyKnown(): KnownVal<K>;
-  protected abstract appendKnown(
-    known: KnownVal<K>,
-    key: KeyOf<K>,
-    val: Type
-  ): KnownVal<K>;
-  protected abstract knownKeys(
-    as: KnownVal<K>,
-    bs: KnownVal<K>
-  ): Iterable<KeyOf<K>>;
-  protected abstract knownToJSON(): unknown;
-  protected abstract literals: [string, string];
-  protected abstract toStringIndexed(key: KeyOf<K>, type: Type): string;
-  protected abstract unknownCtr: string;
-}
-
-// object
-class ObjectVal extends I.Record({
-  known: I.Map<string, Type>(),
-  unknown: TNever as Type
-}) {}
-
-class ObjectType extends CompositeBase<"object"> {
-  constructor(value: ValueOf<"object"> = new ObjectVal({ unknown: TAny })) {
-    super("object", value);
-  }
-
-  new(known: I.Map<any, Type>, unknown: Type): ObjectType {
-    return new ObjectType(new ObjectVal({ unknown, known }));
-  }
-
-  object(def: Type = TAny, value: Record<string, Type> = {}): ObjectType {
-    return this.new(I.Map(value), def);
-  }
-
-  literal(value: Record<string, Type> = {}): ObjectType {
-    return this.object(TNever, value);
-  }
-
-  protected wrapKey(key: string | StringType): StringType {
-    return TString.wrap(key);
-  }
-
-  protected emptyKnown(): I.Map<string, Type> {
-    return I.Map();
-  }
-
-  protected appendKnown(
-    known: I.Map<string, Type>,
-    key: string,
-    val: Type
-  ): I.Map<string, Type> {
-    return known.set(key, val);
-  }
-
-  protected knownKeys(
-    as: I.Map<string, Type>,
-    bs: I.Map<string, Type>
-  ): Iterable<string> {
-    return I.Set.union([as.keySeq(), bs.keySeq()]);
-  }
-
-  protected knownToJSON(): unknown {
-    return this.value.known.map((v) => v.toJSON()).toObject();
-  }
-
-  protected literals: [string, string] = ["{ ", " }"];
-
-  protected toStringIndexed(key: string, type: Type): string {
-    return `${key}: ${type.toString()}`;
-  }
-
-  protected unknownCtr = "objectOf";
-}
-
-const TObject = new ObjectType();
-
-// array
-class ArrayVal extends I.Record({
-  known: I.List<Type>(),
-  unknown: TNever as Type
-}) {}
-
-class ArrayType extends CompositeBase<"array"> {
-  constructor(value: ValueOf<"array"> = new ArrayVal({ unknown: TAny })) {
-    super("array", value);
-  }
-
-  new(known: I.List<Type>, unknown: Type): ArrayType {
-    return new ArrayType(new ArrayVal({ unknown, known }));
-  }
-
-  list(def: Type = TAny, value: Type[] = []): ArrayType {
-    return this.new(I.List(value), def);
-  }
-
-  literal(value: Type[] = []): ArrayType {
-    return this.list(TNever, value);
-  }
-
-  append(value: Type): ArrayType {
-    return this.new(this.value.known.push(value), this.value.unknown);
-  }
-
-  protected wrapKey(key: number | NumberType): NumberType {
-    return TNumber.wrap(key);
-  }
-
-  protected emptyKnown(): I.List<Type> {
-    return I.List();
-  }
-
-  protected appendKnown(
-    known: I.List<Type>,
-    _key: number,
-    val: Type
-  ): I.List<Type> {
-    return known.push(val);
-  }
-
-  protected knownKeys(as: I.List<Type>, bs: I.List<Type>): Iterable<number> {
-    return as.size > bs.size ? as.keySeq() : bs.keySeq();
-  }
-
-  protected knownToJSON(): unknown {
-    return this.value.known.map((v) => v.toJSON()).toArray();
-  }
-
-  protected literals: [string, string] = ["[", "]"];
-
-  protected toStringIndexed(_key: number, type: Type): string {
-    return `${type.toString()}`;
-  }
-
-  protected unknownCtr = "listOf";
-}
-
-const TArray = new ArrayType();
-
-// function
-type SingleType = Exclude<Type, UnionType | NeverType>;
-type Vararg = [Type];
-type Optional = Type[] | [...Type[], Vararg];
-type Required = Type[] | [...Type[], Optional];
-type Fn<T> = (...args: T[]) => Type;
-type Valufy = number[];
-type FunctionBuilderArgs =
-  | [Required, Fn<SingleType>]
-  | [Required, Type, Valufy, Fn<any>];
-
-type FunctionBuilderVal = Array<[ArrayType, (...args: Type[]) => Type]>;
-
-class FunctionBuilder {
-  value: FunctionBuilderVal = [];
-
-  constructor(
-    public name = "<lambda>",
-    public vectorize: number[] = []
-  ) {}
-
-  add(...args: FunctionBuilderArgs): this {
-    const { required, optional, vararg } = this.splitArgs(args[0]);
+  const add: IFnBuilder["add"] = (
+    args: IArgs,
+    typeOrFn: Type | IFn<Type>,
+    valufy?: number[],
+    valFn?: IFn<any>
+  ): IFnBuilder => {
+    const { required, optional, vararg } = splitArgs(args);
     const argList = [...required, ...optional];
 
     // vectorized types
-    for (const pos of this.vectorize.filter((pos) => pos < argList.length)) {
+    for (const pos of vectorize.filter((pos) => pos < argList.length)) {
       const arg = argList[pos];
-
-      argList[pos] = arg.or(TArray.list(arg));
+      argList[pos] = arg.or($array([], arg));
     }
 
     // optional types
     for (let pos = required.length; pos < argList.length; pos++) {
       const arg = argList[pos];
-
-      argList[pos] = arg.or(TNull);
+      argList[pos] = arg.or($null);
     }
 
     // vararg types
-    const types = TArray.list(vararg ?? TNever, argList);
+    const types = $array(argList, vararg ?? $never);
 
     // valufy function
     let fn =
-      typeof args[1] === "function"
-        ? (args[1] as Fn<Type>)
-        : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          this.valufyFn(args[1], args[2]!, args[3]!);
+      typeof typeOrFn === "function"
+        ? typeOrFn
+        : valufyFn(typeOrFn, valufy!, valFn!);
 
     // vectorize function
-    fn = this.vectorizeFn(fn);
+    fn = vectorizeFn(fn);
 
     // add final result
-    this.value.push([types, fn]);
+    fns.push({ types, fn });
 
-    return this;
-  }
+    return { add, build };
+  };
 
-  build(): FunctionType {
-    const fn: Fn<Type> = (...args: Type[]): Type => {
+  const build: IFnBuilder["build"] =
+    () =>
+    (...args: Type[]): Type => {
       // propagate errors
-      const errors = args.filter((arg) => arg instanceof NeverType);
+      const errors = args.filter((arg) => arg.type === "never");
 
       if (errors.length > 0) {
-        return errors.reduce((res, err) => res.or(err), TNever);
+        return errors.reduce<Type>((a, b) => a.or(b), $never);
       }
 
       // finds match
-      const argList = TArray.literal(args);
-      let matchFn: Fn<SingleType> | null = null;
+      const argList = $array(args);
+      let matchFn: IFn<Type> | null = null;
 
-      for (const [types, fn] of this.value) {
-        if (argList.cmp(types) <= Cmp.Subset) {
+      for (const { types, fn } of fns) {
+        const cmp = argList.cmp(types);
+        if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
           matchFn = fn;
           break;
         }
@@ -993,238 +782,116 @@ class FunctionBuilder {
 
       // throws error if none found
       if (matchFn === null) {
-        return TNever.error(
-          `No implementation of '${this.name}' found for arguments: ${args
-            .map((a) => `${a.toString()}`)
+        return $never(
+          `No implementation of '${name}' found for arguments: ${args
+            .map((arg) => arg.toString())
             .join(", ")}`
         );
       }
 
-      // split on unions
-      const argCombos = args.reduce<Type[][]>(
-        (res, arg) =>
-          arg
-            .types()
-            .flatMap((t) => res.map((prev) => [...prev, t]))
-            .toArray(),
-        [[]]
-      );
-
       // union all results
-      return argCombos
-        .map((argCombo) => (matchFn as Fn<Type>)(...argCombo))
-        .reduce((a, b) => a.or(b), TNever);
+      const combos = args.map((arg) => arg.splitTypes());
+      let res: Type = $never;
+
+      for (const combo of UtilFns.cartesian(combos)) {
+        res = res.or(matchFn(...combo));
+      }
+
+      return res;
     };
 
-    const types = this.value
-      .map((pair) => pair[0])
-      .reduce((a, b) => (a as any).or(b), TNever);
+  return { add, build };
+};
 
-    return FunctionType.new(this.name, types, fn);
+export const Fns = {
+  any: AnyFns,
+  never: NeverFns,
+  array: ArrayFns,
+  boolean: BooleanFns,
+  date: DateFns,
+  duration: DurationFns,
+  function: FunctionFns,
+  link: LinkFns,
+  null: NullFns,
+  number: NumberFns,
+  object: ObjectFns,
+  string: StringFns,
+  widget: WidgetFns
+};
+
+const getFns = <K extends keyof typeof Fns>(key: K): IFnsType<unknown> =>
+  Fns[key] as IFnsType<unknown>;
+
+export const $any = type(val("any", null));
+
+export const $never = type(
+  val("never", null),
+  callable({
+    $: (msg: string) => type(val("never", msg)),
+    andError: (a: Type, b: Type) => $never(NeverFns.error(a.types, b.types))
+  })
+);
+
+export const $array = type(
+  ArrayFns.new([], $any),
+  <K extends Type, U extends Type>(known: K[], unknown?: U) =>
+    type(ArrayFns.new(known, unknown ?? $never))
+);
+
+export const $boolean = type(val("boolean", null), (value: boolean) =>
+  type(val("boolean", value))
+);
+
+export const $true = $boolean(true);
+export const $false = $boolean(false);
+
+export const $date = type(val("date", null), (date: L.DateTime) =>
+  type(val("date", date))
+);
+
+export const $duration = type(val("duration", null), (duration: L.Duration) =>
+  type(val("duration", duration))
+);
+
+export const $function = type<"function", IFnDec<Type>>(
+  val("function", () => $any),
+  (...args: [any, any]) => {
+    const res = define("<lambda>", [])
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      .add(...args)
+      .build();
+
+    return type(val("function", res));
   }
+);
 
-  private valufyFn(def: Type, valufy: Valufy, fn: Fn<any>): Fn<Type> {
-    return (...args: Type[]) => {
-      for (const pos of valufy.filter((pos) => pos < args.length)) {
-        const arg = args[pos];
+export const $link = (() => {
+  throw new Error("TODO");
+}) as unknown as Type<"link">;
 
-        if (arg.isType()) {
-          return def;
-        }
+export const $null = type(val("null", null));
 
-        args[pos] = arg.value as any;
-      }
+export const $number = type(val("number", null), (value: number) =>
+  type(val("number", value))
+);
 
-      return fn(...args);
-    };
-  }
+export const $object = type(
+  ObjectFns.new([], $any),
+  (known: Record<string, Type>, unknown?: Type) => {
+    const knownVals: Array<[string, Type]> = [];
 
-  private vectorizeFn(fn: Fn<Type>): Fn<Type> {
-    return (...args: Type[]): Type => {
-      const vecMap = new Map(
-        this.vectorize
-          .filter((pos) => args[pos] instanceof ArrayType && pos < args.length)
-          .map((pos) => [pos, args[pos] as ArrayType])
-      );
-
-      const vecs = [...vecMap.values()];
-
-      if (vecs.length === 0) {
-        return fn(...args);
-      }
-
-      const maxOrInfinity = Math.min(
-        ...vecs.map((t) => (t.isKnown() ? t.value.known.size : Infinity))
-      );
-      const min = Math.min(...vecs.map((t) => t.value.known.size));
-      const max =
-        maxOrInfinity !== Infinity
-          ? maxOrInfinity
-          : Math.max(...vecs.map((t) => t.value.known.size));
-
-      let res = TArray.literal();
-      const results: Type[] = min === 0 ? [res] : [];
-
-      for (let subPos = 0; subPos < max; subPos++) {
-        const subArgs = [...args];
-
-        for (const [vecPos, vecArg] of vecMap.entries()) {
-          subArgs[vecPos] = vecArg.get(subPos);
-        }
-
-        res = res.append(fn(...subArgs));
-
-        if (subPos + 1 >= min) {
-          results.push(res);
-        }
-      }
-
-      if (maxOrInfinity === Infinity) {
-        const lastPos = results.length - 1;
-        const last = results[lastPos] as ArrayType;
-
-        const subArgs = [...args];
-
-        for (const [vecPos, vecArg] of vecMap.entries()) {
-          subArgs[vecPos] = vecArg.value.known.get(max, vecArg.value.unknown);
-        }
-
-        results[lastPos] = TArray.new(last.value.known, fn(...subArgs));
-      }
-
-      return results.reduce((a, b) => a.or(b), TNever);
-    };
-  }
-
-  private splitArgs(_required: Required): {
-    required: Type[];
-    optional: Type[];
-    vararg: Type | null;
-  } {
-    let required: Type[];
-    let optional: Type[];
-    let vararg: Type | null;
-
-    const _optional = _required.at(-1);
-
-    if (_optional === undefined || _optional instanceof TypeBase) {
-      // no optionals or vararg
-      required = _required as Type[];
-      optional = [];
-      vararg = null;
-    } else {
-      // optionals, but maybe no vararg
-      const _vararg = _optional.at(-1);
-
-      if (_vararg === undefined || _vararg instanceof TypeBase) {
-        // optionals, but no vararg
-        required = _required.slice(0, -1) as Type[];
-        optional = _optional as Type[];
-        vararg = null;
-      } else {
-        // optionals and vararg
-        required = _required.slice(0, -1) as Type[];
-        optional = _optional.slice(0, -1) as Type[];
-        vararg = _vararg[0];
-      }
+    for (const key of Object.keys(known).sort(StringFns._cmp)) {
+      knownVals.push([key, known[key]]);
     }
 
-    return { required, optional, vararg };
+    return type(ObjectFns.new(knownVals, unknown));
   }
-}
+);
 
-type FunctionVal = (...args: Type[]) => Type;
+export const $string = type(val("string", null), (value: string) =>
+  type(val("string", value))
+);
 
-class FunctionType extends ValueBase<"function"> {
-  constructor(
-    public name: string = "<function>",
-    public args: Type = TArray.list(),
-    value: FunctionVal = () => TAny
-  ) {
-    super("function", value);
-  }
-
-  static new(
-    name: string,
-    args: Type,
-    fn: (...args: Type[]) => Type
-  ): FunctionType {
-    return new FunctionType(name, args, fn);
-  }
-
-  define(name: string, vectorize: number[] = []): FunctionBuilder {
-    return new FunctionBuilder(name, vectorize);
-  }
-
-  eval(...args: Type[]): Type {
-    return this.value(...args);
-  }
-
-  protected _or(
-    other: FunctionType
-  ): [FunctionType] | [FunctionType, FunctionType] {
-    return this.equals(other) ? [this] : [this, other];
-  }
-
-  protected _and(other: FunctionType): [] | [FunctionType] {
-    return this.equals(other) ? [this] : [];
-  }
-
-  protected _cmp(other: FunctionType): Cmp {
-    return this.equals(other) ? Cmp.Equal : Cmp.Disjoint;
-  }
-
-  toString(): string {
-    return `${this.name}(...${this.args.toString()})`;
-  }
-
-  toJSON(): unknown {
-    return {
-      type: "function",
-      name: this.name,
-      args: this.args.toString()
-    };
-  }
-
-  isType(): boolean {
-    return false;
-  }
-}
-
-const TFunction = new FunctionType();
-
-// exports
-export {
-  TAny as Any,
-  TArray as Array,
-  TBoolean as Boolean,
-  TDate as Date,
-  TDuration as Duration,
-  TFalse as False,
-  TFunction as Function,
-  TLink as Link,
-  TNever as Never,
-  TNull as Null,
-  TNumber as Number,
-  TObject as Object,
-  TString as String,
-  TTrue as True,
-  TWidget as Widget
-};
-
-export type {
-  AnyType,
-  ArrayType,
-  BooleanType,
-  DateType,
-  DurationType,
-  FunctionType,
-  LinkType,
-  NeverType,
-  NullType,
-  NumberType,
-  ObjectType,
-  StringType,
-  UnionType,
-  WidgetType
-};
+export const $widget = (() => {
+  throw new Error("TODO");
+}) as unknown as Type<"widget">;

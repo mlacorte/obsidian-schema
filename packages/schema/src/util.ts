@@ -144,7 +144,7 @@ export function* map<A, B>(iter: Iterable<A>, fn: (val: A) => B): Iterable<B> {
 }
 
 export function* cartesian<V>(vals: Array<Iterable<V>>): Iterable<V[]> {
-  const head = [...vals[0]] ?? [];
+  const head = [...(vals[0] ?? [])];
   const tail = vals.slice(1);
   const remainder = tail.length > 0 ? cartesian(tail) : [[]];
   for (const r of remainder) for (const h of head) yield [h, ...r];

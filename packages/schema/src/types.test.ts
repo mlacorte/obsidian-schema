@@ -1,185 +1,298 @@
 import { describe, expect, test } from "bun:test";
 
-import { fn } from "./builtins";
-import * as T from "./types";
+import { $fn } from "./builtins";
+import {
+  $any,
+  $array,
+  $boolean,
+  $false,
+  $never,
+  $null,
+  $number,
+  $object,
+  $string,
+  $true,
+  isType,
+  StringFns,
+  type Type
+} from "./types";
+import * as UtilFns from "./util";
 
-const one = T.Number.literal(1);
-const two = T.Number.literal(2);
-const three = T.Number.literal(3);
+const $one = $number(1);
+const $two = $number(2);
+const $three = $number(3);
 
-const eqJSON = (a: T.Type, b: T.Type): void => {
-  expect(a.toJSON()).toEqual(b.toJSON());
+const eq = (a: Type, b: Type): void => {
+  expect(a.toString()).toBe(b.toString());
 };
 
-describe("types", () => {
-  test("types", () => {
-    const number = one.or(T.Number);
-    const never = one.and(two);
-    const oneOrTwo = one.or(two);
+describe("util", () => {
+  const { _cmp, _or, _and } = StringFns;
+  const { Cmp, and, or, cmp } = UtilFns;
 
-    expect(one.type).toBe("number");
-    expect(one.value).toBe(1);
-    expect(two.type).toBe("number");
-    expect(two.value).toBe(2);
-    expect(number.type).toBe("number");
-    expect(number.value).toBe(T.Any);
-    expect(never.type).toBe("never");
-    expect((never.value as any).toJS()).toEqual([
-      {
-        message: "Can't combine '1' and '2'.",
-        vars: []
-      }
-    ]);
-    expect(oneOrTwo.type).toBe("union");
+  const as = ["a", "b", "c"];
+  const bs = ["b", "c", "d"];
+
+  describe("or", () => {
+    test("forward", () => {
+      const forward = [...or(as, bs, _or)];
+      expect(forward).toEqual(["a", "b", "c", "d"]);
+    });
+    test("reversed", () => {
+      const reversed = [...or(bs, as, _or)];
+      expect(reversed).toEqual(["a", "b", "c", "d"]);
+    });
   });
 
-  test("boolean", () => {
-    eqJSON(T.True.or(T.False), T.Boolean);
+  describe("and", () => {
+    test("forward", () => {
+      const forward = [...and(as, bs, _and, _cmp)];
+      expect(forward).toEqual(["b", "c"]);
+    });
+    test("reversed", () => {
+      const reversed = [...and(bs, as, _and, _cmp)];
+      expect(reversed).toEqual(["b", "c"]);
+    });
   });
 
-  test("unions", () => {
-    const a = T.String.literal("a");
-    const union = T.Number.or(a);
-    const never = T.Number.and(a);
-    const number = union.and(T.Number);
+  describe("cmp", () => {
+    const abc = ["a", "b", "c"];
+    const ab = ["a", "b"];
+    const bc = ["b", "c"];
+    const b = ["b"];
 
-    expect(a.type).toBe("string");
-    expect(union.type).toBe("union");
-    expect(never.type).toBe("never");
-    expect(number.type).toBe("number");
+    test("equal", () => {
+      expect(cmp(abc, abc, _cmp)).toBe(Cmp.Equal);
+    });
+
+    test("superset", () => {
+      expect(cmp(abc, ab, _cmp)).toBe(Cmp.Superset);
+      expect(cmp(abc, bc, _cmp)).toBe(Cmp.Superset);
+      expect(cmp(abc, b, _cmp)).toBe(Cmp.Superset);
+    });
+
+    test("subset", () => {
+      expect(cmp(ab, abc, _cmp)).toBe(Cmp.Subset);
+      expect(cmp(bc, abc, _cmp)).toBe(Cmp.Subset);
+      expect(cmp(b, abc, _cmp)).toBe(Cmp.Subset);
+    });
+
+    test("disjoint", () => {
+      expect(cmp(ab, bc, _cmp)).toBe(Cmp.DisjointGt);
+      expect(cmp(bc, ab, _cmp)).toBe(Cmp.DisjointLt);
+    });
   });
 
-  test("any", () => {
-    const any = T.String.or(T.Any);
-    const string = T.String.and(T.Any);
+  describe("cartesian", () => {
+    const cartesian = <T>(a: T[][]): T[][] => [...UtilFns.cartesian(a)];
 
-    expect(any.type).toBe("any");
-    expect(string.type).toBe("string");
+    test("single", () => {
+      const input = [[1], [2], [3]];
+      const output = [...UtilFns.cartesian(input)];
+      expect(output).toEqual([[1, 2, 3]]);
+    });
+
+    test("double", () => {
+      expect(cartesian([[0, 1], [2], [3]])).toEqual([
+        [0, 2, 3],
+        [1, 2, 3]
+      ]);
+    });
+
+    test("double-double", () => {
+      expect(cartesian([[0, 1], [2], [3, 4]])).toEqual([
+        [0, 2, 3],
+        [1, 2, 3],
+        [0, 2, 4],
+        [1, 2, 4]
+      ]);
+    });
+  });
+});
+
+describe("typeset", () => {
+  describe("boolean", () => {
+    test("promotion", () => {
+      eq($true.or($false), $boolean);
+    });
   });
 
-  test("never", () => {
-    const never = T.Number.and(T.Never);
-    const number = T.Number.or(T.Never);
+  describe("unions", () => {
+    const $a = $string("a");
 
-    expect(never.type).toBe("never");
-    expect(number.type).toBe("number");
+    test("or", () => {
+      eq($a.or($number), $number.or($a));
+    });
+
+    test("and", () => {
+      eq($a.and($number), $never.andError($a, $number));
+    });
   });
 
-  test("equality", () => {
-    expect(T.Number.equals(T.Number)).toBe(true);
-    expect(T.Number.equals(T.String)).toBe(false);
-    expect(one.or(two).equals(two.or(one))).toBe(true);
-    expect(T.Any.and(T.String).equals(T.String)).toBe(true);
-    expect(T.Number.and(T.String).type).toBe("never");
+  describe("any", () => {
+    test("or", () => {
+      eq($any.or($string), $any);
+    });
+
+    test("and", () => {
+      eq($any.and($string), $string);
+    });
   });
 
-  test("objects", () => {
-    const a = T.Object.object(T.Any, { a: one.or(two) });
-    const b = T.Object.object(T.Any, { a: one });
-    const c = T.Object.object(T.Any, { a: one, b: one });
-    const d = T.Object.object(T.Any, { a: two.or(three) });
+  describe("never", () => {
+    test("or", () => {
+      eq($never.or($number), $number);
+    });
 
-    eqJSON(a.or(a), a);
-    eqJSON(a.and(a), a);
-
-    eqJSON(a.or(b), a);
-    eqJSON(a.and(b), b);
-
-    expect(a.or(c).type).toBe("union");
-    eqJSON(a.and(c), c);
-
-    eqJSON(a.or(d), T.Object.object(T.Any, { a: one.or(two).or(three) }));
+    test("and", () => {
+      eq($never.and($number), $never);
+    });
   });
 
-  test("lists", () => {
-    const a = T.Array.list(T.Any, [one.or(two)]);
-    const b = T.Array.list(T.Any, [one]);
-    const c = T.Array.list(T.Any, [one, two]);
-    const d = T.Array.list(T.Any, [two.or(three)]);
+  describe("null", () => {
+    describe("or", () => {
+      test("self", () => {
+        eq($null.or($null), $null);
+      });
+      test("other", () => {
+        eq($null.or($number).and($null), $null);
+      });
+    });
 
-    eqJSON(a.or(a), a);
-    eqJSON(a.and(a), a);
-
-    eqJSON(a.or(b), a);
-    eqJSON(a.and(b), b);
-
-    expect(a.or(c).type).toBe("union");
-    eqJSON(a.and(c), c);
-
-    eqJSON(a.or(d), T.Array.list(T.Any, [one.or(two).or(three)]));
-
-    const unique1 = T.Array.list(T.Any, [T.String, T.String]);
-    const unique2 = T.Array.list(T.Any, [T.String, T.Null]);
-    const shared1 = T.Array.list(T.Any, [T.String, T.Any]);
-
-    expect(unique1.and(unique2).type).toBe(T.Never.type);
-    expect(unique1.and(shared1).type).toBe(T.Array.type);
-    expect(unique2.and(shared1).type).toBe(T.Array.type);
+    describe("and", () => {
+      test("self", () => {
+        eq($null.and($null), $null);
+      });
+      test("other", () => {
+        eq($null.and($number), $never.andError($null, $number));
+      });
+    });
   });
 
-  test("cmp", () => {
-    const val = T.Number.literal(3.14);
-    const literal = T.Array.literal([val]);
-    const list = T.Array.list(T.Number);
+  describe("objects", () => {
+    const $a12 = $object({ a: $one.or($two) }, $any);
+    const $a1 = $object({ a: $one }, $any);
+    const $a1b2 = $object({ a: $one, b: $two }, $any);
+    const $a23 = $object({ a: $two.or($three) }, $any);
 
-    const a = list.or(T.Number);
-    const b = T.Number.or(list);
+    describe("identity", () => {
+      test("or", () => {
+        eq($a12.or($a12), $a12);
+      });
+      test("and", () => {
+        eq($a12.and($a12), $a12);
+      });
+    });
 
-    expect(literal.cmp(list)).toBe(T.Cmp.Subset);
-    expect(literal.cmp(a)).toBe(T.Cmp.Subset);
-    expect(literal.cmp(b)).toBe(T.Cmp.Subset);
+    describe("subset", () => {
+      test("or", () => {
+        eq($a12.or($a1b2), $object({ a: $one.or($two), b: $any }, $any));
+      });
+      test("and", () => {
+        eq($a12.and($a1), $a1);
+        eq($a12.and($a1b2), $object({ a: $one, b: $two }, $any));
+      });
+    });
+
+    describe("intersect", () => {
+      test("or", () => {
+        eq($a12.or($a23), $object({ a: $one.or($two).or($three) }, $any));
+      });
+
+      test("and", () => {
+        eq($a12.and($a23), $object({ a: $two }, $any));
+      });
+    });
+
+    describe("disjoint", () => {
+      test("and", () => {
+        expect($a1.and($a23).type).toEqual("never");
+      });
+    });
+  });
+
+  describe("lists", () => {
+    const $a12 = $array([$one.or($two)], $any);
+    const $a1 = $array([$one], $any);
+    const $a1b2 = $array([$one, $two], $any);
+    const $a23 = $array([$two.or($three)], $any);
+
+    describe("identity", () => {
+      test("or", () => {
+        eq($a12.or($a12), $a12);
+      });
+      test("and", () => {
+        eq($a12.and($a12), $a12);
+      });
+    });
+
+    describe("subset", () => {
+      test("or", () => {
+        eq($a12.or($a1b2), $array([$one.or($two), $any], $any));
+      });
+      test("and", () => {
+        eq($a12.and($a1), $a1);
+        eq($a12.and($a1b2), $array([$one, $two], $any));
+      });
+    });
+
+    describe("intersect", () => {
+      test("or", () => {
+        eq($a12.or($a23), $array([$one.or($two).or($three)], $any));
+      });
+
+      test("and", () => {
+        eq($a12.and($a23), $array([$two], $any));
+      });
+    });
+
+    describe("disjoint", () => {
+      test("and", () => {
+        expect($a1.and($a23).type).toEqual("never");
+      });
+    });
   });
 
   describe("functions", () => {
-    test("vectorize", () => {
-      const lit = (arg: T.Type | T.Type[]): T.Type =>
-        Array.isArray(arg) ? T.Array.literal(arg) : arg;
+    const lit = (arg: Type | Type[]): Type => (isType(arg) ? arg : $array(arg));
+    const or = (...args: Array<Type | Type[]>): Type =>
+      args.map(lit).reduce((a, b) => a.or(b), $never);
 
-      const or = (...args: Array<T.Type | T.Type[]>): T.Type =>
-        args.map(lit).reduce((a, b) => a.or(b), T.Never);
+    const tests = [
+      [$true, $one, $two, $one],
+      [[$true, $false], $one, $two, [$one, $two]],
+      [$boolean, [$string, $one], $number, [$string.or($number), $number]],
+      [
+        $array([], $boolean),
+        [$string, $one],
+        $number,
+        or([], [$string.or($number)], [$string.or($number), $number])
+      ],
+      [
+        $array([], $boolean),
+        $array([], $string.or($one)),
+        $number,
+        $array([], $number.or($string))
+      ],
+      [
+        $array([], $boolean),
+        $array([$string, $one], $number),
+        $number,
+        or(
+          [],
+          [$string.or($number)],
+          $array([$string.or($number), $number], $number)
+        )
+      ]
+    ].map((row) => row.map(lit) as [Type, Type, Type, Type]);
 
-      const tests: Array<[T.Type, T.Type, T.Type, T.Type]> = [
-        [T.True, one, two, one],
-        [[T.True, T.False], one, two, [one, two]],
-        [
-          T.Boolean,
-          [T.String, one],
-          T.Number,
-          [or(T.String, T.Number), T.Number]
-        ],
-        [
-          T.Array.list(T.Boolean),
-          [T.String, one],
-          T.Number,
-          or([], [or(T.String, T.Number)], [or(T.String, T.Number), T.Number])
-        ],
-        [
-          T.Array.list(T.Boolean),
-          T.Array.list(T.String.or(one)),
-          T.Number,
-          T.Array.list(T.Number.or(T.String))
-        ],
-        [
-          T.Array.list(T.Boolean),
-          T.Array.list(T.Number, [T.String, one]),
-          T.Number,
-          or(
-            [],
-            [T.String.or(T.Number)],
-            T.Array.list(T.Number, [T.String.or(T.Number), T.Number])
-          )
-        ],
-        [
-          T.Array.list(T.Boolean, [T.Boolean]),
-          [T.String, one],
-          [T.Number, two],
-          or([or(T.String, T.Number)], [or(T.String, T.Number), or(one, two)])
-        ]
-      ].map((row) => row.map(lit) as any);
+    for (const types of tests) {
+      const s = types.map((t) => t.toString());
+      const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
 
-      for (const test of tests) {
-        eqJSON(fn.choice.eval(...test.slice(0, 3)), test[3]);
-      }
-    });
+      test(name, () => {
+        eq($fn.choice(...types.slice(0, 3)), types[3]);
+      });
+    }
   });
 });
