@@ -1,5 +1,3 @@
-import { describe, expect, test } from "bun:test";
-
 import { $number, type Type } from "./types";
 import { $function, $value, type TypeSet } from "./typeset";
 
@@ -10,10 +8,17 @@ const $four = $number(4);
 const $five = $number(5);
 const $six = $number(6);
 
-const values = (t: TypeSet): Type[] => [...t.set.values()].map((a) => a.type);
+const valEq = (a: TypeSet, b: Type[]): void => {
+  expect([...a.set.values()].map((t) => t.type).map((t) => t.types)).toEqual(
+    b.map((t) => t.types)
+  );
+};
 
-const deps = (t: TypeSet): Array<Array<[number, Type<any>]>> =>
-  [...t.set.values()].map((a) => [...a.deps.entries()]);
+const depEq = (a: TypeSet, b: Array<Array<[TypeSet, Type]>>): void => {
+  expect(
+    [...a.set.values()].map((p) => [...p.deps].map(([id, t]) => [id, t.types]))
+  ).toEqual(b.map((p) => p.map(([ts, t]) => [ts.id, t.types])));
+};
 
 describe("valueset", () => {
   const a = $value($one.or($two));
@@ -31,19 +36,19 @@ describe("valueset", () => {
   );
 
   test("empty", () => {
-    expect(values(empty)).toMatchObject([$one]);
-    expect(deps(empty)).toMatchObject([[]]);
+    valEq(empty, [$one]);
+    depEq(empty, [[]]);
   });
 
   describe("unit", () => {
     test("a", () => {
-      expect(values(a)).toMatchObject([$one, $two]);
-      expect(deps(a)).toMatchObject([[[a.id, $one]], [[a.id, $two]]]);
+      valEq(a, [$one, $two]);
+      depEq(a, [[[a, $one]], [[a, $two]]]);
     });
 
     test("b", () => {
-      expect(values(b)).toMatchObject([$one, $two]);
-      expect(deps(b)).toMatchObject([[[b.id, $one]], [[b.id, $two]]]);
+      valEq(b, [$one, $two]);
+      depEq(b, [[[b, $one]], [[b, $two]]]);
     });
 
     test("ids", () => {
@@ -52,56 +57,54 @@ describe("valueset", () => {
   });
 
   test("different", () => {
-    expect(values(different)).toMatchObject([$two, $three, $three, $four]);
-    expect(deps(different)).toMatchObject([
+    valEq(different, [$two, $three, $three, $four]);
+    depEq(different, [
       [
-        [a.id, $one],
-        [b.id, $one]
+        [a, $one],
+        [b, $one]
       ],
       [
-        [a.id, $two],
-        [b.id, $one]
+        [a, $two],
+        [b, $one]
       ],
       [
-        [a.id, $one],
-        [b.id, $two]
+        [a, $one],
+        [b, $two]
       ],
       [
-        [a.id, $two],
-        [b.id, $two]
+        [a, $two],
+        [b, $two]
       ]
     ]);
   });
 
   test("same", () => {
-    expect(values(same)).toMatchObject([$two, $four]);
-    expect(deps(same)).toMatchObject([[[a.id, $one]], [[a.id, $two]]]);
+    valEq(same, [$two, $four]);
+    depEq(same, [[[a, $one]], [[a, $two]]]);
   });
 
   test("derived", () => {
-    expect(values(derived).map((a) => a.toString())).toMatchObject(
-      [$three, $five, $four, $six].map((t) => t.toString())
-    );
-    expect(deps(derived)).toMatchObject([
+    valEq(derived, [$three, $five, $four, $six]);
+    depEq(derived, [
       [
-        [a.id, $one],
-        [different.id, $two],
-        [b.id, $one]
+        [a, $one],
+        [different, $two],
+        [b, $one]
       ],
       [
-        [a.id, $two],
-        [different.id, $three],
-        [b.id, $one]
+        [a, $two],
+        [different, $three],
+        [b, $one]
       ],
       [
-        [a.id, $one],
-        [different.id, $three],
-        [b.id, $two]
+        [a, $one],
+        [different, $three],
+        [b, $two]
       ],
       [
-        [a.id, $two],
-        [different.id, $four],
-        [b.id, $two]
+        [a, $two],
+        [different, $four],
+        [b, $two]
       ]
     ]);
   });

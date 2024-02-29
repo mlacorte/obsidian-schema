@@ -3,7 +3,8 @@
   "module": "dist/index.js",
   "type": "module",
   "scripts": {
-    "prepare": "bun ./scripts/prepare.ts"
+    "prepare": "tsx ./scripts/prepare.ts",
+    "test": "jest"
   },
   "dependencies": {
     "@lezer/common": "^1.2.1",
@@ -13,10 +14,12 @@
   },
   "devDependencies": {
     "@lezer/generator": "^1.6.0",
-    "bun-types": "latest",
-    "glob": "^10.3.10"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "esbuild": "^0.20.1",
+    "esbuild-jest-transform": "^2.0.0",
+    "glob": "^10.3.10",
+    "jest": "^29.7.0",
+    "tsx": "^4.7.1"
   }
 }

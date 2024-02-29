@@ -1,4 +1,5 @@
 import { buildParserFile } from "@lezer/generator";
+import * as esbuild from "esbuild";
 import { readFile, unlink, writeFile } from "fs/promises";
 import { glob } from "glob";
 import { parse, sep } from "path";
@@ -30,12 +31,10 @@ await Promise.allSettled(
   (await glob("src/**/*.grammar")).map(buildLezerGrammar)
 );
 
-const res = await Bun.build({
-  entrypoints: ["./src/index.ts"],
+await esbuild.build({
+  entryPoints: ["./src/index.ts"],
   outdir: "./dist",
-  splitting: true,
-  sourcemap: "external",
+  bundle: true,
+  sourcemap: true,
   minify: true
 });
-
-console.log(res);
