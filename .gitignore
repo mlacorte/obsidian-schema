@@ -11,4 +11,4 @@ dist-ssr
 server/dist
 public/dist
 **/*.parser.js
-**/*.terms.js
+**/*.parser.terms.js

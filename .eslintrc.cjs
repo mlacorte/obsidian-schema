@@ -44,6 +44,6 @@ module.exports = {
     "**/dist/**/*.js",
     "node_modules/**/*.js",
     "**/*.parser.js",
-    "**/*.terms.js"
+    "**/*.parser.terms.js"
   ]
 };

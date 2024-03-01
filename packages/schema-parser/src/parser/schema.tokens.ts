@@ -1,7 +1,7 @@
 import { ExternalTokenizer, type InputStream } from "@lezer/lr";
 import emoji from "emoji-regex";
 
-import { identifier, unknown } from "./schema.terms";
+import { identifier, unknown } from "./schema.parser.terms";
 
 const emojiRegex = new RegExp(emoji(), "");
 const longestEmojiSeqLength = 24; // probably overkill, but idk
