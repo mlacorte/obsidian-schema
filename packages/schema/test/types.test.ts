@@ -1,4 +1,4 @@
-import { $fn } from "./builtins";
+import { $fn } from "../src/builtins";
 import {
   $any,
   $array,
@@ -13,8 +13,8 @@ import {
   isType,
   StringFns,
   type Type
-} from "./types";
-import * as UtilFns from "./util";
+} from "../src/types";
+import * as UtilFns from "../src/util";
 
 const $one = $number(1);
 const $two = $number(2);

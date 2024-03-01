@@ -1,12 +1,11 @@
 {
   "compilerOptions": {
-    "allowJs": true,
     "composite": false,
     "declaration": true,
     "declarationMap": true,
-    "downlevelIteration": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
     "allowImportingTsExtensions": true,
     "inlineSources": false,
     "isolatedModules": true,
@@ -19,10 +18,7 @@
     "strict": true,
     "noEmit": true,
     "strictNullChecks": true,
-    "lib": ["ESNext", "dom"],
-    "outDir": "./dist",
-    "types": ["jest", "node"]
+    "lib": ["ESNext", "dom"]
   },
-  "include": ["."],
-  "exclude": ["node_modules", "dist"]
+  "files": [".eslintrc.cjs"]
 }

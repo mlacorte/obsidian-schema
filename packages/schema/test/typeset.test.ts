@@ -1,5 +1,5 @@
-import { $number, type Type } from "./types";
-import { $function, $value, type TypeSet } from "./typeset";
+import { $number, type Type } from "../src/types";
+import { $function, $value, type TypeSet } from "../src/typeset";
 
 const $one = $number(1);
 const $two = $number(2);

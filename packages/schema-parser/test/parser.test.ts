@@ -1,4 +1,4 @@
-import { children, hasErrors, parse, prettyPrint, toJSON } from "./parser";
+import { children, hasErrors, parse, prettyPrint, toJSON } from "../src/parser";
 
 describe("parser", () => {
   test("markdown", () => {

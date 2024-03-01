@@ -1,6 +1,7 @@
+import { type NodePropSource } from "@lezer/common";
 import { styleTags, tags } from "@lezer/highlight";
 
-export const highlight = styleTags({
+export const highlight: NodePropSource = styleTags({
   '"//"': tags.lineComment,
   '"/*"': tags.blockComment,
   Identifier: tags.variableName,
@@ -24,6 +25,6 @@ export const highlight = styleTags({
   Link: tags.link,
   PropertyIdentifier: tags.definition(tags.propertyName),
   "LocalProperty/PropertyIdentifier": tags.definition(
-    tags.local(tags.propertyName),
-  ),
+    tags.local(tags.propertyName)
+  )
 });
