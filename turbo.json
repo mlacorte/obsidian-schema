@@ -13,6 +13,9 @@
     },
     "run:clean": {
       "cache": false
+    },
+    "//#run:clean": {
+      "cache": false
     }
   }
 }
