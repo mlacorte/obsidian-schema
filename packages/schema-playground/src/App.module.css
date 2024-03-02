@@ -32,8 +32,9 @@
   height: 100%;
 }
 
-.editor {
-  padding: var(--pico-spacing);
+.editor > div,
+.editor > div > div {
+  height: 100%;
 }
 
 .results {

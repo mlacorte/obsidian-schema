@@ -9,7 +9,7 @@
 
 :root {
   --schema-border-width: 1px;
-  --schema-border-color: #ccc;
+  --schema-border-color: #ddd;
   --schema-border: var(--schema-border-color) solid var(--schema-border-width);
   --schema-header-height: 80px;
 }

@@ -1,12 +1,36 @@
 import "solid-resizable-panels/styles.css";
 
-import { createSignal, type JSX } from "solid-js";
+import { basicSetup, EditorView } from "codemirror";
+import { type JSX, onCleanup, onMount } from "solid-js";
 import { Panel, PanelGroup, ResizeHandle } from "solid-resizable-panels";
 
 import classes from "./App.module.css";
 
 export const App = (): JSX.Element => {
-  const [_count, _setCount] = createSignal(0);
+  // eslint-disable-next-line prefer-const
+  let editorViewDiv: HTMLDivElement = undefined as unknown as HTMLDivElement;
+  let editorView: EditorView;
+
+  const theme = EditorView.theme({
+    ".cm-selectionBackground": {
+      background: "var(--pico-text-selection-color)"
+    },
+    ".cm-activeLine": { background: "var(--pico-text-selection-color)" },
+    ".cm-activeLineGutter": {
+      background: "var(--pico-text-selection-color)"
+    }
+  });
+
+  onMount(() => {
+    editorView = new EditorView({
+      extensions: [basicSetup, EditorView.lineWrapping, theme],
+      parent: editorViewDiv
+    });
+  });
+
+  onCleanup(() => {
+    editorView.destroy();
+  });
 
   return (
     <>
@@ -30,7 +54,7 @@ export const App = (): JSX.Element => {
         <Panel tag="section" id="playground" class={classes.playground}>
           <PanelGroup direction="column">
             <Panel tag="div" id="editor" class={classes.editor}>
-              Editor
+              <div ref={editorViewDiv} />
             </Panel>
             <ResizeHandle />
             <Panel tag="div" id="results" class={classes.results}>

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@picocss/pico": "^2.0.3",
+    "codemirror": "^6.0.1",
     "solid-js": "^1.8.15",
     "solid-resizable-panels": "^0.4.1"
   },
