@@ -23,6 +23,7 @@ module.exports = {
   rules: {
     // unused-imports
     "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": "off",
     "unused-imports/no-unused-imports": "error",
     "unused-imports/no-unused-vars": [
       "warn",
@@ -42,7 +43,7 @@ module.exports = {
   },
   ignorePatterns: [
     "**/dist/**/*.js",
-    "node_modules/**/*.js",
+    "node_modules/**",
     "**/*.parser.js",
     "**/*.parser.terms.js"
   ]

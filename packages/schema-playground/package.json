@@ -1,0 +1,26 @@
+{
+  "name": "schema-playground",
+  "type": "module",
+  "scripts": {
+    "build": "turbo run run:build",
+    "dev": "turbo run run:dev",
+    "clean": "turbo run run:clean",
+    "preview": "vite preview",
+    "run:build": "tsc && vite build",
+    "run:dev": "vite",
+    "run:clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@picocss/pico": "^2.0.3",
+    "solid-js": "^1.8.15",
+    "solid-resizable-panels": "^0.4.1"
+  },
+  "devDependencies": {
+    "pnpm": "^8.15.4",
+    "rimraf": "^5.0.5",
+    "turbo": "^1.12.4",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.4",
+    "vite-plugin-solid": "^2.10.1"
+  }
+}

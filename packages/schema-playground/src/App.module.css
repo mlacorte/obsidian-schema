@@ -1,0 +1,41 @@
+.header {
+  display: flex;
+  align-items: center;
+  flex-basis: var(--schema-header-height);
+  flex-shrink: 0;
+  padding: 0 var(--pico-block-spacing-horizontal);
+  border-bottom: var(--schema-border);
+}
+
+.main {
+  display: flex;
+  height: calc(100% - var(--schema-header-height));
+}
+
+.sidebar {
+  padding: var(--pico-spacing);
+}
+
+.docs {
+  border-radius: 0;
+  box-shadow: none;
+  overflow: scroll !important; /* override resizer */
+  margin-right: calc(var(--pico-spacing) / 2);
+  max-height: 100%;
+  margin-bottom: 0;
+}
+
+.playground {
+}
+
+.playground > div {
+  height: 100%;
+}
+
+.editor {
+  padding: var(--pico-spacing);
+}
+
+.results {
+  padding: var(--pico-spacing);
+}

@@ -1,0 +1,15 @@
+@import "@picocss/pico/css/pico.violet.min.css";
+@import "./styles/resizable.css";
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+:root {
+  --schema-border-width: 1px;
+  --schema-border-color: #ccc;
+  --schema-border: var(--schema-border-color) solid var(--schema-border-width);
+  --schema-header-height: 80px;
+}

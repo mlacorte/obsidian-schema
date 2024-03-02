@@ -1,0 +1,13 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "run:build": {
+      "inputs": ["src/**", "public/**"],
+      "outputs": ["dist/**"]
+    },
+    "run:dev": {
+      "inputs": ["src/**", "public/**"]
+    }
+  }
+}

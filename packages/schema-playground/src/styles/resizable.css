@@ -1,0 +1,46 @@
+/* both */
+.ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle {
+  --size-px: var(--pico-spacing);
+  display: flex;
+  position: relative;
+  background-color: transparent;
+  border-radius: 0;
+  /* horizontal*/
+  margin: 0 calc(0px - (var(--size-px) / 2));
+}
+.ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle:hover {
+  background-color: var(--pico-text-selection-color);
+}
+.ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle:focus {
+  box-shadow: none;
+}
+.ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle:active {
+  background-color: var(--pico-primary-focus);
+}
+
+.ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle::after {
+  content: "";
+  position: relative;
+  transition: background-color var(--pico-transition);
+  background-color: var(--schema-border-color);
+  /* horizontal*/
+  width: var(--schema-border-width);
+  height: 100%;
+  left: calc((var(--size-px) / 2) - 1px);
+  top: 0;
+}
+.ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle:active::after {
+  background-color: var(--pico-primary-focus);
+}
+
+/* vertical */
+.ResizeablePanelGroup_vertical > .ResizeablePanelGroup-ResizeHandle {
+  margin: calc(0px - (var(--size-px) / 2)) 0;
+}
+
+.ResizeablePanelGroup_vertical > .ResizeablePanelGroup-ResizeHandle::after {
+  width: 100%;
+  height: var(--schema-border-width);
+  left: 0;
+  top: calc((var(--size-px) / 2));
+}
