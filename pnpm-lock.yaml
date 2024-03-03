@@ -142,6 +142,21 @@ importers:
 
   packages/schema-playground:
     dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.13.0
+        version: 6.13.0(@codemirror/language@6.10.1)(@codemirror/state@6.4.1)(@codemirror/view@6.24.1)(@lezer/common@1.2.1)
+      '@codemirror/commands':
+        specifier: ^6.3.3
+        version: 6.3.3
+      '@codemirror/language':
+        specifier: ^6.10.1
+        version: 6.10.1
+      '@codemirror/state':
+        specifier: ^6.4.1
+        version: 6.4.1
+      '@codemirror/view':
+        specifier: ^6.24.1
+        version: 6.24.1
       '@picocss/pico':
         specifier: ^2.0.3
         version: 2.0.3

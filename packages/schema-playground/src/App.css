@@ -1,3 +1,9 @@
+@import "solid-resizable-panels/styles.css";
+
+/**
+ * Resizable panels
+ */
+
 /* both */
 .ResizeablePanelGroup > .ResizeablePanelGroup-ResizeHandle {
   --size-px: var(--pico-spacing);

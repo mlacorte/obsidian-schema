@@ -1,5 +1,4 @@
 @import "@picocss/pico/css/pico.violet.min.css";
-@import "./styles/resizable.css";
 
 #root {
   height: 100vh;

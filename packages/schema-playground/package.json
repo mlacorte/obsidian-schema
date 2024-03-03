@@ -11,6 +11,11 @@
     "run:clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.13.0",
+    "@codemirror/commands": "^6.3.3",
+    "@codemirror/language": "^6.10.1",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.24.1",
     "@picocss/pico": "^2.0.3",
     "codemirror": "^6.0.1",
     "solid-js": "^1.8.15",

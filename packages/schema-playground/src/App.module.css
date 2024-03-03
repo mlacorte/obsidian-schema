@@ -25,15 +25,12 @@
   margin-bottom: 0;
 }
 
-.playground {
-}
-
-.playground > div {
+.editor > div,
+.editor :global(.cm-editor) {
   height: 100%;
 }
 
-.editor > div,
-.editor > div > div {
+.playground > div {
   height: 100%;
 }
 
