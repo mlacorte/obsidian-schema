@@ -54,30 +54,31 @@ export const schemaCompletion: Extension = schemaLanguage.data.of({
   ])
 });
 
-export const schemaLinter = linter((view) => {
-  const { state } = view;
-  const tree = syntaxTree(state);
-  const res: Diagnostic[] = [];
+export const schemaLinter = linter(
+  (view) => {
+    const { state } = view;
+    const tree = syntaxTree(state);
+    const res: Diagnostic[] = [];
 
-  tree.iterate({
-    enter: (n) => {
-      if (!n.type.isError) {
-        return true;
+    tree.iterate({
+      enter: (n) => {
+        if (!n.type.isError) return true;
+
+        res.push({
+          from: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
+          to: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
+          severity: "error",
+          message: "syntax error"
+        });
       }
+    });
 
-      const node = n.node;
-
-      res.push({
-        from: node.prevSibling !== null ? node.prevSibling.to : n.from,
-        to: node.prevSibling !== null ? node.prevSibling.to : n.from,
-        severity: "error",
-        message: "syntax error"
-      });
-    }
-  });
-
-  return res;
-});
+    return res;
+  },
+  {
+    delay: 0
+  }
+);
 
 export const schema = (): LanguageSupport =>
   new LanguageSupport(schemaLanguage, [schemaCompletion, schemaLinter]);

@@ -94,6 +94,9 @@ const theme = EditorView.theme({
   },
 
   ".cm-gutters": {
+    fontSize: inherit,
+    fontFamily,
+    lineHeight,
     backgroundColor: codeBackground,
     color,
     border: "none"
@@ -110,6 +113,7 @@ const theme = EditorView.theme({
   },
 
   ".cm-tooltip": {
+    fontFamily,
     border: "none",
     backgroundColor: tooltipBackground,
     "& > *": {
@@ -127,7 +131,8 @@ const theme = EditorView.theme({
   ".cm-tooltip-autocomplete": {
     "& > ul > li[aria-selected]": {
       backgroundColor: highlightBackground,
-      color
+      color,
+      fontSize
     }
   },
   // linter
@@ -263,6 +268,29 @@ export const extensions: Extension = (() => [
   schema()
 ])();
 
+const doc = `local cmp: (a,b) => error("NEVER"),
+local cmp: (a,b) => a < b,
+
+a: 20,
+b: 10 or 30,
+c: choice(
+  cmp(this.a, this.b),
+  this.a + 3,
+  this.b + 5
+),
+
+c: 23,
+
+/*
+cmp/1: <lambda>,
+cmp/2: <lambda>,
+a/1: 20,
+b/1: 30,
+c/1: 20,
+
+c/1 -> {a/1, b/1, cmp/2}
+*/`;
+
 export const Editor = (): JSX.Element => {
   // eslint-disable-next-line prefer-const
   let editorViewDiv: HTMLDivElement = undefined as unknown as HTMLDivElement;
@@ -271,7 +299,8 @@ export const Editor = (): JSX.Element => {
   onMount(() => {
     editorView = new EditorView({
       extensions,
-      parent: editorViewDiv
+      parent: editorViewDiv,
+      doc
     });
   });
 
