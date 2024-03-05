@@ -24,7 +24,14 @@ export const App = (): JSX.Element => {
         <Panel tag="article" id="docs" class={classes.docs}>
           <h1>Tutorial</h1>
           <p>Describe how to use schema editor here.</p>
-          <code>{`{ json: true }`}</code>
+          <p>
+            <code>{`{ json: true }`}</code>
+          </p>
+          <select>
+            <option>One</option>
+            <option>Two</option>
+            <option>Three</option>
+          </select>
         </Panel>
         <ResizeHandle />
         <Panel tag="section" id="playground" class={classes.playground}>

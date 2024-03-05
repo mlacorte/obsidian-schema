@@ -3,11 +3,13 @@
   "extends": ["//"],
   "pipeline": {
     "run:build": {
-      "inputs": ["src/**", "public/**"],
+      "dependsOn": ["schema-parser#run:build"],
+      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"],
       "outputs": ["dist/**"]
     },
     "run:dev": {
-      "inputs": ["src/**", "public/**"]
+      "dependsOn": ["schema-parser#run:build"],
+      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
     }
   }
 }

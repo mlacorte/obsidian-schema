@@ -19,7 +19,7 @@
 .docs {
   border-radius: 0;
   box-shadow: none;
-  overflow: scroll !important; /* override resizer */
+  overflow: auto !important; /* override resizer */
   margin-right: calc(var(--pico-spacing) / 2);
   max-height: 100%;
   margin-bottom: 0;

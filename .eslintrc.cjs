@@ -18,7 +18,8 @@ module.exports = {
   ],
   parserOptions: {
     ecmaVersion: "latest",
-    sourceType: "module"
+    sourceType: "module",
+    extraFileExtensions: [".json"]
   },
   rules: {
     // unused-imports
@@ -40,11 +41,5 @@ module.exports = {
     // custom
     "@typescript-eslint/consistent-type-assertions": "off",
     "@typescript-eslint/no-non-null-assertion": "off"
-  },
-  ignorePatterns: [
-    "**/dist/**/*.js",
-    "node_modules/**",
-    "**/*.parser.js",
-    "**/*.parser.terms.js"
-  ]
+  }
 };

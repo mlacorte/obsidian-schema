@@ -3,15 +3,27 @@
   "extends": ["//"],
   "pipeline": {
     "run:build": {
-      "inputs": ["src/**"],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "!test/**"
+      ],
       "outputs": ["dist/**"]
     },
     "run:dev": {
-      "inputs": ["src/**"],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "!test/**"
+      ],
       "outputs": ["dist/**"]
     },
     "run:test": {
-      "inputs": ["src/**", "test/**"]
+      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
     }
   }
 }

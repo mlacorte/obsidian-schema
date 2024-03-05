@@ -22,6 +22,6 @@
     "outDir": "./dist",
     "types": ["jest", "node"]
   },
-  "include": ["."],
-  "exclude": ["node_modules", "dist"]
+  "include": [".", "**/*.json"],
+  "exclude": ["node_modules", "dist", ".turbo"]
 }

@@ -3,17 +3,22 @@ import { styleTags, tags } from "@lezer/highlight";
 
 export const highlight: NodePropSource = styleTags({
   '"//"': tags.lineComment,
-  '"/*"': tags.blockComment,
+  '"/*" "*/"': tags.blockComment,
+  this: tags.self,
   Identifier: tags.variableName,
   Tag: tags.tagName,
   DotIdentifier: tags.propertyName,
+  Null: tags.null,
   String: tags.string,
   Number: tags.number,
   Bool: tags.bool,
+  "Duration/... Date/...": tags.literal,
   "\\": tags.escape,
   "override protected": tags.modifier,
   "and or of include": tags.operatorKeyword,
   local: tags.definitionKeyword,
+  "Lambda/LambdaArgs/Arg/Identifier, Lambda/LambdaArgs/TypedArg/Identifier":
+    tags.definition(tags.propertyName),
   '"*" "/" + -': tags.arithmeticOperator,
   '"!" & |': tags.logicOperator,
   '>= <= "!=" > < =': tags.compareOperator,

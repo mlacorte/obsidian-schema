@@ -48,7 +48,7 @@ logicalExpression {
   Or { expression !logic ("or" | "|") expression }
 }
 
-Identifier { identifier }
+Identifier { kw<"this"> | identifier }
 Date { "date(" ( DateLiteral | DateShorthand) ")" }
 Duration { "dur(" durationPair (","? durationPair)* ")" }
 

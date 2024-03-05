@@ -1,4 +1,6 @@
-import { children, hasErrors, parse, prettyPrint, toJSON } from "../src/parser";
+import { schemaUtil } from "../src";
+
+const { children, hasErrors, parse, prettyPrint, toJSON } = schemaUtil;
 
 describe("parser", () => {
   test("markdown", () => {

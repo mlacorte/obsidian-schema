@@ -87,6 +87,18 @@ importers:
 
   packages/schema-parser:
     dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.13.0
+        version: 6.13.0(@codemirror/language@6.10.1)(@codemirror/state@6.4.1)(@codemirror/view@6.24.1)(@lezer/common@1.2.1)
+      '@codemirror/language':
+        specifier: ^6.10.1
+        version: 6.10.1
+      '@codemirror/lint':
+        specifier: ^6.5.0
+        version: 6.5.0
+      '@codemirror/state':
+        specifier: ^6.4.1
+        version: 6.4.1
       '@lezer/common':
         specifier: ^1.2.1
         version: 1.2.1
@@ -151,6 +163,9 @@ importers:
       '@codemirror/language':
         specifier: ^6.10.1
         version: 6.10.1
+      '@codemirror/lint':
+        specifier: ^6.5.0
+        version: 6.5.0
       '@codemirror/state':
         specifier: ^6.4.1
         version: 6.4.1
@@ -163,12 +178,15 @@ importers:
       codemirror:
         specifier: ^6.0.1
         version: 6.0.1(@lezer/common@1.2.1)
+      schema-parser:
+        specifier: workspace:*
+        version: link:../schema-parser
       solid-js:
         specifier: ^1.8.15
         version: 1.8.15
       solid-resizable-panels:
-        specifier: ^0.4.1
-        version: 0.4.1(solid-js@1.8.15)
+        specifier: ^0.4.2
+        version: 0.4.2(solid-js@1.8.15)
     devDependencies:
       pnpm:
         specifier: ^8.15.4
@@ -4748,8 +4766,8 @@ packages:
       solid-js: 1.8.15
     dev: true
 
-  /solid-resizable-panels@0.4.1(solid-js@1.8.15):
-    resolution: {integrity: sha512-qHevjQBFLbN39pzHPTKw50POMyKn3MFljiIaSn3R+DTfqpjQn1MweHpbdmHX9jnehMy7mvVW/Ua2p9uyRabBzA==}
+  /solid-resizable-panels@0.4.2(solid-js@1.8.15):
+    resolution: {integrity: sha512-7qMg9oYqf6hWVHNqHk3hXiXt+9FVuSUgGblNvjKeC339oIyivBK0EPTClTTeD5R8hGn9UZdM2c30Nhtl4q1rfA==}
     peerDependencies:
       solid-js: ^1.7
     dependencies:

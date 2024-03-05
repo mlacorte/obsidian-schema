@@ -4,22 +4,37 @@
   "pipeline": {
     "run:build:lezer": {
       "inputs": ["src/parser/schema.grammar"],
-      "outputs": ["src/parser/schema.parser.js", "src/parser/schema.parser.terms.js"],
+      "outputs": [
+        "src/parser/schema.parser.js",
+        "src/parser/schema.parser.terms.js"
+      ],
       "outputMode": "new-only"
     },
     "run:build": {
       "dependsOn": ["run:build:lezer"],
-      "inputs": ["src/**/*.ts"],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "!test/**"
+      ],
       "outputs": ["dist/**"]
     },
     "run:dev": {
       "dependsOn": ["run:build:lezer"],
-      "inputs": ["src/**/*.ts"],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "!test/**"
+      ],
       "outputs": ["dist/**"]
     },
     "run:test": {
       "dependsOn": ["run:build:lezer"],
-      "inputs": ["src/**/*.ts"]
+      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
     }
   }
 }
