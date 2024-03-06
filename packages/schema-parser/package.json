@@ -15,11 +15,11 @@
     "dev": "turbo run run:dev",
     "test": "turbo run run:test",
     "clean": "turbo run run:clean",
-    "run:clean": "rimraf dist src/**/*.parser.js src/**/*.parser.terms.js .turbo",
     "run:build": "tsup",
     "run:build:lezer": "lezer-generator src/parser/schema.grammar -o src/parser/schema.parser.js",
     "run:dev": "tsup --watch",
-    "run:test": "jest"
+    "run:test": "jest",
+    "run:clean": "rimraf dist src/**/*.parser.js src/**/*.parser.terms.js .turbo & jest --clearCache"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.13.0",

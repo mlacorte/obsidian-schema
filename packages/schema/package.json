@@ -18,7 +18,7 @@
     "run:build": "tsup",
     "run:dev": "tsup --watch",
     "run:test": "jest",
-    "run:clean": "rimraf dist .turbo"
+    "run:clean": "rimraf dist .turbo & jest --clearCache"
   },
   "dependencies": {
     "luxon": "^3.4.4"
