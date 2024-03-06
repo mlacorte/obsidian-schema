@@ -1,20 +1,18 @@
 /* eslint-disable no-labels */
-import { type Type } from "./types";
+import { type SingleType, type Type } from "./types";
 import { cartesian, Cmp } from "./util";
 
 export type id = bigint & { id: never };
 let $id: id = BigInt(1) as id;
 
-export type TypeSet = ITypeSet;
-
-export interface ITypeSet {
+export interface TypeSet {
   id: id;
   set: IPossibleType[];
 }
 
 export interface IPossibleType {
   type: Type;
-  deps: Map<id, Type>;
+  deps: Map<id, SingleType>;
 }
 
 export const $value = (value: Type, id?: id): TypeSet => {
@@ -31,7 +29,7 @@ export const $value = (value: Type, id?: id): TypeSet => {
 
 export const $function = (
   args: TypeSet[],
-  fn: (...args: Array<Type<any>>) => Type,
+  fn: (...args: Array<SingleType<any>>) => Type,
   id?: id
 ): TypeSet => {
   id = id ?? ($id++ as id);
@@ -46,13 +44,14 @@ export const $function = (
   );
 
   outer: for (const argCombo of argCombos) {
-    const deps = new Map<id, Type>();
+    const deps = new Map<id, SingleType>();
 
     for (const arg of argCombo) {
       const curr = deps.get(arg.id);
 
       if (curr === undefined) {
-        deps.set(arg.id, arg.type);
+        // TODO: figure out what to do if multiple types returned
+        deps.set(arg.id, arg.type as SingleType);
       } else if (curr.cmp(arg.type) !== Cmp.Equal) {
         continue outer;
       }
@@ -68,7 +67,7 @@ export const $function = (
       }
     }
 
-    const types = args.map((a) => deps.get(a.id)) as Type[];
+    const types = args.map((a) => deps.get(a.id)) as SingleType[];
     const type = fn(...types);
     set.push({ type, deps });
   }

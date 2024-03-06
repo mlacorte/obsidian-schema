@@ -1,4 +1,4 @@
-import { $number, type Type } from "../src/types";
+import { $number, type SingleType } from "../src/types";
 import { $function, $value, type TypeSet } from "../src/typeset";
 
 const $one = $number(1);
@@ -8,13 +8,13 @@ const $four = $number(4);
 const $five = $number(5);
 const $six = $number(6);
 
-const valEq = (a: TypeSet, b: Type[]): void => {
+const valEq = (a: TypeSet, b: SingleType[]): void => {
   expect([...a.set.values()].map((t) => t.type).map((t) => t.types)).toEqual(
     b.map((t) => t.types)
   );
 };
 
-const depEq = (a: TypeSet, b: Array<Array<[TypeSet, Type]>>): void => {
+const depEq = (a: TypeSet, b: Array<Array<[TypeSet, SingleType]>>): void => {
   expect(
     [...a.set.values()].map((p) => [...p.deps].map(([id, t]) => [id, t.types]))
   ).toEqual(b.map((p) => p.map(([ts, t]) => [ts.id, t.types])));
@@ -24,15 +24,20 @@ describe("valueset", () => {
   const a = $value($one.or($two));
   const b = $value($one.or($two));
   const empty = $function([], () => $one);
-  const different = $function([a, b], (a: Type<"number">, b: Type<"number">) =>
-    $number(a.value! + b.value!)
+  const different = $function(
+    [a, b],
+    (a: SingleType<"number">, b: SingleType<"number">) =>
+      $number(a.value! + b.value!)
   );
-  const same = $function([a, a], (a: Type<"number">, b: Type<"number">) =>
-    $number(a.value! + b.value!)
+  const same = $function(
+    [a, a],
+    (a: SingleType<"number">, b: SingleType<"number">) =>
+      $number(a.value! + b.value!)
   );
   const derived = $function(
     [a, different],
-    (a: Type<"number">, b: Type<"number">) => $number(a.value! + b.value!)
+    (a: SingleType<"number">, b: SingleType<"number">) =>
+      $number(a.value! + b.value!)
   );
 
   test("empty", () => {

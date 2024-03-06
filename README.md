@@ -39,5 +39,5 @@ Use the following for development purposes:
 - `pnpm test`
 - `pnpm build`
 
-The `pnpm` package is added as a dev dependency, so you can run `npm install` to
-get it if you don't want to install it globally.
+The `pnpm` package is added as a dev dependency, so you can run
+`npx pnpm install` to get it as well as all the project dendencies.
