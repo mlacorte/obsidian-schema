@@ -2,8 +2,8 @@
 import { type Type } from "./types";
 import { cartesian, Cmp } from "./util";
 
-type id = number;
-let $id: id = 1;
+export type id = bigint & { id: never };
+let $id: id = BigInt(1) as id;
 
 export type TypeSet = ITypeSet;
 
@@ -17,12 +17,10 @@ export interface IPossibleType {
   deps: Map<id, Type>;
 }
 
-export const $value = (value: Type): TypeSet => {
-  const id = $id++;
+export const $value = (value: Type, id?: id): TypeSet => {
+  id = id ?? ($id++ as id);
   const types = [...value.splitTypes()];
   const set: IPossibleType[] = [];
-
-  if (types.length === 1) return { id, set };
 
   for (const type of types) {
     set.push({ type, deps: new Map([[id, type]]) });
@@ -33,9 +31,10 @@ export const $value = (value: Type): TypeSet => {
 
 export const $function = (
   args: TypeSet[],
-  fn: (...args: Array<Type<any>>) => Type
+  fn: (...args: Array<Type<any>>) => Type,
+  id?: id
 ): TypeSet => {
-  const id = $id++;
+  id = id ?? ($id++ as id);
 
   if (args.length === 0) {
     return { id, set: [{ type: fn(), deps: new Map() }] };
