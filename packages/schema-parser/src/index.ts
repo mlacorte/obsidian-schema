@@ -59,19 +59,18 @@ export const schemaLinter = linter(
     const { state } = view;
     const tree = syntaxTree(state);
     const res: Diagnostic[] = [];
+    const n = tree.cursor();
 
-    tree.iterate({
-      enter: (n) => {
-        if (!n.type.isError) return true;
+    do {
+      if (!n.type.isError) continue;
 
-        res.push({
-          from: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
-          to: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
-          severity: "error",
-          message: "syntax error"
-        });
-      }
-    });
+      res.push({
+        from: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
+        to: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
+        severity: "error",
+        message: "syntax error"
+      });
+    } while (n.next());
 
     return res;
   },

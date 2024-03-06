@@ -106,6 +106,10 @@ const theme = EditorView.theme({
     backgroundColor: highlightBackground
   },
 
+  ".cm-foldGutter": {
+    marginTop: "-4px"
+  },
+
   ".cm-foldPlaceholder": {
     backgroundColor: "transparent",
     border: "none",
@@ -270,6 +274,23 @@ export const extensions: Extension = (() => [
 
 const doc = `local cmp: (a,b) => error("NEVER"),
 local cmp: (a,b) => a < b,
+
+foo: {
+  a: 10,
+  bar: this.bar.foo,
+  of string,
+},
+
+bar: {
+  foo: this.foo.a,
+},
+
+other:
+  local a: 10,
+  local b: 20,
+  [a, b, a + b],
+
+test: local a: 10, a,
 
 a: 20,
 b: 10 or 30,
