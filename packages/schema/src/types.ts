@@ -7,55 +7,52 @@ import { Cmp } from "./util";
 
 export type IKey = keyof ITypeMap;
 
-export interface ITypeMap<IsVal extends boolean = false> {
+export interface ITypeMap {
   any: null;
-  never: (IsVal extends true ? never : null) | string;
+  never: null | string;
   array: {
-    known: Array<Type<IKey, IsVal>>;
-    unknown: Type<IKey, IsVal>;
+    known: Array<Type<IKey>>;
+    unknown: Type<IKey>;
   };
-  boolean: (IsVal extends true ? never : null) | boolean;
-  date: (IsVal extends true ? never : null) | L.DateTime;
-  duration: (IsVal extends true ? never : null) | L.Duration;
-  function: (...args: Array<Type<IKey, IsVal>>) => Type<IKey, IsVal>;
+  boolean: null | boolean;
+  date: null | L.DateTime;
+  duration: null | L.Duration;
+  function: (...args: Array<Type<IKey>>) => Type<IKey>;
   link: Stubs.Link;
   null: null;
-  number: (IsVal extends true ? never : null) | number;
+  number: null | number;
   object: {
-    known: Map<string, Type<IKey, IsVal>>;
-    unknown: Type<IKey, IsVal>;
+    known: Map<string, Type<IKey>>;
+    unknown: Type<IKey>;
   };
-  string: (IsVal extends true ? never : null) | string;
+  string: null | string;
   widget: Stubs.Widget;
 }
-export type IType<K extends IKey = IKey, IsVal extends boolean = false> = [
-  IVal<K, IsVal>,
-  ...Array<IVal<K, IsVal>>
-];
-export type IVal<K extends IKey = IKey, IsVal extends boolean = false> = {
-  [V in K]: { type: V; values: IValues<V, IsVal> };
+export type IType<K extends IKey = IKey> = [IVal<K>, ...Array<IVal<K>>];
+export type IVal<K extends IKey = IKey> = {
+  [V in K]: { type: V; values: IValues<V> };
 }[K];
-export type IValues<K extends IKey = IKey, IsVal extends boolean = false> = [
-  ITypeMap<IsVal>[K],
-  ...Array<ITypeMap<IsVal>[K]>
+export type IValues<K extends IKey = IKey> = [
+  ITypeMap[K],
+  ...Array<ITypeMap[K]>
 ];
 
 const $isType = Symbol("type");
 export const isType = (obj: object): obj is Type => $isType in obj;
 
-export interface Type<K extends IKey = IKey, IsVal extends boolean = false> {
+export interface Type<K extends IKey = IKey> {
   [$isType]: true;
-  types: IType<K, IsVal>;
+  types: IType<K>;
   get type(): K;
-  get values(): Array<ITypeMap<IsVal>[K]>;
-  get value(): ITypeMap<IsVal>[K];
+  get values(): Array<ITypeMap[K]>;
+  get value(): ITypeMap[K];
   or: (other: Type) => Type;
   and: (other: Type) => Type;
   cmp: (other: Type, sortOnly?: boolean) => Cmp;
   toString: () => string;
-  isType: () => this is Type<K, true>;
-  splitTypes: () => Iterable<Type<K, IsVal>>;
-  clone: () => Type<K, IsVal>;
+  isType: () => boolean;
+  splitTypes: () => Iterable<Type<K>>;
+  clone: () => Type<K>;
 }
 
 export const type: {
