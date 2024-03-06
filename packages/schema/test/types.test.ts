@@ -1,4 +1,4 @@
-import { $fn } from "../src/builtins";
+import { builtins } from "../src/builtins";
 import {
   $any,
   $array,
@@ -289,7 +289,7 @@ describe("typeset", () => {
       const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
 
       test(name, () => {
-        eq($fn.choice(...types.slice(0, 3)), types[3]);
+        eq(builtins.choice.value(...types.slice(0, 3)), types[3]);
       });
     }
   });

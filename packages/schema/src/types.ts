@@ -620,7 +620,7 @@ interface IFnDec<T> {
 
 interface IFnBuilder {
   add: IFnDec<IFnBuilder>;
-  build: () => IFn<Type>;
+  build: () => Type<"function">;
 }
 
 export const define = (name: string, vectorize: number[]): IFnBuilder => {
@@ -755,47 +755,48 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
     return { add, build };
   };
 
-  const build: IFnBuilder["build"] =
-    () =>
-    (...args: Type[]): Type => {
-      // propagate errors
-      const errors = args.filter((arg) => arg.type === "never");
+  const build: IFnBuilder["build"] = () =>
+    type(
+      val("function", (...args: Type[]): Type => {
+        // propagate errors
+        const errors = args.filter((arg) => arg.type === "never");
 
-      if (errors.length > 0) {
-        return errors.reduce<Type>((a, b) => a.or(b), $never);
-      }
-
-      // finds match
-      const argList = $array(args);
-      let matchFn: IFn<Type> | null = null;
-
-      for (const { types, fn } of fns) {
-        const cmp = argList.cmp(types);
-        if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
-          matchFn = fn;
-          break;
+        if (errors.length > 0) {
+          return errors.reduce<Type>((a, b) => a.or(b), $never);
         }
-      }
 
-      // throws error if none found
-      if (matchFn === null) {
-        return $never(
-          `No implementation of '${name}' found for arguments: ${args
-            .map((arg) => arg.toString())
-            .join(", ")}`
-        );
-      }
+        // finds match
+        const argList = $array(args);
+        let matchFn: IFn<Type> | null = null;
 
-      // union all results
-      const combos = args.map((arg) => arg.splitTypes());
-      let res: Type = $never;
+        for (const { types, fn } of fns) {
+          const cmp = argList.cmp(types);
+          if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
+            matchFn = fn;
+            break;
+          }
+        }
 
-      for (const combo of UtilFns.cartesian(combos)) {
-        res = res.or(matchFn(...combo));
-      }
+        // throws error if none found
+        if (matchFn === null) {
+          return $never(
+            `No implementation of '${name}' found for arguments: ${args
+              .map((arg) => arg.toString())
+              .join(", ")}`
+          );
+        }
 
-      return res;
-    };
+        // union all results
+        const combos = args.map((arg) => arg.splitTypes());
+        let res: Type = $never;
+
+        for (const combo of UtilFns.cartesian(combos)) {
+          res = res.or(matchFn(...combo));
+        }
+
+        return res;
+      })
+    );
 
   return { add, build };
 };
@@ -852,14 +853,11 @@ export const $duration = type(val("duration", null), (duration: L.Duration) =>
 
 export const $function = type<"function", IFnDec<Type>>(
   val("function", () => $any),
-  (...args: [any, any]) => {
-    const res = define("<lambda>", [])
+  (...args: [any, any]) =>
+    define("<lambda>", [])
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       .add(...args)
-      .build();
-
-    return type(val("function", res));
-  }
+      .build()
 );
 
 export const $link = (() => {

@@ -5,10 +5,15 @@ import {
   $link,
   $never,
   $null,
+  $number,
   $string,
   define,
   type Type
 } from "./types";
+
+const lt = define("lt", [])
+  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) < 0))
+  .build();
 
 const lte = define("lte", [])
   .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) <= 0))
@@ -30,7 +35,14 @@ const neq = define("neq", [])
   .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) !== 0))
   .build();
 
-export const $op = { lte, gt, gte, eq, neq };
+// TODO: make this dataview compliant
+const plus = define("neq", [])
+  .add([$number, $number], $number, [0, 1], (a: number, b: number) =>
+    $number(a + b)
+  )
+  .build();
+
+export const ops = { lt, lte, gt, gte, eq, neq, plus };
 
 const choice = define("choice", [0, 1, 2])
   .add([$boolean, $any, $any], (cond: Type<"boolean">, pass, fail) =>
@@ -44,4 +56,4 @@ const elink = define("elink", [0])
   .add([$null, [$any]], () => $never("TODO"))
   .build();
 
-export const $fn = { choice, elink };
+export const builtins = { choice, elink };
