@@ -53,6 +53,7 @@ export interface TypeBase<K extends IKey> {
   and: (other: Type<any>) => Type;
   cmp: (other: Type<any>, sortOnly?: boolean) => Cmp;
   toString: () => string;
+  isSingle: () => this is SingleType<K>;
   isType: () => boolean;
   splitTypes: () => Iterable<SingleType<K>>;
 }
@@ -84,6 +85,7 @@ export const type: {
   obj.cmp = (other, sortOnly = false) =>
     TypeFns.cmp(obj.types, other.types, sortOnly);
   obj.toString = () => TypeFns.string(obj.types);
+  obj.isSingle = () => TypeFns.isSingle(obj.types);
   obj.isType = () => TypeFns.isType(obj.types);
   obj.splitTypes = () =>
     UtilFns.map(TypeFns.splitTypes(obj.types), type) as Array<SingleType<K>>;
@@ -180,6 +182,16 @@ export const TypeFns = {
     types
       .flatMap((t) => t.values.map((v) => getFns(t.type).string(v)))
       .join(" or "),
+  isSingle(types: IType): boolean {
+    if (types.length > 1) return false;
+    for (const t of types) {
+      const { isSingle } = getFns(t.type);
+      for (const v of t.values) {
+        if (!isSingle(v)) return false;
+      }
+    }
+    return true;
+  },
   isType(types: IType): boolean {
     if (types.length > 1) return true;
     for (const t of types) {
@@ -252,6 +264,7 @@ interface IFnsType<T> {
   and: (a: T, b: T) => [] | [T];
   cmp: (a: T, b: T, sortOnly?: boolean) => Cmp;
   string: (value: T) => string;
+  isSingle: (value: T) => boolean;
   isType: (value: T) => boolean;
   splitTypes: (value: T) => Iterable<T>;
   clone: (value: T) => T;
@@ -316,18 +329,11 @@ const unitFns = <K extends IKey, T>(
       if (b === null) return Cmp.Subset;
       return fns._cmp(a as NonNull, b as NonNull, sortOnly);
     },
-    string(value) {
-      return value === null ? key : fns._string(value);
-    },
-    isType(value) {
-      return value === null;
-    },
-    splitTypes(value) {
-      return [value];
-    },
-    clone(value) {
-      return value === null ? null : fns._clone(value as NonNull);
-    },
+    string: (value) => (value === null ? key : fns._string(value)),
+    isSingle: () => true,
+    isType: (value) => value === null,
+    splitTypes: (value) => [value],
+    clone: (value) => (value === null ? null : fns._clone(value as NonNull)),
     ...fns
   };
 };
@@ -337,6 +343,7 @@ export const AnyFns = baseFns<"any">(() => ({
   and: () => [null],
   cmp: () => Cmp.Equal,
   string: () => "any",
+  isSingle: () => true,
   isType: () => true,
   splitTypes: () => [null],
   clone: () => null
@@ -356,6 +363,7 @@ export const NullFns = baseFns<"null">(() => ({
   and: () => [null],
   cmp: () => Cmp.Equal,
   string: () => "null",
+  isSingle: () => true,
   isType: () => false,
   splitTypes: () => [null],
   clone: () => null
@@ -538,6 +546,13 @@ export const collectionFns = <K extends "array" | "object", V>(
     knownSize(obj) {
       return args._size(obj.known);
     },
+    isSingle(obj) {
+      for (const key of obj.known.keys() as IColKeyVals) {
+        const val = args._get(obj.known, key, null as never);
+        if (!val.isSingle()) return false;
+      }
+      return true;
+    },
     isType(obj) {
       if (obj.unknown.type !== "never") return true;
       for (const key of obj.known.keys() as IColKeyVals) {
@@ -609,6 +624,7 @@ export const FunctionFns = baseFns<"function">(() => {
     and: (a, b) => (cmp(a, b) === Cmp.Equal ? [a] : []),
     cmp,
     string: () => "<function>",
+    isSingle: () => true,
     isType: () => false,
     splitTypes: (val) => [val],
     clone: (fn) => fn.bind({})
