@@ -17,7 +17,7 @@
     "clean": "turbo run run:clean",
     "run:build": "tsup",
     "run:dev": "tsup --watch",
-    "run:test": "jest",
+    "run:test": "jest --no-cache",
     "run:clean": "rimraf dist .turbo & jest --clearCache"
   },
   "dependencies": {

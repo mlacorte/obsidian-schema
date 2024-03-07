@@ -20,7 +20,7 @@ export const $value = (value: Type, id?: id): TypeSet => {
   const types = [...value.splitTypes()];
   const set: IPossibleType[] = [];
 
-  if (types.length === 0) {
+  if (types.length === 1) {
     set.push({ type: types[0], deps: new Map() });
     return { id, set };
   }
@@ -74,7 +74,7 @@ export const $function = (
     const res = fn(...args.map((a) => deps.get(a.id)!));
     const types = [...res.splitTypes()];
 
-    if (types.length === 0) {
+    if (types.length === 1) {
       set.push({ type: types[0], deps });
       continue;
     }
