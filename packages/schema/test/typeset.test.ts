@@ -1,5 +1,5 @@
 import { $number, type SingleType } from "../src/types";
-import { $function, $value, type TypeSet } from "../src/typeset";
+import { $fn, $val, type TypeSet } from "../src/typeset";
 
 const $one = $number(1);
 const $two = $number(2);
@@ -9,32 +9,38 @@ const $five = $number(5);
 const $six = $number(6);
 
 const valEq = (a: TypeSet, b: SingleType[]): void => {
-  expect([...a.set.values()].map((t) => t.type).map((t) => t.types)).toEqual(
-    b.map((t) => t.types)
-  );
+  expect(
+    [...a.potentials.values()].map((t) => t.type).map((t) => t.types)
+  ).toEqual(b.map((t) => t.types));
 };
 
 const depEq = (a: TypeSet, b: Array<Array<[TypeSet, SingleType]>>): void => {
   expect(
-    [...a.set.values()].map((p) => [...p.deps].map(([id, t]) => [id, t.types]))
+    [...a.potentials.values()].map((p) =>
+      [...p.conds].map(([id, t]) => [id, t.types])
+    )
   ).toEqual(b.map((p) => p.map(([ts, t]) => [ts.id, t.types])));
 };
 
 describe("valueset", () => {
-  const a = $value($one.or($two));
-  const b = $value($one.or($two));
-  const empty = $function([], () => $one);
-  const different = $function(
+  let ctr = BigInt(1);
+  const a = $val(ctr++, $one.or($two));
+  const b = $val(ctr++, $one.or($two));
+  const empty = $fn(ctr++, [], () => $one);
+  const different = $fn(
+    ctr++,
     [a, b],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
   );
-  const same = $function(
+  const same = $fn(
+    ctr++,
     [a, a],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
   );
-  const derived = $function(
+  const derived = $fn(
+    ctr++,
     [a, different],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
