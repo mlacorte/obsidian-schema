@@ -11,7 +11,7 @@ export interface TypeSet {
 }
 
 export interface IPossibleType {
-  type: Type;
+  type: SingleType;
   deps: Map<id, SingleType>;
 }
 
@@ -19,6 +19,11 @@ export const $value = (value: Type, id?: id): TypeSet => {
   id = id ?? ($id++ as id);
   const types = [...value.splitTypes()];
   const set: IPossibleType[] = [];
+
+  if (types.length === 0) {
+    set.push({ type: types[0], deps: new Map() });
+    return { id, set };
+  }
 
   for (const type of types) {
     set.push({ type, deps: new Map([[id, type]]) });
@@ -35,7 +40,7 @@ export const $function = (
   id = id ?? ($id++ as id);
 
   if (args.length === 0) {
-    return { id, set: [{ type: fn(), deps: new Map() }] };
+    return $value(fn(), id);
   }
 
   const set: IPossibleType[] = [];
@@ -50,8 +55,7 @@ export const $function = (
       const curr = deps.get(arg.id);
 
       if (curr === undefined) {
-        // TODO: figure out what to do if multiple types returned
-        deps.set(arg.id, arg.type as SingleType);
+        deps.set(arg.id, arg.type);
       } else if (curr.cmp(arg.type) !== Cmp.Equal) {
         continue outer;
       }
@@ -67,9 +71,19 @@ export const $function = (
       }
     }
 
-    const types = args.map((a) => deps.get(a.id)) as SingleType[];
-    const type = fn(...types);
-    set.push({ type, deps });
+    const res = fn(...args.map((a) => deps.get(a.id)!));
+    const types = [...res.splitTypes()];
+
+    if (types.length === 0) {
+      set.push({ type: types[0], deps });
+      continue;
+    }
+
+    for (const type of types) {
+      const includeSelf = structuredClone(deps);
+      includeSelf.set(id, type);
+      set.push({ type, deps: includeSelf });
+    }
   }
 
   return { id, set };
