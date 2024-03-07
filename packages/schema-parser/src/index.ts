@@ -6,7 +6,7 @@ import {
   LRLanguage,
   syntaxTree
 } from "@codemirror/language";
-import { type Diagnostic, linter } from "@codemirror/lint";
+import { linter } from "@codemirror/lint";
 import { type Extension } from "@codemirror/state";
 
 import { highlight } from "./parser/schema.highlight";
@@ -58,21 +58,22 @@ export const schemaLinter = linter(
   (view) => {
     const { state } = view;
     const tree = syntaxTree(state);
-    const res: Diagnostic[] = [];
     const n = tree.cursor();
 
     do {
       if (!n.type.isError) continue;
 
-      res.push({
-        from: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
-        to: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
-        severity: "error",
-        message: "syntax error"
-      });
+      return [
+        {
+          from: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
+          to: n.node.prevSibling !== null ? n.node.prevSibling.to : n.from,
+          severity: "error",
+          message: "syntax error"
+        }
+      ];
     } while (n.next());
 
-    return res;
+    return [];
   },
   {
     delay: 0
