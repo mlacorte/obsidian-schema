@@ -80,9 +80,7 @@ export const $function = (
     }
 
     for (const type of types) {
-      const includeSelf = structuredClone(deps);
-      includeSelf.set(id, type);
-      set.push({ type, deps: includeSelf });
+      set.push({ type, deps: new Map(deps).set(id, type) });
     }
   }
 
