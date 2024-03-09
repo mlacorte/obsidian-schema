@@ -1,28 +1,140 @@
 import {
-  $array,
-  $never,
+  $any,
   $number,
-  $object,
   $string,
   builtins,
-  type ops,
+  ops,
   type SingleType,
   type Type
 } from ".";
-import { $val, type id, type TypeSet } from "./typeset";
+import { type id, type TypeSet } from "./typeset";
 
 export type path = string & { path: never };
 export type identifier = string & { identifier: never };
 
-export type TypeRef =
+export type Ast =
   | SingleType
-  | BranchRef
-  | ObjectRef
-  | ArrayRef
-  | Thunk<TypeRef>;
+  | AstRef
+  | AstLocal
+  | AstCall
+  | AstFn
+  | AstObj
+  | AstArr
+  | AstOr
+  | AstAnd;
+
+export interface AstRef {
+  type: "ast/ref";
+  ref: string;
+  subRefs: string[];
+}
+
+export interface AstLocal {
+  type: "ast/local";
+  key: string;
+  val: Ast;
+  expr: Ast;
+}
+
+export interface AstCall {
+  type: "ast/call";
+  fn: Ast;
+  args: Ast[];
+}
+
+export interface AstFn {
+  type: "ast/fn";
+  args: Array<[key: string, type: Type]>;
+  body: Ast;
+}
+
+export interface AstObj {
+  type: "ast/obj";
+  known: Array<
+    [local: "local", key: string, val: Ast] | [key: string, val: Ast]
+  >;
+  unknown: Ast;
+}
+
+export interface AstArr {
+  type: "ast/arr";
+  known: Ast[];
+  unknown: Ast;
+}
+
+export interface AstOr {
+  type: "ast/or";
+  vals: Ast[];
+}
+
+export interface AstAnd {
+  type: "ast/and";
+  vals: Ast[];
+}
+
+export const ref = (ref: string, subRefs: string[] = []): AstRef => ({
+  type: "ast/ref",
+  ref,
+  subRefs
+});
+
+export const local = (key: string, val: Ast, expr: Ast): AstLocal => ({
+  type: "ast/local",
+  key,
+  val,
+  expr
+});
+
+export const call = (fn: Ast, args: Ast[]): AstCall => ({
+  type: "ast/call",
+  fn,
+  args
+});
+
+export const fn = (
+  args: Array<string | [key: string, type: Type]>,
+  body: Ast
+): AstFn => ({
+  type: "ast/fn",
+  args: args.map((arg) => (typeof arg === "string" ? [arg, $any] : arg)),
+  body
+});
+
+export const obj = (
+  known: Array<
+    [local: "local", key: string, val: Ast] | [key: string, val: Ast]
+  > = [],
+  unknown: Ast = $any
+): AstObj => ({
+  type: "ast/obj",
+  known,
+  unknown
+});
+
+export const arr = (known: Ast[] = [], unknown: Ast = $any): AstArr => ({
+  type: "ast/arr",
+  known,
+  unknown
+});
+
+export const or = (a: Ast, ...bs: Ast[]): Ast =>
+  bs.length === 0
+    ? a
+    : {
+        type: "ast/or",
+        vals: [a, ...bs].flatMap((v) => (v.type === "ast/or" ? v.vals : [v]))
+      };
+
+export const and = (a: Ast, ...bs: Ast[]): Ast =>
+  bs.length === 0
+    ? a
+    : {
+        type: "ast/and",
+        vals: [a, ...bs].flatMap((v) => (v.type === "ast/and" ? v.vals : [v]))
+      };
 
 export interface INote {
-  identifiers: ObjectRef;
+  ast: AstObj;
   ids: Set<id>;
   deps: Set<path>;
   reverseDeps: Set<path>;
@@ -35,10 +147,9 @@ export interface IGlobalContext {
 
 export interface IContext {
   global: IGlobalContext;
-  path: path;
   note: INote;
   branches: Map<id, TypeSet>;
-  scope: ObjectRef;
+  scope: AstObj;
 }
 
 export class Context implements IGlobalContext {
@@ -46,29 +157,19 @@ export class Context implements IGlobalContext {
   public notes = new Map<path, INote>();
   public branches = new Map<id, TypeSet>();
 
-  add(path: path, fn: (ctx: IObjectCtx) => void): void {
-    const ctx: IContext = {
-      global: this,
-      path,
-      note: null as any, // added below
-      branches: new Map(
-        [...this.branches.values()].map((t) => [t.id, t.clone()])
-      ),
-      scope: null as any // added below
-    };
-
-    ctx.scope = objectRef(ctx, $object({ ...builtins, this: $object({}) }));
-
-    ctx.note = {
-      identifiers: ctx.scope.vals.get("this") as ObjectRef,
+  add(path: path, ast: AstObj): this {
+    const $this = ast;
+    const scope = obj([...Object.entries(builtins), ["this", $this]]);
+    const note: INote = {
+      ast: scope,
       ids: new Set(),
       deps: new Set(),
       reverseDeps: new Set()
     };
 
-    this.notes.set(path, ctx.note);
+    this.notes.set(path, note);
 
-    evalObj(ctx, fn);
+    return this;
   }
 
   remove(path: path): Set<path> {
@@ -98,304 +199,52 @@ export class Context implements IGlobalContext {
   }
 }
 
-const evalObj = (ctx: IContext, fn: (ctx: IObjectCtx) => void): ObjectRef => {
-  const obj = objectRef(ctx, $object({}));
+// export const branchRef = (ctx: IContext, union: Type): Branch => {
+//   // shallow
+//   const set = $val(ctx.global.ctr++, union);
+//   ctx.note.ids.add(set.id);
+//   ctx.branches.set(set.id, set);
 
-  fn({
-    local(key, expr) {
-      ctx.scope.vals.set(key, evalExpr(ctx, expr));
-    },
-    set(_key, _expr) {
-      throw new Error("TODO");
-    },
-    of(_val) {
-      throw new Error("TODO");
-    },
-    include(_val) {
-      throw new Error("TODO");
-    }
-  });
+//   return { type: "branch", id: set.id };
+// };
 
-  return obj;
-};
+// export const fromBranchRef = (ctx: IContext, branch: Branch): Type =>
+//   ctx.branches
+//     .get(branch.id)!
+//     .potentials.reduce<Type>((res, branch) => res.or(branch.type), $never);
 
-const evalArr = (ctx: IContext, fn: (ctx: IArrayCtx) => void): ArrayRef => {
-  const arr = arrayRef(ctx, $array([]));
-
-  fn({
-    set: (_val) => {
-      throw new Error("TODO");
-    },
-    of: (_val) => {
-      throw new Error("TODO");
-    },
-    include: (_val: TypeRef) => {
-      throw new Error("TODO");
-    }
-  });
-
-  return arr;
-};
-
-const evalExpr = (ctx: IContext, fn: (ctx: IExprCtx) => TypeRef): TypeRef =>
-  fn({
-    local: (_key, _expr) => {
-      throw new Error("TODO");
-    },
-    get: (_keys) => {
-      throw new Error("TODO");
-    },
-    op: (_key) => {
-      throw new Error("TODO");
-    },
-    call: (_fn, _args) => {
-      throw new Error("TODO");
-    },
-    fn: (_args, _expr) => {
-      throw new Error("TODO");
-    },
-    obj: (obj) => {
-      return evalObj(ctx, obj);
-    },
-    arr: (arr) => {
-      return evalArr(ctx, arr);
-    },
-    or: (_types) => {
-      throw new Error("TODO");
-    },
-    and: (_types) => {
-      throw new Error("TODO");
-    }
-  });
-
-export interface Thunk<V> {
-  type: "thunk";
-  val: V | SingleType<"never">;
-}
-
-let thunkCtr = BigInt(1);
-const runningThunks = new Set<bigint>();
-
-export const thunk = <V>(fn: () => V): Thunk<V> => {
-  const obj = {} as Thunk<V>;
-  const id = thunkCtr++;
-
-  const get = (): V | SingleType<"never"> => {
-    let value: V | SingleType<"never">;
-
-    // cycle detection
-    if (!runningThunks.has(id)) {
-      runningThunks.add(id);
-      value = fn();
-      runningThunks.delete(id);
-    } else {
-      value = $never("Cycle detected");
-    }
-
-    // only run once
-    return Object.defineProperty(obj, "val", {
-      configurable: false,
-      enumerable: true,
-      value
-    }).val;
-  };
-
-  return Object.defineProperty(obj, "val", {
-    configurable: true,
-    enumerable: true,
-    get
-  });
-};
-
-export const typeRef = (ctx: IContext, types: Type): TypeRef => {
-  if (types.values.length > 1) return branchRef(ctx, types);
-
-  switch (types.type) {
-    case "object":
-      return objectRef(ctx, types as SingleType<"object">);
-    case "array":
-      return arrayRef(ctx, types as SingleType<"array">);
-    default:
-      return types.isSingle() ? types : branchRef(ctx, types);
-  }
-};
-
-export const fromTypeRef = (ctx: IContext, ref: TypeRef): Type => {
-  switch (ref.type) {
-    case "obj":
-      return fromObjectRef(ctx, ref);
-    case "arr":
-      return fromArrayRef(ctx, ref);
-    case "branch":
-      return fromBranchRef(ctx, ref);
-    case "thunk":
-      return fromTypeRef(ctx, ref.val);
-    default:
-      return ref;
-  }
-};
-
-export interface BranchRef {
-  type: "branch";
-  id: id;
-}
-
-export const branchRef = (ctx: IContext, types: Type): BranchRef => {
-  const set = $val(ctx.global.ctr++, types);
-  ctx.note.ids.add(set.id);
-  ctx.branches.set(set.id, set);
-
-  return { type: "branch", id: set.id };
-};
-
-export const fromBranchRef = (ctx: IContext, branch: BranchRef): Type =>
-  ctx.branches
-    .get(branch.id)!
-    .potentials.reduce<Type>((res, branch) => res.or(branch.type), $never);
-
-export interface ObjectRef {
-  type: "obj";
-  vals: Map<string, TypeRef>;
-  of: TypeRef;
-}
-
-export const objectRef = (
-  ctx: IContext,
-  type: SingleType<"object">
-): ObjectRef => {
-  const vals = new Map<string, TypeRef>();
-  const of = thunk(() => typeRef(ctx, type.value.unknown));
-
-  for (const [key, val] of type.value.known) {
-    vals.set(
-      key,
-      thunk(() => typeRef(ctx, val))
-    );
-  }
-
-  return { type: "obj", vals, of };
-};
-
-export const fromObjectRef = (
-  ctx: IContext,
-  obj: ObjectRef
-): SingleType<"object"> =>
-  $object(
-    [...obj.vals.entries()].reduce<Record<string, Type>>((res, [key, type]) => {
-      res[key] = fromTypeRef(ctx, type);
-      return res;
-    }, {}),
-    fromTypeRef(ctx, obj.of)
-  );
-
-export interface ArrayRef {
-  type: "arr";
-  vals: TypeRef[];
-  of: TypeRef;
-}
-
-export const arrayRef = (
-  ctx: IContext,
-  type: SingleType<"array">
-): ArrayRef => ({
-  type: "arr",
-  vals: type.value.known.map((t) => thunk(() => typeRef(ctx, t))),
-  of: thunk(() => typeRef(ctx, type.value.unknown))
-});
-
-export const fromArrayRef = (
-  ctx: IContext,
-  arr: ArrayRef
-): SingleType<"array"> =>
-  $array(
-    arr.vals.map((a) => fromTypeRef(ctx, a)),
-    fromTypeRef(ctx, arr.of)
-  );
-
-export interface IObjectCtx {
-  local: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  set: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  of: (val: TypeRef) => void;
-  include: (val: TypeRef) => void;
-}
-
-export interface IArrayCtx {
-  set: (expr: (ctx: IExprCtx) => TypeRef) => void;
-  of: (val: TypeRef) => void;
-  include: (val: TypeRef) => void;
-}
-
-export interface IExprCtx {
-  local: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  get: (ref: string, properties?: string[]) => TypeRef;
-  op: (key: keyof typeof ops) => SingleType<"function">;
-  call: (fn: TypeRef, args: TypeRef[]) => TypeRef;
-  fn: (
-    args: string[],
-    expr: (ctx: IExprCtx) => void
-  ) => Thunk<SingleType<"function">>;
-  obj: (obj: (ctx: IObjectCtx) => void) => ObjectRef;
-  arr: (arr: (ctx: IArrayCtx) => void) => ArrayRef;
-  or: (types: TypeRef[]) => TypeRef;
-  and: (types: TypeRef[]) => TypeRef;
-}
-
-const _test = (): Type => {
-  const fakeEval = (_obj: (ctx: IObjectCtx) => void): Type => {
-    throw new Error("TODO");
-  };
-
-  return fakeEval((c) => {
-    c.local("cmp", (c) =>
-      c.fn(["a", "b"], (c) => c.call(c.get("error"), [$string("NEVER")]))
-    );
-
-    c.local("cmp", (c) =>
-      c.fn(["a", "b"], (c) => c.call(c.op("lt"), [c.get("a"), c.get("b")]))
-    );
-
-    c.set("foo", (c) =>
-      c.obj((c) => {
-        c.set("a", () => $number(10));
-        c.set("bar", (c) => c.get("this", ["bar", "foo"]));
-      })
-    );
-
-    c.set("bar", (c) =>
-      c.obj((c) => {
-        c.set("foo", (c) => c.get("this", ["foo", "a"]));
-      })
-    );
-
-    c.set("other", (c) => {
-      c.local("a", () => $number(10));
-      c.local("b", () => $number(10));
-
-      return c.arr((c) => {
-        c.set((c) => c.get("a"));
-        c.set((c) => c.get("b"));
-        c.set((c) => c.call(c.op("plus"), [c.get("a"), c.get("b")]));
-      });
-    });
-
-    c.set("test", (c) => {
-      c.local("a", () => $number(10));
-
-      return c.get("a");
-    });
-
-    c.set("a", () => $number(20));
-
-    c.set("b", (c) => c.or([$number(10), $number(30)]));
-
-    c.set("c", (c) =>
-      c.call(c.get("choice"), [
-        c.call(c.get("cmp"), [c.get("this", ["a"]), c.get("this", ["b"])]),
-        c.call(c.op("plus"), [c.get("this", ["a"]), $number(3)]),
-        c.call(c.op("plus"), [c.get("this", ["b"]), $number(5)])
-      ])
-    );
-
-    c.set("c", () => $number(23));
-  });
-};
+const _test: Ast = obj([
+  ["local", "cmp", fn(["a", "b"], call(ref("error"), [$string("NEVER")]))],
+  ["local", "cmp", fn(["a", "b"], call(ops.lt, [ref("a"), ref("b")]))],
+  [
+    "foo",
+    obj([
+      ["a", $number(10)],
+      ["bar", ref("this", ["bar", "foo"])]
+    ])
+  ],
+  ["bar", obj([["foo", ref("this", ["foo", "a"])]])],
+  [
+    "other",
+    local(
+      "a",
+      $number(10),
+      local(
+        "b",
+        $number(10),
+        arr([ref("a"), ref("b"), call(ops.plus, [ref("a"), ref("b")])])
+      )
+    )
+  ],
+  ["test", local("a", $number(10), ref("a"))],
+  ["a", $number(20)],
+  ["b", or($number(10), $number(30))],
+  [
+    "c",
+    call(ref("choice"), [
+      call(ref("cmp"), [ref("this", ["a"]), ref("this", ["b"])]),
+      call(ops.plus, [ref("this", ["a"]), $number(3)]),
+      call(ops.plus, [ref("this", ["b"]), $number(5)])
+    ])
+  ]
+]);

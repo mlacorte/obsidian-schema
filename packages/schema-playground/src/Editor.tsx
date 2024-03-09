@@ -275,6 +275,10 @@ export const extensions: Extension = (() => [
 const doc = `local cmp: (a,b) => error("NEVER"),
 local cmp: (a,b) => a < b,
 
+fired: "fired",
+pending: "pending",
+event: { status: this.fired } or { status: this.pending },
+
 foo: {
   a: 10,
   bar: this.bar.foo,

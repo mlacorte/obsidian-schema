@@ -17,7 +17,7 @@ export interface ITypeMap {
   boolean: null | boolean;
   date: null | L.DateTime;
   duration: null | L.Duration;
-  function: (...args: Array<SingleType<IKey>>) => Type<IKey>;
+  function: (...args: Array<Type<IKey>>) => Type<IKey>;
   link: Stubs.Link;
   null: null;
   number: null | number;
@@ -779,7 +779,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
   };
 
   const build: IFnBuilder["build"] = () =>
-    singleType("function", (...args: SingleType[]): Type => {
+    singleType("function", (...args: Type[]): Type => {
       // propagate errors
       const errors = args.filter((arg) => arg.type === "never");
 
