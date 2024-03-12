@@ -66,7 +66,7 @@ export const $val = (id: id, value: Type): TypeSet => {
 export const $fn = (
   id: id,
   args: TypeSet[],
-  fn: (...args: Array<SingleType<any>>) => Type
+  fn: (...args: SingleType[]) => Type
 ): TypeSet => {
   if (args.length === 0) {
     return $val(id, fn());

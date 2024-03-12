@@ -11,19 +11,19 @@ export interface ITypeMap {
   any: null;
   never: null | string;
   array: {
-    known: Array<Type<IKey>>;
-    unknown: Type<IKey>;
+    known: Type[];
+    unknown: Type;
   };
   boolean: null | boolean;
   date: null | L.DateTime;
   duration: null | L.Duration;
-  function: (...args: Array<Type<IKey>>) => Type<IKey>;
+  function: (...args: Type[]) => Type;
   link: Stubs.Link;
   null: null;
   number: null | number;
   object: {
-    known: Map<string, Type<IKey>>;
-    unknown: Type<IKey>;
+    known: Map<string, Type>;
+    unknown: Type;
   };
   string: null | string;
   widget: Stubs.Widget;
@@ -56,25 +56,33 @@ export interface TypeBase<K extends IKey> {
   isSingle: () => this is SingleType<K>;
   isType: () => boolean;
   splitTypes: () => Iterable<SingleType<K>>;
+  get: (key: Type) => Type;
 }
 
 export interface Type<K extends IKey = IKey> extends TypeBase<K> {
   types: IType<K>;
   get values(): Array<ITypeMap[K]>;
   clone: () => Type<K>;
+  splitTypesShallow: () => [SingleType<K>, ...Array<SingleType<K>>];
 }
 
 export interface SingleType<K extends IKey = IKey> extends TypeBase<K> {
   types: ISingleType<K>;
   get values(): [ITypeMap[K]];
   clone: () => SingleType<K>;
+  splitTypesShallow: () => [SingleType<K>];
 }
+
+export const is = <K extends IKey>(
+  key: K,
+  type: SingleType
+): type is SingleType<K> => type.type === key;
 
 export const type: {
   <K extends IKey>(types: IType<K>): Type<K>;
   <K extends IKey, T>(types: IType<K>, self: T): Type<K> & T;
 } = <K extends IKey, T>(types: IType<K>, self?: T): Type<K> | (Type<K> & T) => {
-  const obj = (self ?? {}) as Type<any>;
+  const obj = (self ?? {}) as Type<K>;
   obj[$isType] = true;
   obj.types = types;
   Object.defineProperty(obj, "type", { get: () => obj.types[0].type });
@@ -89,7 +97,35 @@ export const type: {
   obj.isType = () => TypeFns.isType(obj.types);
   obj.splitTypes = () =>
     UtilFns.map(TypeFns.splitTypes(obj.types), type) as Array<SingleType<K>>;
+  obj.splitTypesShallow = () => obj.types.map((t) => type([t])) as any;
   obj.clone = () => type(TypeFns.clone(obj.types));
+  obj.get = (keys) => {
+    let res: Type = $never;
+
+    for (const type of obj.splitTypes()) {
+      for (const key of keys.splitTypes()) {
+        res = res.or(
+          is("object", type) && is("string", key)
+            ? key.isType()
+              ? [...type.value.known.values()].reduce<Type>(
+                  (a, b) => a.or(b),
+                  type.value.unknown.or($null)
+                )
+              : ObjectFns.get(type.value, key.value!)
+            : is("array", type) && is("number", key)
+              ? key.isType()
+                ? type.value.known.reduce<Type>(
+                    (a, b) => a.or(b),
+                    type.value.unknown.or($null)
+                  )
+                : ArrayFns.get(type.value, key.value!)
+              : $null
+        );
+      }
+    }
+
+    return res;
+  };
   return obj;
 };
 
@@ -121,7 +157,7 @@ export const callable = <T extends { $: (...args: any[]) => any }>(
 };
 
 export const TypeFns = {
-  or(as: IType, bs: IType): IType {
+  or(as: IType<any>, bs: IType<any>): IType {
     // short circuit on identity
     if (as === bs) return as;
 
@@ -139,7 +175,7 @@ export const TypeFns = {
     // vals
     return [...UtilFns.or<IVal>(as, bs, ValFns.or)] as IType;
   },
-  and(as: IType, bs: IType): IType {
+  and(as: IType<any>, bs: IType<any>): IType {
     // short circuit on identity
     if (as === bs) return as;
 
@@ -160,7 +196,7 @@ export const TypeFns = {
       ? [{ type: "never", values: [NeverFns.error(as, bs)] }]
       : (res as IType);
   },
-  cmp(as: IType, bs: IType, sortOnly = false): Cmp {
+  cmp(as: IType<any>, bs: IType<any>, sortOnly = false): Cmp {
     // short circuit on identity
     if (as === bs) return Cmp.Equal;
 
@@ -178,11 +214,11 @@ export const TypeFns = {
     // vals
     return UtilFns.cmp(as, bs, ValFns.cmp, sortOnly);
   },
-  string: (types: IType) =>
+  string: (types: IType<any>) =>
     types
       .flatMap((t) => t.values.map((v) => getFns(t.type).string(v)))
       .join(" or "),
-  isSingle(types: IType): boolean {
+  isSingle(types: IType<any>): boolean {
     if (types.length > 1) return false;
     for (const t of types) {
       const { isSingle } = getFns(t.type);
@@ -192,7 +228,7 @@ export const TypeFns = {
     }
     return true;
   },
-  isType(types: IType): boolean {
+  isType(types: IType<any>): boolean {
     if (types.length > 1) return true;
     for (const t of types) {
       const { isType } = getFns(t.type);
@@ -202,7 +238,7 @@ export const TypeFns = {
     }
     return false;
   },
-  *splitTypes(types: IType): Iterable<ISingleType> {
+  *splitTypes(types: IType<any>): Iterable<ISingleType> {
     for (const t of types) {
       const { splitTypes } = getFns(t.type);
       for (const v of t.values) {
@@ -212,7 +248,7 @@ export const TypeFns = {
       }
     }
   },
-  clone(types: IType): IType {
+  clone(types: IType<any>): IType<any> {
     return [
       ...types.map((t) => {
         const { clone } = getFns(t.type);
