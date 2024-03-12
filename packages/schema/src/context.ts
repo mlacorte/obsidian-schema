@@ -148,16 +148,18 @@ const evalExpr = <T extends TypeRef>(
       ref.ctx = cloneCtx(ref.ctx);
       ref.ctx.scope.set(key, evalExpr(ref.ctx, expr));
     },
-    get: (name: string, properties = []) =>
-      thunk(ref.ctx, () => {
-        const curr = ref.ctx.scope.get(name)!;
-        if (curr === undefined) return $val(ref.ctx.global.ctr++, $null);
+    get: (name: string, properties = []) => {
+      const ctx = ref.ctx;
 
-        const objSet = fromTypeRef(ref.ctx, curr);
-        const propsSet = properties.map((v) => fromTypeRef(ref.ctx, v));
+      return thunk(ctx, () => {
+        const curr = ctx.scope.get(name)!;
+        if (curr === undefined) return $val(ctx.global.ctr++, $null);
+
+        const objSet = fromTypeRef(ctx, curr);
+        const propsSet = properties.map((v) => fromTypeRef(ctx, v));
 
         return $fn(
-          ref.ctx.global.ctr++,
+          ctx.global.ctr++,
           [objSet, ...propsSet],
           (obj, ...props) => {
             let res: Type = obj;
@@ -170,7 +172,8 @@ const evalExpr = <T extends TypeRef>(
             return res;
           }
         );
-      }),
+      })
+    },
     call: (_fn, _args) => {
       throw new Error("TODO");
     },
