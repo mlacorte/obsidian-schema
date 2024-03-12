@@ -27,7 +27,6 @@ export type TypeRef =
 
 export interface INote {
   this: ObjectRef;
-  path: path;
   deps: Set<path>;
   reverseDeps: Set<path>;
 }
@@ -52,10 +51,11 @@ export class Context implements IGlobalContext {
 
     const note: INote = {
       this: $this,
-      path,
       deps: new Set(),
       reverseDeps: new Set()
     };
+
+    this.notes.set(path, note);
 
     const scope = new Map<string, TypeRef>([
       ...Object.entries(builtins),
@@ -63,8 +63,6 @@ export class Context implements IGlobalContext {
     ]);
 
     const ctx: IContext = { global: this, note, scope };
-
-    this.notes.set(path, note);
 
     evalObj(ctx, fn);
   }
@@ -91,68 +89,87 @@ export class Context implements IGlobalContext {
   }
 }
 
-const evalObj = (ctx: IContext, fn: (ctx: IObjectCtx) => void): ObjectRef => {
-  const obj = objectRef(ctx, $object({}));
+const cloneCtx = ({ global, note, scope }: IContext): IContext => ({
+  global,
+  note,
+  scope: new Map(scope)
+});
+
+const evalObj = (
+  initialCtx: IContext,
+  fn: (ctx: IObjectCtx) => void
+): ObjectRef | AndRef => {
+  const obj = objectRef(initialCtx, $object({}, $any));
+  const ands: TypeRef[] = [];
+  const ref = { ctx: initialCtx };
 
   fn({
     local(key, expr) {
-      ctx.scope.set(key, evalExpr(ctx, expr));
+      ref.ctx = cloneCtx(ref.ctx);
+      ref.ctx.scope.set(key, evalExpr(ref.ctx, expr));
     },
-    set(_key, _expr) {
-      throw new Error("TODO");
+    set(key, expr) {
+      obj.vals.set(key, evalExpr(ref.ctx, expr));
     },
-    of(_val) {
-      throw new Error("TODO");
+    of(expr) {
+      obj.of = andRef(obj.of, evalExpr(ref.ctx, expr));
     },
-    include(_val) {
-      throw new Error("TODO");
+    include(expr) {
+      ands.push(evalExpr(ref.ctx, expr));
     }
   });
 
-  return obj;
+  return andRef(obj, ...ands);
 };
 
-const evalArr = (ctx: IContext, fn: (ctx: IArrayCtx) => void): ArrayRef => {
-  const arr = arrayRef(ctx, $array([]));
+const evalArr = (ctx: IContext, fn: (ctx: IArrayCtx) => void): TypeRef => {
+  const arr = arrayRef(ctx, $array([], $any));
 
   fn({
-    set: (_val) => {
-      throw new Error("TODO");
+    set: (expr) => {
+      arr.vals.push(evalExpr(ctx, expr));
     },
-    of: (_val) => {
-      throw new Error("TODO");
-    },
-    include: (_val: TypeRef) => {
-      throw new Error("TODO");
+    of: (expr) => {
+      arr.of = andRef(arr.of, evalExpr(ctx, expr));
     }
   });
 
   return arr;
 };
 
-const evalExpr = (ctx: IContext, fn: (ctx: IExprCtx) => TypeRef): TypeRef =>
-  fn({
-    local: (_key, _expr) => {
-      throw new Error("TODO");
+const evalExpr = <T extends TypeRef>(
+  initialCtx: IContext,
+  fn: (ctx: IExprCtx) => T
+): T => {
+  const ref = { ctx: initialCtx };
+
+  return fn({
+    local: (key, expr) => {
+      ref.ctx = cloneCtx(ref.ctx);
+      ref.ctx.scope.set(key, evalExpr(ref.ctx, expr));
     },
-    get: (ref: string, properties = []) =>
-      thunk(ctx, () => {
-        const curr = ctx.scope.get(ref)!;
-        if (curr === undefined) return $val(ctx.global.ctr++, $null);
+    get: (name: string, properties = []) =>
+      thunk(ref.ctx, () => {
+        const curr = ref.ctx.scope.get(name)!;
+        if (curr === undefined) return $val(ref.ctx.global.ctr++, $null);
 
-        const objSet = fromTypeRef(ctx, curr);
-        const propsSet = properties.map((v) => fromTypeRef(ctx, v));
+        const objSet = fromTypeRef(ref.ctx, curr);
+        const propsSet = properties.map((v) => fromTypeRef(ref.ctx, v));
 
-        return $fn(ctx.global.ctr++, [objSet, ...propsSet], (obj, ...props) => {
-          let res: Type = obj;
+        return $fn(
+          ref.ctx.global.ctr++,
+          [objSet, ...propsSet],
+          (obj, ...props) => {
+            let res: Type = obj;
 
-          for (const prop of props) {
-            res = res.get(prop);
-            if (res.cmp($null) === Cmp.Equal) return $null;
+            for (const prop of props) {
+              res = res.get(prop);
+              if (res.cmp($null) === Cmp.Equal) return $null;
+            }
+
+            return res;
           }
-
-          return res;
-        });
+        );
       }),
     call: (_fn, _args) => {
       throw new Error("TODO");
@@ -161,18 +178,19 @@ const evalExpr = (ctx: IContext, fn: (ctx: IExprCtx) => TypeRef): TypeRef =>
       throw new Error("TODO");
     },
     obj: (obj) => {
-      return evalObj(ctx, obj);
+      return evalObj(ref.ctx, obj);
     },
     arr: (arr) => {
-      return evalArr(ctx, arr);
+      return evalArr(ref.ctx, arr);
     },
-    or: (_types) => {
-      throw new Error("TODO");
+    or: (a, ...bs) => {
+      return orRef(a, ...bs);
     },
-    and: (_types) => {
-      throw new Error("TODO");
+    and: (a, ...bs) => {
+      return andRef(a, ...bs);
     }
   });
+};
 
 export interface Thunk {
   type: "ref/thunk";
@@ -215,7 +233,7 @@ export const thunk = (ctx: IContext, fn: () => TypeSet): Thunk => {
 
 export const typeRef = (ctx: IContext, type: Type): TypeRef => {
   if (type.types.length > 1) {
-    return orRef(ctx, ...type.splitTypesShallow());
+    return orRef(...type.splitTypesShallow());
   }
 
   switch (type.type) {
@@ -310,7 +328,7 @@ export interface OrRef {
   vals: TypeRef[];
 }
 
-export const orRef = (ctx: IContext, a: TypeRef, ...bs: TypeRef[]): TypeRef =>
+export const orRef = <T extends TypeRef>(a: T, ...bs: TypeRef[]): T | OrRef =>
   bs.length === 0
     ? a
     : {
@@ -331,7 +349,10 @@ export interface AndRef {
   vals: TypeRef[];
 }
 
-export const andRef = (ctx: IContext, a: TypeRef, ...bs: TypeRef[]): TypeRef =>
+export const andRef = <T extends TypeRef>(
+  a: T,
+  ...bs: TypeRef[]
+): T | AndRef =>
   bs.length === 0
     ? a
     : {
@@ -350,14 +371,13 @@ export const fromAndRef = (ctx: IContext, or: AndRef): TypeSet => {
 export interface IObjectCtx {
   local: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
   set: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  of: (val: TypeRef) => void;
-  include: (val: TypeRef) => void;
+  of: (expr: (ctx: IExprCtx) => TypeRef) => void;
+  include: (expr: (ctx: IExprCtx) => TypeRef) => void;
 }
 
 export interface IArrayCtx {
   set: (expr: (ctx: IExprCtx) => TypeRef) => void;
-  of: (val: TypeRef) => void;
-  include: (val: TypeRef) => void;
+  of: (expr: (ctx: IExprCtx) => TypeRef) => void;
 }
 
 export interface IExprCtx {
@@ -367,8 +387,8 @@ export interface IExprCtx {
   fn: (args: string[], expr: (ctx: IExprCtx) => void) => TypeRef;
   obj: (obj: (ctx: IObjectCtx) => void) => TypeRef;
   arr: (arr: (ctx: IArrayCtx) => void) => TypeRef;
-  or: (types: TypeRef[]) => TypeRef;
-  and: (types: TypeRef[]) => TypeRef;
+  or: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | OrRef;
+  and: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | AndRef;
 }
 
 const _test = (): Type => {
@@ -417,7 +437,7 @@ const _test = (): Type => {
 
     c.set("a", () => $number(20));
 
-    c.set("b", (c) => c.or([$number(10), $number(30)]));
+    c.set("b", (c) => c.or($number(10), $number(30)));
 
     c.set("c", (c) =>
       c.call(c.get("choice"), [
