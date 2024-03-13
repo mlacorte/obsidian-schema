@@ -1,6 +1,7 @@
 import {
   $any,
   $array,
+  $function,
   $never,
   $null,
   $number,
@@ -151,34 +152,66 @@ const evalExpr = <T extends TypeRef>(
     get: (name: string, properties = []) => {
       const ctx = ref.ctx;
 
-      return thunk(ctx, () => {
+      return lazy(ctx, () => {
+        const id = ctx.global.ctr++;
         const curr = ctx.scope.get(name)!;
-        if (curr === undefined) return $val(ctx.global.ctr++, $null);
+        if (curr === undefined) return $val(id, $null);
 
         const objSet = fromTypeRef(ctx, curr);
         const propsSet = properties.map((v) => fromTypeRef(ctx, v));
 
-        return $fn(
-          ctx.global.ctr++,
-          [objSet, ...propsSet],
-          (obj, ...props) => {
-            let res: Type = obj;
+        return $fn(id, [objSet, ...propsSet], (obj, ...props) => {
+          let res: Type = obj;
 
-            for (const prop of props) {
-              res = res.get(prop);
-              if (res.cmp($null) === Cmp.Equal) return $null;
+          for (const prop of props) {
+            res = res.get(prop);
+            if (res.cmp($null) === Cmp.Equal) return $null;
+          }
+
+          return res;
+        });
+      });
+    },
+    call: (fnRef, argRefs) => {
+      const id = ref.ctx.global.ctr++;
+      const fnSet = fromTypeRef(ref.ctx, fnRef);
+      const argSets = argRefs.map((arg) => fromTypeRef(ref.ctx, arg));
+
+      return strict(
+        $fn(id, [fnSet, ...argSets], (fn, ...args) => {
+          if (fn.is("function")) {
+            return fn.value(...args);
+          }
+
+          return $null;
+        })
+      );
+    },
+    fn: (args, expr) => {
+      const ctx = ref.ctx;
+      const names = args.map((a) => (typeof a === "string" ? a : a[0]));
+      const types = args.map((a) => (typeof a === "string" ? $any : a[1]));
+
+      return strict(
+        $val(
+          ctx.global.ctr++,
+          $function(types, (...argTypes) => {
+            for (let i = 0; i < names.length; i++) {
+              const arg = typeRef(
+                ctx,
+                (argTypes[i] as Type) ?? $never("missing arg")
+              );
+              ctx.scope.set(names[i], arg);
             }
 
-            return res;
-          }
-        );
-      })
-    },
-    call: (_fn, _args) => {
-      throw new Error("TODO");
-    },
-    fn: (_args, _expr) => {
-      throw new Error("TODO");
+            /**
+             * TODO: restructure $function to return TypeSets instead of Types
+             */
+            // return evalExpr(ctx, expr);
+            return $never("TODO");
+          })
+        )
+      );
     },
     obj: (obj) => {
       return evalObj(ref.ctx, obj);
@@ -203,18 +236,18 @@ export interface Thunk {
 let thunkCtr = BigInt(1);
 const runningThunks = new Set<bigint>();
 
-export const thunk = (ctx: IContext, fn: () => TypeSet): Thunk => {
+export const lazy = (ctx: IContext, fn: () => TypeSet): Thunk => {
   const obj = { type: "ref/thunk" } as Thunk;
-  const id = thunkCtr++;
+  const thunkId = thunkCtr++;
 
   const get = (): TypeSet => {
     let value: TypeSet;
 
     // cycle detection
-    if (!runningThunks.has(id)) {
-      runningThunks.add(id);
+    if (!runningThunks.has(thunkId)) {
+      runningThunks.add(thunkId);
       value = fn();
-      runningThunks.delete(id);
+      runningThunks.delete(thunkId);
     } else {
       value = $val(ctx.global.ctr++, $never("Cycle detected"));
     }
@@ -233,6 +266,8 @@ export const thunk = (ctx: IContext, fn: () => TypeSet): Thunk => {
     get
   });
 };
+
+export const strict = (val: TypeSet): Thunk => ({ type: "ref/thunk", val });
 
 export const typeRef = (ctx: IContext, type: Type): TypeRef => {
   if (type.types.length > 1) {
@@ -287,11 +322,12 @@ export const objectRef = (
 };
 
 export const fromObjectRef = (ctx: IContext, obj: ObjectRef): TypeSet => {
+  const id = ctx.global.ctr++;
   const keys = [...obj.vals.keys()];
   const vals = [...obj.vals.values()].map((v) => fromTypeRef(ctx, v));
   const of = fromTypeRef(ctx, obj.of);
 
-  return $fn(ctx.global.ctr++, [of, ...vals], (unknown, ...knownVals) => {
+  return $fn(id, [of, ...vals], (unknown, ...knownVals) => {
     const known: Record<string, SingleType> = {};
 
     for (let i = 0; i < knownVals.length; i++) {
@@ -318,12 +354,11 @@ export const arrayRef = (
 });
 
 export const fromArrayRef = (ctx: IContext, arr: ArrayRef): TypeSet => {
+  const id = ctx.global.ctr++;
   const vals = arr.vals.map((v) => fromTypeRef(ctx, v));
   const of = fromTypeRef(ctx, arr.of);
 
-  return $fn(ctx.global.ctr++, [of, ...vals], (unknown, ...known) =>
-    $array(known, unknown)
-  );
+  return $fn(id, [of, ...vals], (unknown, ...known) => $array(known, unknown));
 };
 
 export interface OrRef {
@@ -340,9 +375,10 @@ export const orRef = <T extends TypeRef>(a: T, ...bs: TypeRef[]): T | OrRef =>
       };
 
 export const fromOrRef = (ctx: IContext, or: OrRef): TypeSet => {
+  const id = ctx.global.ctr++;
   const ors = or.vals.map((v) => fromTypeRef(ctx, v));
 
-  return $fn(ctx.global.ctr++, ors, (...types) =>
+  return $fn(id, ors, (...types) =>
     types.reduce<Type>((a, b) => a.or(b), $never)
   );
 };
@@ -364,9 +400,10 @@ export const andRef = <T extends TypeRef>(
       };
 
 export const fromAndRef = (ctx: IContext, or: AndRef): TypeSet => {
+  const id = ctx.global.ctr++;
   const ands = or.vals.map((v) => fromTypeRef(ctx, v));
 
-  return $fn(ctx.global.ctr++, ands, (...types) =>
+  return $fn(id, ands, (...types) =>
     types.reduce<Type>((a, b) => a.and(b), $any)
   );
 };
@@ -387,7 +424,10 @@ export interface IExprCtx {
   local: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
   get: (ref: string, properties?: TypeRef[]) => TypeRef;
   call: (fn: TypeRef, args: TypeRef[]) => TypeRef;
-  fn: (args: string[], expr: (ctx: IExprCtx) => void) => TypeRef;
+  fn: (
+    args: Array<string | [string, Type]>,
+    expr: (ctx: IExprCtx) => TypeRef
+  ) => TypeRef;
   obj: (obj: (ctx: IObjectCtx) => void) => TypeRef;
   arr: (arr: (ctx: IArrayCtx) => void) => TypeRef;
   or: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | OrRef;

@@ -71,12 +71,8 @@ export interface SingleType<K extends IKey = IKey> extends TypeBase<K> {
   get values(): [ITypeMap[K]];
   clone: () => SingleType<K>;
   splitTypesShallow: () => [SingleType<K>];
+  is: <K extends IKey>(key: K) => this is SingleType<K>;
 }
-
-export const is = <K extends IKey>(
-  key: K,
-  type: SingleType
-): type is SingleType<K> => type.type === key;
 
 export const type: {
   <K extends IKey>(types: IType<K>): Type<K>;
@@ -99,20 +95,22 @@ export const type: {
     UtilFns.map(TypeFns.splitTypes(obj.types), type) as Array<SingleType<K>>;
   obj.splitTypesShallow = () => obj.types.map((t) => type([t])) as any;
   obj.clone = () => type(TypeFns.clone(obj.types));
+  (obj as unknown as SingleType).is = <K extends IKey>(k: K) =>
+    (obj.type as IKey) === k;
   obj.get = (keys) => {
     let res: Type = $never;
 
     for (const type of obj.splitTypes()) {
       for (const key of keys.splitTypes()) {
         res = res.or(
-          is("object", type) && is("string", key)
+          type.is("object") && key.is("string")
             ? key.isType()
               ? [...type.value.known.values()].reduce<Type>(
                   (a, b) => a.or(b),
                   type.value.unknown.or($null)
                 )
               : ObjectFns.get(type.value, key.value!)
-            : is("array", type) && is("number", key)
+            : type.is("array") && key.is("number")
               ? key.isType()
                 ? type.value.known.reduce<Type>(
                     (a, b) => a.or(b),
@@ -753,6 +751,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
         }
 
         $res = $res.clone();
+        // TODO: fix this to handle single inputs -> multiple outputs
         $res.value.known.push(fn(...subArgs));
 
         if (subPos + 1 >= min) {
