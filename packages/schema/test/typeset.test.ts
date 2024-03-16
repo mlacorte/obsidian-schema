@@ -1,5 +1,6 @@
+import { Context } from "../src/context";
 import { $number, type SingleType } from "../src/types";
-import { $fn, $val, type TypeSet } from "../src/typeset";
+import { TypeSet } from "../src/typeset";
 
 const $one = $number(1);
 const $two = $number(2);
@@ -23,24 +24,25 @@ const depEq = (a: TypeSet, b: Array<Array<[TypeSet, SingleType]>>): void => {
 };
 
 describe("valueset", () => {
-  let ctr = BigInt(1);
-  const a = $val(ctr++, $one.or($two));
-  const b = $val(ctr++, $one.or($two));
-  const empty = $fn(ctr++, [], () => $one);
-  const different = $fn(
-    ctr++,
+  const ctx = new Context().empty();
+
+  const a = TypeSet.val(ctx, $one.or($two));
+  const b = TypeSet.val(ctx, $one.or($two));
+  const empty = TypeSet.call(ctx, [], () => $one);
+  const different = TypeSet.call(
+    ctx,
     [a, b],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
   );
-  const same = $fn(
-    ctr++,
+  const same = TypeSet.call(
+    ctx,
     [a, a],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
   );
-  const derived = $fn(
-    ctr++,
+  const derived = TypeSet.call(
+    ctx,
     [a, different],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)

@@ -12,32 +12,32 @@ import {
 } from "./types";
 
 const lt = define("lt", [])
-  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) < 0))
+  .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) < 0))
   .build();
 
 const lte = define("lte", [])
-  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) <= 0))
+  .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) <= 0))
   .build();
 
 const gt = define("gt", [])
-  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) > 0))
+  .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) > 0))
   .build();
 
 const gte = define("gte", [])
-  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) >= 0))
+  .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) >= 0))
   .build();
 
 const eq = define("eq", [])
-  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) === 0))
+  .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) === 0))
   .build();
 
 const neq = define("neq", [])
-  .add([$any, $any], (a, b) => $boolean(a.cmp(b, true) !== 0))
+  .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) !== 0))
   .build();
 
 // TODO: make this dataview compliant
 const plus = define("neq", [])
-  .add([$number, $number], $number, [0, 1], (a: number, b: number) =>
+  .add([$number, $number], $number, [0, 1], (_, a: number, b: number) =>
     $number(a + b)
   )
   .build();
@@ -45,7 +45,7 @@ const plus = define("neq", [])
 export const ops = { lt, lte, gt, gte, eq, neq, plus };
 
 const choice = define("choice", [0, 1, 2])
-  .add([$boolean, $any, $any], (cond: Type<"boolean">, pass, fail) =>
+  .add([$boolean, $any, $any], (_, cond: Type<"boolean">, pass, fail) =>
     cond.isType() ? pass.or(fail) : cond.value! ? pass : fail
   )
   .build();

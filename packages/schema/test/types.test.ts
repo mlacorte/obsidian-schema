@@ -1,4 +1,5 @@
 import { builtins } from "../src/builtins";
+import { Context } from "../src/context";
 import {
   $any,
   $array,
@@ -14,6 +15,7 @@ import {
   StringFns,
   type Type
 } from "../src/types";
+import { TypeSet } from "../src/typeset";
 import * as UtilFns from "../src/util";
 
 const $one = $number(1);
@@ -284,12 +286,15 @@ describe("typeset", () => {
       ]
     ].map((row) => row.map(lit) as [Type, Type, Type, Type]);
 
+    const ctx = new Context().empty();
+
     for (const types of tests) {
+      const args = types.slice(0, 3).map((t) => TypeSet.val(ctx, t));
       const s = types.map((t) => t.toString());
       const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
 
       test(name, () => {
-        eq(builtins.choice.value(...types.slice(0, 3)), types[3]);
+        eq(builtins.choice.value(ctx, ...args).type(), types[3]);
       });
     }
   });

@@ -1,33 +1,37 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import * as L from "luxon";
 
+import { type IContext } from "./context";
 import type * as Stubs from "./stubs";
+import { TypeSet } from "./typeset";
 import * as UtilFns from "./util";
 import { Cmp } from "./util";
 
 export type IKey = keyof ITypeMap;
 
-export interface ITypeMap {
+export interface ITypeMapBase<T> {
   any: null;
   never: null | string;
   array: {
-    known: Type[];
-    unknown: Type;
+    known: T[];
+    unknown: T;
   };
   boolean: null | boolean;
   date: null | L.DateTime;
   duration: null | L.Duration;
-  function: (...args: Type[]) => Type;
+  function: (ctx: IContext, ...args: TypeSet[]) => TypeSet;
   link: Stubs.Link;
   null: null;
   number: null | number;
   object: {
-    known: Map<string, Type>;
-    unknown: Type;
+    known: Map<string, T>;
+    unknown: T;
   };
   string: null | string;
   widget: Stubs.Widget;
 }
+export type ITypeMap = ITypeMapBase<Type>;
+export type ISingleTypeMap = ITypeMapBase<SingleType>;
 export type IType<K extends IKey = IKey> = [IVal<K>, ...Array<IVal<K>>];
 export type ISingleType<K extends IKey = IKey> = [ISingleVal<K>];
 export type IVal<K extends IKey = IKey> = {
@@ -40,7 +44,7 @@ export type IValues<K extends IKey = IKey> = [
   ITypeMap[K],
   ...Array<ITypeMap[K]>
 ];
-export type ISingleValues<K extends IKey = IKey> = [ITypeMap[K]];
+export type ISingleValues<K extends IKey = IKey> = [ISingleTypeMap[K]];
 
 const $isType = Symbol("type");
 export const isType = (obj: object): obj is Type => $isType in obj;
@@ -48,7 +52,6 @@ export const isType = (obj: object): obj is Type => $isType in obj;
 export interface TypeBase<K extends IKey> {
   [$isType]: true;
   get type(): K;
-  get value(): ITypeMap[K];
   or: (other: Type<any>) => Type;
   and: (other: Type<any>) => Type;
   cmp: (other: Type<any>, sortOnly?: boolean) => Cmp;
@@ -61,6 +64,7 @@ export interface TypeBase<K extends IKey> {
 
 export interface Type<K extends IKey = IKey> extends TypeBase<K> {
   types: IType<K>;
+  get value(): ITypeMap[K];
   get values(): Array<ITypeMap[K]>;
   clone: () => Type<K>;
   splitTypesShallow: () => [SingleType<K>, ...Array<SingleType<K>>];
@@ -68,7 +72,8 @@ export interface Type<K extends IKey = IKey> extends TypeBase<K> {
 
 export interface SingleType<K extends IKey = IKey> extends TypeBase<K> {
   types: ISingleType<K>;
-  get values(): [ITypeMap[K]];
+  get value(): ISingleTypeMap[K];
+  get values(): [ISingleTypeMap[K]];
   clone: () => SingleType<K>;
   splitTypesShallow: () => [SingleType<K>];
   is: <K extends IKey>(key: K) => this is SingleType<K>;
@@ -129,7 +134,7 @@ export const type: {
 
 export const val = <K extends IKey>(
   key: K,
-  value: ITypeMap[K]
+  value: ISingleTypeMap[K]
 ): ISingleType<K> => [{ type: key, values: [value] }];
 
 export const singleType: {
@@ -137,7 +142,7 @@ export const singleType: {
   <K extends IKey, T>(key: K, value: ITypeMap[K], self: T): SingleType<K> & T;
 } = <K extends IKey, T>(
   key: K,
-  value: ITypeMap[K],
+  value: ISingleTypeMap[K],
   self?: T
 ): SingleType<K> | (SingleType<K> & T) => type(val(key, value), self as any);
 
@@ -409,6 +414,7 @@ export const BooleanFns = unitFns("boolean", () => ({
     if (a === null || b === null || (a && !b) || (b && !a)) return [null];
     return [a && b];
   },
+  splitTypes: (value) => (value === null ? [false, true] : [value]),
   _cmp: (a: boolean, b: boolean) =>
     a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
 }));
@@ -665,13 +671,13 @@ export const FunctionFns = baseFns<"function">(() => {
   };
 });
 
-type IFn<T> = (...args: T[]) => Type;
+type IFn<T> = (ctx: IContext, ...args: T[]) => Type;
 type IArgs = Type[] | [...Type[], IOptional];
 type IOptional = Type[] | [...Type[], IVararg];
 type IVararg = [Type];
 
 interface IFnDec<T> {
-  (args: IArgs, fn: IFn<Type<any>>): T;
+  (args: IArgs, fn: IFn<SingleType<any>>): T;
   (args: IArgs, type: Type, valufy: number[], valFn: IFn<any>): T;
 }
 
@@ -683,7 +689,7 @@ interface IFnBuilder {
 export const define = (name: string, vectorize: number[]): IFnBuilder => {
   const fns: Array<{
     types: Type<"array">;
-    fn: IFn<Type>;
+    fn: IFn<SingleType>;
   }> = [];
 
   // utility
@@ -709,29 +715,29 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
   };
 
   const valufyFn =
-    (def: Type, valufy: number[], fn: IFn<any>): IFn<Type> =>
-    (...args: Type[]): Type => {
+    (def: Type, valufy: number[], fn: IFn<any>): IFn<SingleType> =>
+    (ctx: IContext, ...args: SingleType[]): Type => {
       for (const pos of valufy.filter((pos) => pos < args.length)) {
         const arg = args[pos];
         if (arg.isType()) return def;
         args[pos] = arg.value as any;
       }
-      return fn(...args);
+      return fn(ctx, ...args);
     };
 
   const vectorizeFn =
-    (fn: IFn<Type>): IFn<Type> =>
-    (...args: Type[]): Type => {
-      const vecMap = new Map<number, Type<"array">>();
+    (fn: IFn<SingleType>): IFn<SingleType> =>
+    (ctx: IContext, ...args: SingleType[]): Type => {
+      const vecMap = new Map<number, SingleType<"array">>();
 
       for (const pos of vectorize) {
         const arg = args[pos];
         if (arg.type !== "array" || pos >= args.length) continue;
-        vecMap.set(pos, arg as Type<"array">);
+        vecMap.set(pos, arg as SingleType<"array">);
       }
 
       const vecs = [...vecMap.values()].map((t) => t.value);
-      if (vecs.length === 0) return fn(...args);
+      if (vecs.length === 0) return fn(ctx, ...args);
 
       const maxOrInfinity = Math.min(...vecs.map(ArrayFns.size));
       const min = Math.min(...vecs.map(ArrayFns.knownSize));
@@ -740,19 +746,18 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
           ? maxOrInfinity
           : Math.max(...vecs.map(ArrayFns.knownSize));
 
-      let $res = $array([]);
+      let $res: Type<"array"> = $array([]);
       const results: Array<Type<"array">> = min === 0 ? [$res] : [];
 
       for (let subPos = 0; subPos < max; subPos++) {
-        const subArgs: Type[] = [...args];
+        const subArgs: SingleType[] = [...args];
 
         for (const [vecPos, $vecArg] of vecMap.entries()) {
-          subArgs[vecPos] = ArrayFns.get($vecArg.value, subPos);
+          subArgs[vecPos] = ArrayFns.get($vecArg.value, subPos) as SingleType;
         }
 
         $res = $res.clone();
-        // TODO: fix this to handle single inputs -> multiple outputs
-        $res.value.known.push(fn(...subArgs));
+        $res.value.known.push(fn(ctx, ...subArgs));
 
         if (subPos + 1 >= min) {
           results.push($res);
@@ -768,7 +773,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
           subArgs[vecPos] = vecArg.value.known[max] ?? vecArg.value.unknown;
         }
 
-        results[lastPos] = $array(last.value.known, fn(...subArgs));
+        results[lastPos] = $array(last.value.known, fn(ctx, ...subArgs));
       }
 
       return results.reduce<Type>((a, b) => a.or(b), $never);
@@ -776,7 +781,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
 
   const add: IFnBuilder["add"] = (
     args: IArgs,
-    typeOrFn: Type | IFn<Type>,
+    typeOrFn: Type | IFn<SingleType<any>>,
     valufy?: number[],
     valFn?: IFn<any>
   ): IFnBuilder => {
@@ -814,45 +819,41 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
   };
 
   const build: IFnBuilder["build"] = () =>
-    singleType("function", (...args: Type[]): Type => {
-      // propagate errors
-      const errors = args.filter((arg) => arg.type === "never");
+    singleType(
+      "function",
+      (ctx: IContext, ...args: TypeSet[]): TypeSet =>
+        TypeSet.call(ctx, args, (...args) => {
+          // propagate errors
+          const errors = args.filter((arg) => arg.type === "never");
 
-      if (errors.length > 0) {
-        return errors.reduce<Type>((a, b) => a.or(b), $never);
-      }
+          if (errors.length > 0) {
+            return errors.reduce<Type>((a, b) => a.or(b), $never);
+          }
 
-      // finds match
-      const argList = $array(args);
-      let matchFn: IFn<SingleType> | null = null;
+          // finds match
+          const argList = $array(args);
+          let matchFn: IFn<SingleType> | null = null;
 
-      for (const { types, fn } of fns) {
-        const cmp = argList.cmp(types);
-        if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
-          matchFn = fn;
-          break;
-        }
-      }
+          for (const { types, fn } of fns) {
+            const cmp = argList.cmp(types);
+            if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
+              matchFn = fn;
+              break;
+            }
+          }
 
-      // throws error if none found
-      if (matchFn === null) {
-        return $never(
-          `No implementation of '${name}' found for arguments: ${args
-            .map((arg) => arg.toString())
-            .join(", ")}`
-        );
-      }
+          // throws error if none found
+          if (matchFn === null) {
+            return $never(
+              `No implementation of '${name}' found for arguments: ${args
+                .map((arg) => arg.toString())
+                .join(", ")}`
+            );
+          }
 
-      // union all results
-      const combos = args.map((arg) => arg.splitTypes());
-      let res: Type = $never;
-
-      for (const combo of UtilFns.cartesian(combos)) {
-        res = res.or(matchFn(...combo));
-      }
-
-      return res;
-    });
+          return matchFn(ctx, ...args);
+        })
+    );
 
   return { add, build };
 };
@@ -911,7 +912,7 @@ export const $duration = singleType("duration", null, (duration: L.Duration) =>
 
 export const $function = singleType<"function", IFnDec<Type>>(
   "function",
-  () => $any,
+  (ctx) => TypeSet.val(ctx, $any),
   (...args: [any, any]) =>
     define("<lambda>", [])
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
