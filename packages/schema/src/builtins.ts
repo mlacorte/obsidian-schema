@@ -8,7 +8,7 @@ import {
   $number,
   $string,
   define,
-  type Type
+  type SingleType
 } from "./types";
 
 const lt = define("lt", [])
@@ -45,8 +45,8 @@ const plus = define("neq", [])
 export const ops = { lt, lte, gt, gte, eq, neq, plus };
 
 const choice = define("choice", [0, 1, 2])
-  .add([$boolean, $any, $any], (_, cond: Type<"boolean">, pass, fail) =>
-    cond.isType() ? pass.or(fail) : cond.value! ? pass : fail
+  .add([$boolean, $any, $any], (_, cond: SingleType<"boolean">, pass, fail) =>
+    cond.isType() ? $never("should never happen") : cond.value! ? pass : fail
   )
   .build();
 

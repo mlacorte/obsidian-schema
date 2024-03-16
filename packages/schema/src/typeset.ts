@@ -1,6 +1,6 @@
 /* eslint-disable no-labels */
 import { type IContext } from "./context";
-import { $never, type SingleType, type Type } from "./types";
+import { $never, $null, type SingleType, type Type } from "./types";
 import { cartesian, Cmp } from "./util";
 
 export type id = bigint;
@@ -106,21 +106,25 @@ export class TypeSet {
 
     return new TypeSet(id, potentials);
   }
+
+  static eval(ctx: IContext, fn: TypeSet, args: TypeSet[]): TypeSet {
+    const potentials: IPotentialType[] = [];
+
+    for (const { type } of fn.potentials) {
+      const conds = new Map();
+      if (fn.potentials.length > 1) conds.set(fn.id, type);
+
+      if (!type.is("function")) {
+        potentials.push({ type: $null, conds });
+        continue;
+      }
+
+      for (const potential of type.value(ctx, ...args).potentials) {
+        if (fn.potentials.length > 1) potential.conds.set(fn.id, type);
+        potentials.push(potential);
+      }
+    }
+
+    return new TypeSet(ctx.global.ctr++, potentials);
+  }
 }
-
-// export const $eval = (id: id, fn: TypeSet, args: TypeSet[]): TypeSet => {
-//   const potentials: IPotentialType[] = [];
-//   const gt1 = fn.potentials.length > 1;
-
-//   for (const { type } of fn.potentials) {
-//     const conds = new Map();
-//     if (fn.potentials.length > 1) conds.set(fn.id, type);
-
-//     if (!type.is("function")) {
-//       potentials.push({ type: $null, conds })
-//       continue;
-//     }
-
-//     $call(id, args, type.value)
-//   }
-// };

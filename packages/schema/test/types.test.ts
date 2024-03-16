@@ -288,6 +288,10 @@ describe("typeset", () => {
 
     const ctx = new Context().empty();
 
+    test("boolean splitting", () => {
+      expect([...$array([], $boolean).splitTypes()].length).toBe(2);
+    });
+
     for (const types of tests) {
       const args = types.slice(0, 3).map((t) => TypeSet.val(ctx, t));
       const s = types.map((t) => t.toString());

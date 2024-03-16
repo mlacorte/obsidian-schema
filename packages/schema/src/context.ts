@@ -174,21 +174,11 @@ const evalExpr = <T extends TypeRef>(
       });
     },
     call: (fnRef, argRefs) => {
-      throw new Error("TODO");
-      // const ctx = ref.ctx;
-      // const id = ctx.global.ctr++;
-      // const fnSet = fromTypeRef(ctx, fnRef);
-      // const argSets = argRefs.map((arg) => fromTypeRef(ctx, arg));
+      const ctx = ref.ctx;
+      const fnSet = fromTypeRef(ctx, fnRef);
+      const argSets = argRefs.map((arg) => fromTypeRef(ctx, arg));
 
-      // return strict(
-      //   $call(id, [fnSet, ...argSets], (fn, ...args) => {
-      //     if (fn.is("function")) {
-      //       return fn.value(ctx, ...args);
-      //     }
-
-      //     return $null;
-      //   })
-      // );
+      return strict(TypeSet.eval(ctx, fnSet, argSets));
     },
     fn: (args, expr) => {
       const ctx = ref.ctx;
@@ -207,8 +197,7 @@ const evalExpr = <T extends TypeRef>(
               ctx.scope.set(names[i], arg);
             }
 
-            throw new Error("TODO");
-            // return fromTypeRef(ctx, evalExpr(ctx, expr)).type();
+            return fromTypeRef(ctx, evalExpr(ctx, expr)).type();
           })
         )
       );
