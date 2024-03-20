@@ -1,7 +1,6 @@
 import {
   $any,
   $array,
-  $function,
   $never,
   $null,
   $number,
@@ -10,6 +9,7 @@ import {
   builtins,
   ops,
   type SingleType,
+  singleType,
   type Type
 } from ".";
 import { type id, TypeSet } from "./typeset";
@@ -181,26 +181,35 @@ const evalExpr = <T extends TypeRef>(
       return strict(TypeSet.eval(ctx, fnSet, argSets));
     },
     fn: (args, expr) => {
-      const ctx = ref.ctx;
-      const names = args.map((a) => (typeof a === "string" ? a : a[0]));
-      const types = args.map((a) => (typeof a === "string" ? $any : a[1]));
-
-      return strict(
-        TypeSet.val(
-          ctx,
-          $function(types, (...argTypes) => {
-            for (let i = 0; i < names.length; i++) {
-              const arg = typeRef(
-                ctx,
-                (argTypes[i] as Type) ?? $never("missing arg") // possible?
-              );
-              ctx.scope.set(names[i], arg);
-            }
-
-            return fromTypeRef(ctx, evalExpr(ctx, expr)).type();
-          })
-        )
+      const snapshot = ref.ctx;
+      const cleaned: Array<[name: string, type: Type]> = args.map((a) =>
+        typeof a === "string" ? [a, $any] : a
       );
+
+      return singleType("function", (_, ...args): TypeSet => {
+        const ctx = cloneCtx(snapshot);
+
+        for (const [pos, arg] of args.slice(0, cleaned.length).entries()) {
+          const [name, type] = cleaned[pos];
+
+          ctx.scope.set(
+            name,
+            strict(
+              TypeSet.call(ctx, [arg], (arg) => {
+                switch (arg.cmp(type)) {
+                  case Cmp.Equal:
+                  case Cmp.Subset:
+                    return arg;
+                  default:
+                    return $never.andError(arg, type);
+                }
+              })
+            )
+          );
+        }
+
+        return fromTypeRef(ctx, evalExpr(ctx, expr));
+      });
     },
     obj: (obj) => {
       return evalObj(ref.ctx, obj);
@@ -414,7 +423,7 @@ export interface IExprCtx {
   fn: (
     args: Array<string | [string, Type]>,
     expr: (ctx: IExprCtx) => TypeRef
-  ) => TypeRef;
+  ) => SingleType<"function">;
   obj: (obj: (ctx: IObjectCtx) => void) => TypeRef;
   arr: (arr: (ctx: IArrayCtx) => void) => TypeRef;
   or: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | OrRef;
