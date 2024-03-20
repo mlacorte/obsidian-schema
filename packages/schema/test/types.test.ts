@@ -292,7 +292,7 @@ describe("typeset", () => {
     const ctx = new Context().empty();
 
     for (const types of tests) {
-      const args = types.slice(0, 3).map((t) => TypeSet.val(ctx, t));
+      const args = types.slice(0, 3).map((t) => TypeSet.val(t));
       const s = types.map((t) => t.toString());
       const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
 

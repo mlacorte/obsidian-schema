@@ -16,6 +16,8 @@ export class TypeSet {
     public potentials: IPotentialType[]
   ) {}
 
+  static ctr = BigInt(1);
+
   type(): Type {
     return this.potentials.reduce<Type>((res, p) => res.or(p.type), $never);
   }
@@ -33,8 +35,8 @@ export class TypeSet {
     );
   }
 
-  static val(ctx: IContext, value: Type): TypeSet {
-    const id = ctx.global.ctr++;
+  static val(value: Type): TypeSet {
+    const id = TypeSet.ctr++;
     const types = [...value.splitTypes()];
     const potentials: IPotentialType[] = [];
 
@@ -52,15 +54,14 @@ export class TypeSet {
   }
 
   static call(
-    ctx: IContext,
     args: TypeSet[],
     fn: (...args: Array<SingleType<any>>) => Type
   ): TypeSet {
     if (args.length === 0) {
-      return TypeSet.val(ctx, fn());
+      return TypeSet.val(fn());
     }
 
-    const id = ctx.global.ctr++;
+    const id = TypeSet.ctr++;
     const potentials: IPotentialType[] = [];
     const argCombos = cartesian(
       args.map((arg) =>
@@ -108,6 +109,7 @@ export class TypeSet {
   }
 
   static eval(ctx: IContext, fn: TypeSet, args: TypeSet[]): TypeSet {
+    const id = TypeSet.ctr++;
     const potentials: IPotentialType[] = [];
 
     for (const { type } of fn.potentials) {
@@ -125,6 +127,6 @@ export class TypeSet {
       }
     }
 
-    return new TypeSet(ctx.global.ctr++, potentials);
+    return new TypeSet(id, potentials);
   }
 }

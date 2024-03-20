@@ -3,20 +3,16 @@ import {
   $array,
   $never,
   $null,
-  $number,
   $object,
-  $string,
   builtins,
-  ops,
   type SingleType,
   singleType,
   type Type
 } from ".";
-import { type id, TypeSet } from "./typeset";
+import { TypeSet } from "./typeset";
 import { Cmp } from "./util";
 
 export type path = string;
-export type identifier = string & { identifier: never };
 
 export type TypeRef =
   | SingleType
@@ -33,7 +29,6 @@ export interface INote {
 }
 
 export interface IGlobalContext {
-  ctr: id;
   notes: Map<path, INote>;
 }
 
@@ -44,7 +39,6 @@ export interface IContext {
 }
 
 export class Context implements IGlobalContext {
-  public ctr = BigInt(1);
   public notes = new Map<path, INote>();
 
   empty(): IContext {
@@ -62,6 +56,16 @@ export class Context implements IGlobalContext {
     ]);
 
     return { global: this, note, scope };
+  }
+
+  eval(fn: (ctx: IObjectCtx) => void): Type {
+    return fromTypeRef(evalObj(this.empty(), fn)).type();
+  }
+
+  get(path: path): Type | null {
+    const note = this.notes.get(path);
+    if (note === undefined) return null;
+    return fromTypeRef(note.this).type();
   }
 
   add(path: path, fn: (ctx: IObjectCtx) => void): void {
@@ -156,12 +160,12 @@ const evalExpr = <T extends TypeRef>(
 
       return lazy(ctx, () => {
         const curr = ctx.scope.get(name)!;
-        if (curr === undefined) return TypeSet.val(ctx, $null);
+        if (curr === undefined) return TypeSet.val($null);
 
-        const objSet = fromTypeRef(ctx, curr);
-        const propsSet = properties.map((v) => fromTypeRef(ctx, v));
+        const objSet = fromTypeRef(curr);
+        const propsSet = properties.map((v) => fromTypeRef(v));
 
-        return TypeSet.call(ctx, [objSet, ...propsSet], (obj, ...props) => {
+        return TypeSet.call([objSet, ...propsSet], (obj, ...props) => {
           let res: Type = obj;
 
           for (const prop of props) {
@@ -175,8 +179,8 @@ const evalExpr = <T extends TypeRef>(
     },
     call: (fnRef, argRefs) => {
       const ctx = ref.ctx;
-      const fnSet = fromTypeRef(ctx, fnRef);
-      const argSets = argRefs.map((arg) => fromTypeRef(ctx, arg));
+      const fnSet = fromTypeRef(fnRef);
+      const argSets = argRefs.map((arg) => fromTypeRef(arg));
 
       return strict(TypeSet.eval(ctx, fnSet, argSets));
     },
@@ -195,7 +199,7 @@ const evalExpr = <T extends TypeRef>(
           ctx.scope.set(
             name,
             strict(
-              TypeSet.call(ctx, [arg], (arg) => {
+              TypeSet.call([arg], (arg) => {
                 switch (arg.cmp(type)) {
                   case Cmp.Equal:
                   case Cmp.Subset:
@@ -208,7 +212,7 @@ const evalExpr = <T extends TypeRef>(
           );
         }
 
-        return fromTypeRef(ctx, evalExpr(ctx, expr));
+        return fromTypeRef(evalExpr(ctx, expr));
       });
     },
     obj: (obj) => {
@@ -247,7 +251,7 @@ export const lazy = (ctx: IContext, fn: () => TypeSet): Thunk => {
       value = fn();
       runningThunks.delete(thunkId);
     } else {
-      value = TypeSet.val(ctx, $never("Cycle detected"));
+      value = TypeSet.val($never("Cycle detected"));
     }
 
     // only run once
@@ -282,20 +286,20 @@ export const typeRef = (ctx: IContext, type: Type): TypeRef => {
   }
 };
 
-export const fromTypeRef = (ctx: IContext, ref: TypeRef): TypeSet => {
+export const fromTypeRef = (ref: TypeRef): TypeSet => {
   switch (ref.type) {
     case "ref/obj":
-      return fromObjectRef(ctx, ref);
+      return fromObjectRef(ref);
     case "ref/arr":
-      return fromArrayRef(ctx, ref);
+      return fromArrayRef(ref);
     case "ref/or":
-      return fromOrRef(ctx, ref);
+      return fromOrRef(ref);
     case "ref/and":
-      return fromAndRef(ctx, ref);
+      return fromAndRef(ref);
     case "ref/thunk":
       return ref.val;
     default:
-      return TypeSet.val(ctx, ref);
+      return TypeSet.val(ref);
   }
 };
 
@@ -319,12 +323,12 @@ export const objectRef = (
   return { type: "ref/obj", vals, of };
 };
 
-export const fromObjectRef = (ctx: IContext, obj: ObjectRef): TypeSet => {
+export const fromObjectRef = (obj: ObjectRef): TypeSet => {
   const keys = [...obj.vals.keys()];
-  const vals = [...obj.vals.values()].map((v) => fromTypeRef(ctx, v));
-  const of = fromTypeRef(ctx, obj.of);
+  const vals = [...obj.vals.values()].map((v) => fromTypeRef(v));
+  const of = fromTypeRef(obj.of);
 
-  return TypeSet.call(ctx, [of, ...vals], (unknown, ...knownVals) => {
+  return TypeSet.call([of, ...vals], (unknown, ...knownVals) => {
     const known: Record<string, SingleType> = {};
 
     for (let i = 0; i < knownVals.length; i++) {
@@ -350,11 +354,11 @@ export const arrayRef = (
   of: typeRef(ctx, type.value.unknown)
 });
 
-export const fromArrayRef = (ctx: IContext, arr: ArrayRef): TypeSet => {
-  const vals = arr.vals.map((v) => fromTypeRef(ctx, v));
-  const of = fromTypeRef(ctx, arr.of);
+export const fromArrayRef = (arr: ArrayRef): TypeSet => {
+  const vals = arr.vals.map((v) => fromTypeRef(v));
+  const of = fromTypeRef(arr.of);
 
-  return TypeSet.call(ctx, [of, ...vals], (unknown, ...known) =>
+  return TypeSet.call([of, ...vals], (unknown, ...known) =>
     $array(known, unknown)
   );
 };
@@ -372,10 +376,10 @@ export const orRef = <T extends TypeRef>(a: T, ...bs: TypeRef[]): T | OrRef =>
         vals: [a, ...bs].flatMap((v) => (v.type === "ref/or" ? v.vals : [v]))
       };
 
-export const fromOrRef = (ctx: IContext, or: OrRef): TypeSet => {
-  const ors = or.vals.map((v) => fromTypeRef(ctx, v));
+export const fromOrRef = (or: OrRef): TypeSet => {
+  const ors = or.vals.map((v) => fromTypeRef(v));
 
-  return TypeSet.call(ctx, ors, (...types) =>
+  return TypeSet.call(ors, (...types) =>
     types.reduce<Type>((a, b) => a.or(b), $never)
   );
 };
@@ -396,10 +400,10 @@ export const andRef = <T extends TypeRef>(
         vals: [a, ...bs].flatMap((v) => (v.type === "ref/and" ? v.vals : [v]))
       };
 
-export const fromAndRef = (ctx: IContext, or: AndRef): TypeSet => {
-  const ands = or.vals.map((v) => fromTypeRef(ctx, v));
+export const fromAndRef = (or: AndRef): TypeSet => {
+  const ands = or.vals.map((v) => fromTypeRef(v));
 
-  return TypeSet.call(ctx, ands, (...types) =>
+  return TypeSet.call(ands, (...types) =>
     types.reduce<Type>((a, b) => a.and(b), $any)
   );
 };
@@ -429,66 +433,3 @@ export interface IExprCtx {
   or: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | OrRef;
   and: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | AndRef;
 }
-
-const _test = (): Type => {
-  const fakeEval = (_obj: (ctx: IObjectCtx) => void): Type => {
-    throw new Error("TODO");
-  };
-
-  return fakeEval((c) => {
-    c.local("cmp", (c) =>
-      c.fn(["a", "b"], (c) => c.call(c.get("error"), [$string("NEVER")]))
-    );
-
-    c.local("cmp", (c) =>
-      c.fn(["a", "b"], (c) => c.call(ops.lt, [c.get("a"), c.get("b")]))
-    );
-
-    c.set("foo", (c) =>
-      c.obj((c) => {
-        c.set("a", () => $number(10));
-        c.set("bar", (c) => c.get("this", [$string("bar"), $string("foo")]));
-      })
-    );
-
-    c.set("bar", (c) =>
-      c.obj((c) => {
-        c.set("foo", (c) => c.get("this", [$string("foo"), $string("a")]));
-      })
-    );
-
-    c.set("other", (c) => {
-      c.local("a", () => $number(10));
-      c.local("b", () => $number(10));
-
-      return c.arr((c) => {
-        c.set((c) => c.get("a"));
-        c.set((c) => c.get("b"));
-        c.set((c) => c.call(ops.plus, [c.get("a"), c.get("b")]));
-      });
-    });
-
-    c.set("test", (c) => {
-      c.local("a", () => $number(10));
-
-      return c.get("a");
-    });
-
-    c.set("a", () => $number(20));
-
-    c.set("b", (c) => c.or($number(10), $number(30)));
-
-    c.set("c", (c) =>
-      c.call(c.get("choice"), [
-        c.call(c.get("cmp"), [
-          c.get("this", [$string("a")]),
-          c.get("this", [$string("b")])
-        ]),
-        c.call(ops.plus, [c.get("this", [$string("a")]), $number(3)]),
-        c.call(ops.plus, [c.get("this", [$string("b")]), $number(5)])
-      ])
-    );
-
-    c.set("c", () => $number(23));
-  });
-};

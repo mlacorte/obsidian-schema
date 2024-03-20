@@ -1,4 +1,3 @@
-import { Context } from "../src/context";
 import { $number, type SingleType } from "../src/types";
 import { TypeSet } from "../src/typeset";
 
@@ -24,25 +23,20 @@ const depEq = (a: TypeSet, b: Array<Array<[TypeSet, SingleType]>>): void => {
 };
 
 describe("valueset", () => {
-  const ctx = new Context().empty();
-
-  const a = TypeSet.val(ctx, $one.or($two));
-  const b = TypeSet.val(ctx, $one.or($two));
-  const empty = TypeSet.call(ctx, [], () => $one);
+  const a = TypeSet.val($one.or($two));
+  const b = TypeSet.val($one.or($two));
+  const empty = TypeSet.call([], () => $one);
   const different = TypeSet.call(
-    ctx,
     [a, b],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
   );
   const same = TypeSet.call(
-    ctx,
     [a, a],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)
   );
   const derived = TypeSet.call(
-    ctx,
     [a, different],
     (a: SingleType<"number">, b: SingleType<"number">) =>
       $number(a.value! + b.value!)

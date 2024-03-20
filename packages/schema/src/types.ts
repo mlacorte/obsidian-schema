@@ -903,7 +903,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
     singleType(
       "function",
       (ctx: IContext, ...args: TypeSet[]): TypeSet =>
-        TypeSet.call(ctx, expandVecs(args), (...args) => {
+        TypeSet.call(expandVecs(args), (...args) => {
           // propagate errors
           const errors = args.filter((arg) => arg.type === "never");
 
@@ -993,7 +993,7 @@ export const $duration = singleType("duration", null, (duration: L.Duration) =>
 
 export const $function = singleType<"function", IFnDec<Type>>(
   "function",
-  (ctx) => TypeSet.val(ctx, $any),
+  () => TypeSet.val($any),
   (...args: [any, any]) =>
     define("<lambda>", [])
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
