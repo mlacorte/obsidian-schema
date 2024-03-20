@@ -115,6 +115,9 @@ describe("typeset", () => {
     test("promotion", () => {
       eq($true.or($false), $boolean);
     });
+    test("demotion", () => {
+      expect([...$boolean.splitTypes()].length).toBe(2);
+    });
   });
 
   describe("unions", () => {
@@ -287,10 +290,6 @@ describe("typeset", () => {
     ].map((row) => row.map(lit) as [Type, Type, Type, Type]);
 
     const ctx = new Context().empty();
-
-    test("boolean splitting", () => {
-      expect([...$array([], $boolean).splitTypes()].length).toBe(2);
-    });
 
     for (const types of tests) {
       const args = types.slice(0, 3).map((t) => TypeSet.val(ctx, t));

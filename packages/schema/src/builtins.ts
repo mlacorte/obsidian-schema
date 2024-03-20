@@ -46,7 +46,7 @@ export const ops = { lt, lte, gt, gte, eq, neq, plus };
 
 const choice = define("choice", [0, 1, 2])
   .add([$boolean, $any, $any], (_, cond: SingleType<"boolean">, pass, fail) =>
-    cond.isType() ? $never("should never happen") : cond.value! ? pass : fail
+    cond.value! ? pass : fail
   )
   .build();
 

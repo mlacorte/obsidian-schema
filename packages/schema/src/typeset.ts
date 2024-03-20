@@ -1,12 +1,12 @@
 /* eslint-disable no-labels */
 import { type IContext } from "./context";
-import { $never, $null, type SingleType, type Type } from "./types";
+import { $never, $null, type IKey, type SingleType, type Type } from "./types";
 import { cartesian, Cmp } from "./util";
 
 export type id = bigint;
 
-export interface IPotentialType {
-  type: SingleType;
+export interface IPotentialType<K extends IKey = IKey> {
+  type: SingleType<K>;
   conds: Map<id, SingleType>;
 }
 
