@@ -16,6 +16,7 @@ export type path = string;
 
 export type TypeRef =
   | SingleType
+  | ValsRef
   | ObjectRef
   | ArrayRef
   | OrRef
@@ -59,7 +60,9 @@ export class Context implements IGlobalContext {
   }
 
   eval(fn: (ctx: IObjectCtx) => void): Type {
-    return fromTypeRef(evalObj(this.empty(), fn)).type();
+    const ctx = this.empty();
+    const $this = ctx.note.this;
+    return fromTypeRef(evalObj(ctx, fn, $this)).type();
   }
 
   get(path: path): Type | null {
@@ -70,8 +73,9 @@ export class Context implements IGlobalContext {
 
   add(path: path, fn: (ctx: IObjectCtx) => void): void {
     const ctx = this.empty();
+    const $this = ctx.note.this;
     this.notes.set(path, ctx.note);
-    evalObj(ctx, fn);
+    evalObj(ctx, fn, $this);
   }
 
   remove(path: path): Set<path> {
@@ -104,25 +108,34 @@ const cloneCtx = ({ global, note, scope }: IContext): IContext => ({
 
 const evalObj = (
   initialCtx: IContext,
-  fn: (ctx: IObjectCtx) => void
+  fn: (ctx: IObjectCtx) => void,
+  obj: ObjectRef = objectRef(initialCtx, $object({}, $any))
 ): ObjectRef | AndRef => {
-  const obj = objectRef(initialCtx, $object({}, $any));
   const ands: TypeRef[] = [];
   const ref = { ctx: initialCtx };
 
   fn({
     local(key, expr) {
       ref.ctx = cloneCtx(ref.ctx);
-      ref.ctx.scope.set(key, evalExpr(ref.ctx, expr));
+      ref.ctx.scope.set(
+        key,
+        thunk(() => evalExpr(ref.ctx, expr))
+      );
     },
     set(key, expr) {
-      obj.vals.set(key, evalExpr(ref.ctx, expr));
+      obj.vals.set(
+        key,
+        thunk(() => evalExpr(ref.ctx, expr))
+      );
     },
     of(expr) {
-      obj.of = andRef(obj.of, evalExpr(ref.ctx, expr));
+      obj.of = andRef(
+        obj.of,
+        thunk(() => evalExpr(ref.ctx, expr))
+      );
     },
     include(expr) {
-      ands.push(evalExpr(ref.ctx, expr));
+      ands.push(thunk(() => evalExpr(ref.ctx, expr)));
     }
   });
 
@@ -134,10 +147,10 @@ const evalArr = (ctx: IContext, fn: (ctx: IArrayCtx) => void): TypeRef => {
 
   fn({
     set: (expr) => {
-      arr.vals.push(evalExpr(ctx, expr));
+      arr.vals.push(thunk(() => evalExpr(ctx, expr)));
     },
     of: (expr) => {
-      arr.of = andRef(arr.of, evalExpr(ctx, expr));
+      arr.of = thunk(() => andRef(arr.of, evalExpr(ctx, expr)));
     }
   });
 
@@ -153,19 +166,20 @@ const evalExpr = <T extends TypeRef>(
   return fn({
     local: (key, expr) => {
       ref.ctx = cloneCtx(ref.ctx);
-      ref.ctx.scope.set(key, evalExpr(ref.ctx, expr));
+      ref.ctx.scope.set(
+        key,
+        thunk(() => evalExpr(ref.ctx, expr))
+      );
     },
     get: (name: string, properties = []) => {
-      const ctx = ref.ctx;
+      const curr = ref.ctx.scope.get(name);
+      if (curr === undefined) return lit(TypeSet.val($null));
 
-      return lazy(() => {
-        const curr = ctx.scope.get(name)!;
-        if (curr === undefined) return TypeSet.val($null);
+      const objSet = fromTypeRef(curr);
+      const propsSet = properties.map((v) => fromTypeRef(v));
 
-        const objSet = fromTypeRef(curr);
-        const propsSet = properties.map((v) => fromTypeRef(v));
-
-        return TypeSet.call([objSet, ...propsSet], (obj, ...props) => {
+      return lit(
+        TypeSet.call([objSet, ...propsSet], (obj, ...props) => {
           let res: Type = obj;
 
           for (const prop of props) {
@@ -174,15 +188,15 @@ const evalExpr = <T extends TypeRef>(
           }
 
           return res;
-        });
-      });
+        })
+      );
     },
     call: (fnRef, argRefs) => {
       const ctx = ref.ctx;
       const fnSet = fromTypeRef(fnRef);
       const argSets = argRefs.map(fromTypeRef);
 
-      return strict(TypeSet.eval(ctx, fnSet, argSets));
+      return lit(TypeSet.eval(ctx, fnSet, argSets));
     },
     fn: (args, expr) => {
       const snapshot = ref.ctx;
@@ -198,7 +212,7 @@ const evalExpr = <T extends TypeRef>(
 
           ctx.scope.set(
             name,
-            strict(
+            lit(
               TypeSet.call([arg], (arg) => {
                 switch (arg.cmp(type)) {
                   case Cmp.Equal:
@@ -230,46 +244,39 @@ const evalExpr = <T extends TypeRef>(
   });
 };
 
-export interface Thunk {
-  type: "ref/thunk";
-  val: TypeSet;
+export interface ValsRef {
+  type: "ref/vals";
+  vals: TypeSet;
 }
 
-let thunkCtr = BigInt(1);
-const runningThunks = new Set<bigint>();
+export const lit = (vals: TypeSet): ValsRef => ({ type: "ref/vals", vals });
 
-export const lazy = (fn: () => TypeSet): Thunk => {
-  const obj = { type: "ref/thunk" } as Thunk;
-  const thunkId = thunkCtr++;
+export interface Thunk {
+  type: "ref/thunk";
+  val: TypeRef;
+}
 
-  const get = (): TypeSet => {
-    let value: TypeSet;
+export const thunk = (fn: () => TypeRef): Thunk => {
+  let running = false;
+  let value: TypeRef | null = null;
 
-    // cycle detection
-    if (!runningThunks.has(thunkId)) {
-      runningThunks.add(thunkId);
-      value = fn();
-      runningThunks.delete(thunkId);
-    } else {
-      value = TypeSet.val($never("Cycle detected"));
+  return {
+    type: "ref/thunk",
+    get val() {
+      if (value !== null) return value;
+
+      // cycle detection
+      if (!running) {
+        running = true;
+        value = fn();
+      } else {
+        value = $never("Cycle detected");
+      }
+
+      return value;
     }
-
-    // only run once
-    return Object.defineProperty(obj, "val", {
-      configurable: false,
-      enumerable: true,
-      value
-    }).val;
   };
-
-  return Object.defineProperty(obj, "val", {
-    configurable: true,
-    enumerable: true,
-    get
-  });
 };
-
-export const strict = (val: TypeSet): Thunk => ({ type: "ref/thunk", val });
 
 export const typeRef = (ctx: IContext, type: Type): TypeRef => {
   if (type.types.length > 1) {
@@ -297,7 +304,9 @@ export const fromTypeRef = (ref: TypeRef): TypeSet => {
     case "ref/and":
       return fromAndRef(ref);
     case "ref/thunk":
-      return ref.val;
+      return fromTypeRef(ref.val);
+    case "ref/vals":
+      return ref.vals;
     default:
       return TypeSet.val(ref);
   }
