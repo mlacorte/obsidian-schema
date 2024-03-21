@@ -46,11 +46,9 @@ export type IValues<K extends IKey = IKey> = [
 ];
 export type ISingleValues<K extends IKey = IKey> = [ISingleTypeMap[K]];
 
-const $isType = Symbol("type");
-export const isType = (obj: object): obj is Type => $isType in obj;
+export const isType = (obj: object): obj is Type => obj instanceof TypeClass;
 
 export interface TypeBase<K extends IKey> {
-  [$isType]: true;
   get type(): K;
   or: (other: Type<any>) => Type;
   and: (other: Type<any>) => Type;
@@ -79,33 +77,68 @@ export interface SingleType<K extends IKey = IKey> extends TypeBase<K> {
   is: <K extends IKey>(key: K) => this is SingleType<K>;
 }
 
-export const type: {
-  <K extends IKey>(types: IType<K>): Type<K>;
-  <K extends IKey, T>(types: IType<K>, self: T): Type<K> & T;
-} = <K extends IKey, T>(types: IType<K>, self?: T): Type<K> | (Type<K> & T) => {
-  const obj = (self ?? {}) as Type<K>;
-  obj[$isType] = true;
-  obj.types = types;
-  Object.defineProperty(obj, "type", { get: () => obj.types[0].type });
-  Object.defineProperty(obj, "values", { get: () => obj.types[0].values });
-  Object.defineProperty(obj, "value", { get: () => obj.types[0].values[0] });
-  obj.or = (other) => type(TypeFns.or(obj.types, other.types));
-  obj.and = (other) => type(TypeFns.and(obj.types, other.types));
-  obj.cmp = (other, sortOnly = false) =>
-    TypeFns.cmp(obj.types, other.types, sortOnly);
-  obj.toString = () => TypeFns.string(obj.types);
-  obj.isSingle = () => TypeFns.isSingle(obj.types);
-  obj.isType = () => TypeFns.isType(obj.types);
-  obj.splitTypes = () =>
-    UtilFns.map(TypeFns.splitTypes(obj.types), type) as Array<SingleType<K>>;
-  obj.splitTypesShallow = () => obj.types.map((t) => type([t])) as any;
-  obj.clone = () => type(TypeFns.clone(obj.types));
-  (obj as unknown as SingleType).is = <K extends IKey>(k: K) =>
-    (obj.type as IKey) === k;
-  obj.get = (keys) => {
+class TypeClass<K extends IKey> implements Type<K> {
+  constructor(public types: IType<K>) {}
+
+  get type(): K {
+    return this.types[0].type;
+  }
+
+  get values(): Array<ITypeMap[K]> {
+    return this.types[0].values;
+  }
+
+  get value(): ITypeMap[K] {
+    return this.types[0].values[0];
+  }
+
+  or(other: Type<any>): Type {
+    return new TypeClass(TypeFns.or(this.types, other.types));
+  }
+
+  and(other: Type<any>): Type {
+    return new TypeClass(TypeFns.and(this.types, other.types));
+  }
+
+  cmp(other: Type<any>, sortOnly = false): Cmp {
+    return TypeFns.cmp(this.types, other.types, sortOnly);
+  }
+
+  toString(): string {
+    return TypeFns.string(this.types);
+  }
+
+  is<K extends IKey>(key: K): this is SingleType<K> {
+    return this.type === (key as IKey);
+  }
+
+  isSingle(): this is SingleType<K> {
+    return TypeFns.isSingle(this.types);
+  }
+
+  isType(): boolean {
+    return TypeFns.isType(this.types);
+  }
+
+  splitTypes(): Iterable<SingleType<K>> {
+    return UtilFns.map(
+      TypeFns.splitTypes(this.types),
+      (types) => new TypeClass(types)
+    ) as Array<SingleType<K>>;
+  }
+
+  splitTypesShallow(): [SingleType<K>, ...Array<SingleType<K>>] {
+    return this.types.map((t) => new TypeClass([t])) as any;
+  }
+
+  clone(): TypeClass<any> {
+    return new TypeClass(TypeFns.clone(this.types));
+  }
+
+  get(keys: Type<keyof ITypeMap>): Type<keyof ITypeMap> {
     let res: Type = $never;
 
-    for (const type of obj.splitTypes()) {
+    for (const type of this.splitTypes()) {
       for (const key of keys.splitTypes()) {
         res = res.or(
           type.is("object") && key.is("string")
@@ -128,8 +161,21 @@ export const type: {
     }
 
     return res;
-  };
-  return obj;
+  }
+}
+
+export const type: {
+  <K extends IKey>(types: IType<K>): Type<K>;
+  <K extends IKey, T>(types: IType<K>, self: T): Type<K> & T;
+} = <K extends IKey, T>(
+  types: IType<K>,
+  self?: object
+): Type<K> | (Type<K> & T) => {
+  const obj = new TypeClass(types);
+  if (self === undefined) return obj;
+  Object.assign(self, obj);
+  Object.setPrototypeOf(self, TypeClass.prototype);
+  return self as Type<K> & T;
 };
 
 export const val = <K extends IKey>(
