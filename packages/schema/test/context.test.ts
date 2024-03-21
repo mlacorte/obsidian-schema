@@ -76,10 +76,8 @@ const output = $object(
     a: $number(20),
     b: $number(10).or($number(30)),
     c: $number(23),
-    other: $array(
-      [$number(20), $number(10).or($number(30)), $number(30).or($number(50))],
-      $any
-    )
+    other: $array([$number(10), $number(10), $number(20)], $any),
+    test: $number(10)
   },
   $any
 );

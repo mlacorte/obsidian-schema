@@ -1,6 +1,12 @@
 /* eslint-disable no-labels */
 import { type IContext } from "./context";
-import { $never, $null, type IKey, type SingleType, type Type } from "./types";
+import {
+  $never,
+  type IKey,
+  type ISingleTypeMap,
+  type SingleType,
+  type Type
+} from "./types";
 import { cartesian, Cmp } from "./util";
 
 export type id = bigint;
@@ -108,23 +114,51 @@ export class TypeSet {
     return new TypeSet(id, potentials);
   }
 
-  static eval(ctx: IContext, fn: TypeSet, args: TypeSet[]): TypeSet {
+  static eval(ctx: IContext, fns: TypeSet, args: TypeSet[]): TypeSet {
+    for (const fn of fns.potentials) {
+      if (!fn.type.is("function")) {
+        return TypeSet.val(
+          $never(`'${fn.type.toString()}' is not a function.`)
+        );
+      }
+    }
+
     const id = TypeSet.ctr++;
     const potentials: IPotentialType[] = [];
 
-    for (const { type } of fn.potentials) {
-      const conds = new Map();
-      if (fn.potentials.length > 1) conds.set(fn.id, type);
+    for (const fn of fns.potentials) {
+      const fnVal = fn.type.value as ISingleTypeMap["function"];
 
-      if (!type.is("function")) {
-        potentials.push({ type: $null, conds });
-        continue;
-      }
+      const filtered = args.map((arg) => {
+        const args: IPotentialType[] = [];
 
-      for (const potential of type.value(ctx, ...args).potentials) {
-        if (fn.potentials.length > 1) potential.conds.set(fn.id, type);
-        potentials.push(potential);
-      }
+        outer: for (let { type, conds } of arg.potentials) {
+          conds = new Map(conds);
+          const self = conds.get(fns.id);
+
+          if (self === undefined) {
+            conds.set(fns.id, fn.type);
+          } else if (self.cmp(fn.type) !== Cmp.Equal) {
+            continue outer;
+          }
+
+          for (const [id, cond] of fn.conds) {
+            const curr = conds.get(id);
+
+            if (curr === undefined) {
+              conds.set(id, cond);
+            } else if (curr.cmp(cond) !== Cmp.Equal) {
+              continue outer;
+            }
+          }
+
+          args.push({ type, conds });
+        }
+
+        return new TypeSet(arg.id, args);
+      });
+
+      potentials.push(...fnVal(ctx, ...filtered).potentials);
     }
 
     return new TypeSet(id, potentials);

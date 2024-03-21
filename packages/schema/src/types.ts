@@ -885,10 +885,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
     const types = $array(argList, vararg ?? $never);
 
     // valufy function
-    let fn =
-      typeof typeOrFn === "function"
-        ? typeOrFn
-        : valufyFn(typeOrFn, valufy!, valFn!);
+    let fn = isType(typeOrFn) ? valufyFn(typeOrFn, valufy!, valFn!) : typeOrFn;
 
     // vectorize function
     fn = vectorizeFn(fn);

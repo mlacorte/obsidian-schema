@@ -158,7 +158,7 @@ const evalExpr = <T extends TypeRef>(
     get: (name: string, properties = []) => {
       const ctx = ref.ctx;
 
-      return lazy(ctx, () => {
+      return lazy(() => {
         const curr = ctx.scope.get(name)!;
         if (curr === undefined) return TypeSet.val($null);
 
@@ -180,7 +180,7 @@ const evalExpr = <T extends TypeRef>(
     call: (fnRef, argRefs) => {
       const ctx = ref.ctx;
       const fnSet = fromTypeRef(fnRef);
-      const argSets = argRefs.map((arg) => fromTypeRef(arg));
+      const argSets = argRefs.map(fromTypeRef);
 
       return strict(TypeSet.eval(ctx, fnSet, argSets));
     },
@@ -238,7 +238,7 @@ export interface Thunk {
 let thunkCtr = BigInt(1);
 const runningThunks = new Set<bigint>();
 
-export const lazy = (ctx: IContext, fn: () => TypeSet): Thunk => {
+export const lazy = (fn: () => TypeSet): Thunk => {
   const obj = { type: "ref/thunk" } as Thunk;
   const thunkId = thunkCtr++;
 
@@ -325,7 +325,7 @@ export const objectRef = (
 
 export const fromObjectRef = (obj: ObjectRef): TypeSet => {
   const keys = [...obj.vals.keys()];
-  const vals = [...obj.vals.values()].map((v) => fromTypeRef(v));
+  const vals = [...obj.vals.values()].map(fromTypeRef);
   const of = fromTypeRef(obj.of);
 
   return TypeSet.call([of, ...vals], (unknown, ...knownVals) => {
