@@ -109,7 +109,7 @@ const cloneCtx = ({ global, note, scope }: IContext): IContext => ({
 const evalObj = (
   initialCtx: IContext,
   fn: (ctx: IObjectCtx) => void,
-  obj: ObjectRef = objectRef(initialCtx, $object({}, $any))
+  obj: ObjectRef = objectRef(initialCtx, $object)
 ): ObjectRef | AndRef => {
   const ands: TypeRef[] = [];
   const ref = { ctx: initialCtx };
@@ -143,7 +143,7 @@ const evalObj = (
 };
 
 const evalArr = (ctx: IContext, fn: (ctx: IArrayCtx) => void): TypeRef => {
-  const arr = arrayRef(ctx, $array([], $any));
+  const arr = arrayRef(ctx, $array);
 
   fn({
     set: (expr) => {

@@ -173,10 +173,10 @@ describe("typeset", () => {
   });
 
   describe("objects", () => {
-    const $a12 = $object({ a: $one.or($two) }, $any);
-    const $a1 = $object({ a: $one }, $any);
-    const $a1b2 = $object({ a: $one, b: $two }, $any);
-    const $a23 = $object({ a: $two.or($three) }, $any);
+    const $a12 = $object({ a: $one.or($two) });
+    const $a1 = $object({ a: $one });
+    const $a1b2 = $object({ a: $one, b: $two });
+    const $a23 = $object({ a: $two.or($three) });
 
     describe("identity", () => {
       test("or", () => {
@@ -189,21 +189,21 @@ describe("typeset", () => {
 
     describe("subset", () => {
       test("or", () => {
-        eq($a12.or($a1b2), $object({ a: $one.or($two), b: $any }, $any));
+        eq($a12.or($a1b2), $object({ a: $one.or($two), b: $any }));
       });
       test("and", () => {
         eq($a12.and($a1), $a1);
-        eq($a12.and($a1b2), $object({ a: $one, b: $two }, $any));
+        eq($a12.and($a1b2), $object({ a: $one, b: $two }));
       });
     });
 
     describe("intersect", () => {
       test("or", () => {
-        eq($a12.or($a23), $object({ a: $one.or($two).or($three) }, $any));
+        eq($a12.or($a23), $object({ a: $one.or($two).or($three) }));
       });
 
       test("and", () => {
-        eq($a12.and($a23), $object({ a: $two }, $any));
+        eq($a12.and($a23), $object({ a: $two }));
       });
     });
 
@@ -215,10 +215,10 @@ describe("typeset", () => {
   });
 
   describe("lists", () => {
-    const $a12 = $array([$one.or($two)], $any);
-    const $a1 = $array([$one], $any);
-    const $a1b2 = $array([$one, $two], $any);
-    const $a23 = $array([$two.or($three)], $any);
+    const $a12 = $array([$one.or($two)]);
+    const $a1 = $array([$one]);
+    const $a1b2 = $array([$one, $two]);
+    const $a23 = $array([$two.or($three)]);
 
     describe("identity", () => {
       test("or", () => {
@@ -231,21 +231,21 @@ describe("typeset", () => {
 
     describe("subset", () => {
       test("or", () => {
-        eq($a12.or($a1b2), $array([$one.or($two), $any], $any));
+        eq($a12.or($a1b2), $array([$one.or($two), $any]));
       });
       test("and", () => {
         eq($a12.and($a1), $a1);
-        eq($a12.and($a1b2), $array([$one, $two], $any));
+        eq($a12.and($a1b2), $array([$one, $two]));
       });
     });
 
     describe("intersect", () => {
       test("or", () => {
-        eq($a12.or($a23), $array([$one.or($two).or($three)], $any));
+        eq($a12.or($a23), $array([$one.or($two).or($three)]));
       });
 
       test("and", () => {
-        eq($a12.and($a23), $array([$two], $any));
+        eq($a12.and($a23), $array([$two]));
       });
     });
 
@@ -257,7 +257,8 @@ describe("typeset", () => {
   });
 
   describe("functions", () => {
-    const lit = (arg: Type | Type[]): Type => (isType(arg) ? arg : $array(arg));
+    const lit = (arg: Type | Type[]): Type =>
+      isType(arg) ? arg : $array(arg, $never);
     const or = (...args: Array<Type | Type[]>): Type =>
       args.map(lit).reduce((a, b) => a.or(b), $never);
 

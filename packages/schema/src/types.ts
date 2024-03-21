@@ -909,7 +909,7 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
           }
 
           // finds match
-          const argList = $array(args);
+          const argList = $array(args, $never);
           let matchFn: IFn<SingleType> | null = null;
 
           for (const { types, fn } of fns) {
@@ -970,7 +970,7 @@ export const $array = singleType(
   "array",
   { known: [], unknown: $any },
   <K extends Type, U extends Type>(known: K[], unknown?: U) =>
-    singleType("array", { known, unknown: unknown ?? $never })
+    singleType("array", { known, unknown: unknown ?? $any })
 );
 
 export const $boolean = singleType("boolean", null, (value: boolean) =>
@@ -1020,7 +1020,7 @@ export const $object = singleType(
 
     return singleType("object", {
       known: knownVals,
-      unknown: unknown ?? $never
+      unknown: unknown ?? $any
     });
   }
 );

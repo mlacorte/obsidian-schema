@@ -1,4 +1,4 @@
-import { $any, $array, $number, $object, $string, ops } from "../src";
+import { $array, $number, $object, $string, ops } from "../src";
 import { Context } from "../src/context";
 
 const input = new Context().eval((c) => {
@@ -58,29 +58,20 @@ const input = new Context().eval((c) => {
   c.set("c", () => $number(23));
 });
 
-const output = $object(
-  {
-    foo: $object(
-      {
-        a: $number(10),
-        bar: $number(10)
-      },
-      $any
-    ),
-    bar: $object(
-      {
-        foo: $number(10)
-      },
-      $any
-    ),
-    a: $number(20),
-    b: $number(10).or($number(30)),
-    c: $number(23),
-    other: $array([$number(10), $number(10), $number(20)], $any),
-    test: $number(10)
-  },
-  $any
-);
+const output = $object({
+  foo: $object({
+    a: $number(10),
+    bar: $number(10)
+  }),
+  bar: $object({
+    foo: $number(10)
+  }),
+  a: $number(20),
+  b: $number(10).or($number(30)),
+  c: $number(23),
+  other: $array([$number(10), $number(10), $number(20)]),
+  test: $number(10)
+});
 
 describe("context", () => {
   test("test", () => {
