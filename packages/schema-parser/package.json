@@ -22,28 +22,29 @@
     "run:clean": "rimraf dist src/**/*.parser.js src/**/*.parser.terms.js .turbo & jest --clearCache"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.13.0",
+    "@codemirror/autocomplete": "^6.15.0",
     "@codemirror/language": "^6.10.1",
     "@codemirror/lint": "^6.5.0",
     "@codemirror/state": "^6.4.1",
     "@lezer/common": "^1.2.1",
     "@lezer/highlight": "^1.2.0",
     "@lezer/lr": "^1.4.0",
-    "emoji-regex": "^10.3.0"
+    "emoji-regex": "^10.3.0",
+    "schema": "workspace:*"
   },
   "devDependencies": {
-    "@lezer/generator": "^1.6.0",
+    "@lezer/generator": "^1.7.0",
     "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.25",
+    "@types/node": "^20.11.30",
     "chokidar": "^3.6.0",
     "colorette": "^2.0.20",
     "esbuild-jest-transform": "^2.0.0",
     "globby": "^14.0.1",
     "jest": "^29.7.0",
-    "pnpm": "^8.15.4",
+    "pnpm": "^8.15.5",
     "rimraf": "^5.0.5",
     "tsup": "^8.0.2",
     "tsx": "^4.7.1",
-    "turbo": "^1.12.5"
+    "turbo": "^1.13.0"
   }
 }

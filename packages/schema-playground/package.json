@@ -11,24 +11,24 @@
     "run:clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.13.0",
+    "@codemirror/autocomplete": "^6.15.0",
     "@codemirror/commands": "^6.3.3",
     "@codemirror/language": "^6.10.1",
     "@codemirror/lint": "^6.5.0",
     "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.25.1",
+    "@codemirror/view": "^6.26.0",
     "@picocss/pico": "^2.0.6",
     "codemirror": "^6.0.1",
     "schema-parser": "workspace:*",
-    "solid-js": "^1.8.15",
+    "solid-js": "^1.8.16",
     "solid-resizable-panels": "^0.4.2"
   },
   "devDependencies": {
-    "pnpm": "^8.15.4",
+    "pnpm": "^8.15.5",
     "rimraf": "^5.0.5",
-    "turbo": "^1.12.5",
-    "typescript": "^5.4.2",
-    "vite": "^5.1.5",
-    "vite-plugin-solid": "^2.10.1"
+    "turbo": "^1.13.0",
+    "typescript": "^5.4.3",
+    "vite": "^5.2.2",
+    "vite-plugin-solid": "^2.10.2"
   }
 }

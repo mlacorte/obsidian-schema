@@ -4,7 +4,7 @@ module.exports = {
     es2021: true
   },
   plugins: ["unused-imports", "simple-import-sort"],
-  extends: ["standard-with-typescript", "prettier"],
+  extends: ["love", "prettier"],
   overrides: [
     {
       env: {
