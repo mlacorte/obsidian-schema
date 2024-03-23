@@ -9,6 +9,7 @@ import {
 import { linter } from "@codemirror/lint";
 import { type Extension } from "@codemirror/state";
 
+import { treeEval } from "./eval";
 import { highlight } from "./parser/schema.highlight";
 import { parser } from "./parser/schema.parser";
 import * as terms from "./parser/schema.parser.terms";
@@ -82,3 +83,5 @@ export const schemaLinter = linter(
 
 export const schema = (): LanguageSupport =>
   new LanguageSupport(schemaLanguage, [schemaCompletion, schemaLinter]);
+
+export const schemaTreeEval = treeEval;

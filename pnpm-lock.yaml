@@ -178,12 +178,18 @@ importers:
       '@codemirror/view':
         specifier: ^6.26.0
         version: 6.26.0
+      '@lezer/highlight':
+        specifier: ^1.2.0
+        version: 1.2.0
       '@picocss/pico':
         specifier: ^2.0.6
         version: 2.0.6
       codemirror:
         specifier: ^6.0.1
         version: 6.0.1(@lezer/common@1.2.1)
+      schema:
+        specifier: workspace:*
+        version: link:../schema
       schema-parser:
         specifier: workspace:*
         version: link:../schema-parser

@@ -1,12 +1,53 @@
 import "./App.css";
 
-import { type JSX } from "solid-js";
+import { classHighlighter, highlightCode } from "@lezer/highlight";
+import { $never, type Type } from "schema";
+import { schemaLanguage } from "schema-parser";
+import { type Accessor, createSignal, type JSX } from "solid-js";
 import { Panel, PanelGroup, ResizeHandle } from "solid-resizable-panels";
 
 import classes from "./App.module.css";
 import { Editor } from "./Editor";
 
+interface CodeProps {
+  type: Accessor<Type>;
+}
+
+export const Code = (props: CodeProps): JSX.Element => {
+  const parser = schemaLanguage.parser;
+
+  const res = (): HTMLElement => {
+    const code = props.type().toString();
+    const result = document.createElement("code");
+
+    const emit = (text: string, classes = ""): void => {
+      let node: Node = document.createTextNode(text);
+
+      if (classes.length !== 0) {
+        const span = document.createElement("span");
+        span.appendChild(node);
+        span.className = classes;
+        node = span;
+      }
+
+      result.appendChild(node);
+    };
+
+    const emitBreak = (): void => {
+      result.appendChild(document.createTextNode("\n"));
+    };
+
+    highlightCode(code, parser.parse(code), classHighlighter, emit, emitBreak);
+
+    return result;
+  };
+
+  return <>{res()}</>;
+};
+
 export const App = (): JSX.Element => {
+  const [type, setType] = createSignal<Type>($never);
+
   return (
     <>
       <header class={classes.header}>Header</header>
@@ -37,11 +78,11 @@ export const App = (): JSX.Element => {
         <Panel tag="section" id="playground" class={classes.playground}>
           <PanelGroup direction="column">
             <Panel tag="div" id="editor" class={classes.editor}>
-              <Editor />
+              <Editor setType={setType} />
             </Panel>
             <ResizeHandle />
             <Panel tag="div" id="results" class={classes.results}>
-              Results
+              <Code type={type} />
             </Panel>
           </PanelGroup>
         </Panel>

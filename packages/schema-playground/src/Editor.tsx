@@ -16,7 +16,8 @@ import {
   foldGutter,
   foldKeymap,
   indentOnInput,
-  syntaxHighlighting
+  syntaxHighlighting,
+  syntaxTree
 } from "@codemirror/language";
 import { EditorState, type Extension } from "@codemirror/state";
 import {
@@ -28,8 +29,9 @@ import {
   rectangularSelection
 } from "@codemirror/view";
 import { EditorView } from "codemirror";
-import { schema } from "schema-parser";
-import { type JSX, onCleanup, onMount } from "solid-js";
+import { Context, type Type } from "schema";
+import { schema, schemaTreeEval } from "schema-parser";
+import { type JSX, onCleanup, onMount, type Setter } from "solid-js";
 
 const color = "var(--pico-color)";
 const fontSize = "var(--pico-font-size)";
@@ -245,7 +247,7 @@ const theme = EditorView.theme({
   }
 });
 
-export const extensions: Extension = (() => [
+export const extensions: Extension[] = (() => [
   theme,
   EditorView.lineWrapping,
   lineNumbers(),
@@ -316,17 +318,36 @@ c/1: 20,
 c/1 -> {a/1, b/1, cmp/2}
 */`;
 
-export const Editor = (): JSX.Element => {
+interface EditorProps {
+  setType: Setter<Type>;
+}
+
+export const Editor = (props: EditorProps): JSX.Element => {
   // eslint-disable-next-line prefer-const
   let editorViewDiv: HTMLDivElement = undefined as unknown as HTMLDivElement;
   let editorView: EditorView;
+  const ctx = new Context();
+
+  const evalType = (): void => {
+    console.clear();
+    const tree = syntaxTree(editorView.state);
+    const text = editorView.state.doc;
+    props.setType(ctx.eval(schemaTreeEval(text, tree)));
+  };
 
   onMount(() => {
     editorView = new EditorView({
-      extensions,
+      extensions: [
+        ...extensions,
+        EditorView.updateListener.of((e) => {
+          if (e.docChanged) evalType();
+        })
+      ],
       parent: editorViewDiv,
       doc
     });
+
+    evalType();
   });
 
   onCleanup(() => {

@@ -9,8 +9,7 @@ block { listOf<property> }
 expression {
   value | postfixExpression | mathExpression |
   comparisonExpression | logicalExpression  |
-  Not { "!" expression } |
-  LocalProperty "," expression |
+  Not | LocalProperty "," expression |
   "(" expression ~lambdaOrParen ")"
 }
 
@@ -21,32 +20,30 @@ value {
 
 @precedence { postfix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
 
-postfixExpression {
-  Call { expression !postfix "(" listOf<expression | Of | Include> ")" } |
-  Index { expression !postfix "[" expression "]" } |
-  Dot { expression !postfix "." DotIdentifier { identifier } }
-}
+Call { expression !postfix "(" listOf<expression | Of | Include> ")" }
+Index { expression !postfix "[" expression "]" }
+Dot { expression !postfix "." DotIdentifier }
+DotIdentifier { identifier }
+postfixExpression { Call  | Index  | Dot }
 
-mathExpression {
-  Multiply { expression !mulDiv "*" expression } |
-  Divide { expression !mulDiv divideOp expression } |
-  Plus { expression !plsMin "+" expression } |
-  Minus { expression !plsMin "-" expression }
-}
+Multiply { expression !mulDiv "*" expression }
+Divide { expression !mulDiv divideOp expression }
+Plus { expression !plsMin "+" expression }
+Minus { expression !plsMin "-" expression }
+mathExpression { Multiply | Divide | Plus | Minus }
 
-comparisonExpression {
-  Gte { expression !cmp ">=" expression } |
-  Lte { expression !cmp "<=" expression } |
-  Neq { expression !cmp "!=" expression } |
-  Gt { expression !cmp ">" expression } |
-  Lt { expression !cmp "<" expression } |
-  Eq { expression !cmp "=" expression }
-}
+Gte { expression !cmp ">=" expression }
+Lte { expression !cmp "<=" expression }
+Neq { expression !cmp "!=" expression }
+Gt { expression !cmp ">" expression }
+Lt { expression !cmp "<" expression }
+Eq { expression !cmp "=" expression }
+comparisonExpression { Gte | Lte | Neq | Gt | Lt | Eq }
 
-logicalExpression {
-  And { expression !logic ("and" | "&") expression } |
-  Or { expression !logic ("or" | "|") expression }
-}
+Not { "!" expression }
+And { expression !logic ("and" | "&") expression }
+Or { expression !logic ("or" | "|") expression }
+logicalExpression { And | Or }
 
 Identifier { kw<"this"> | identifier }
 Date { "date(" ( DateLiteral | DateShorthand) ")" }
@@ -74,14 +71,16 @@ Of { kw<"of"> expression }
 Include { kw<"include"> expression }
 LocalProperty { kw<"local"> propertyKey ":" expression }
 
+DurationYears { Number ("year" | "years" | "yr" | "yrs") }
+DurationMonths { Number ("month" | "months" | "mo" | "mos") }
+DurationWeeks { Number ("week" | "weeks" | "wk" | "wks" | "w") }
+DurationDays { Number ("day" | "days" | "d") }
+DurationHours { Number ("hour" | "hours" | "hr" | "hrs" | "h") }
+DurationMinutes { Number ("minute" | "minutes" | "min" | "mins" | "m") }
+DurationSeconds { Number ("second" | "seconds" | "sec" | "secs" | "s") }
 durationPair {
-  DurationYears { Number ("year" | "years" | "yr" | "yrs") } |
-  DurationMonths { Number ("month" | "months" | "mo" | "mos") } |
-  DurationWeeks { Number ("week" | "weeks" | "wk" | "wks" | "w") } |
-  DurationDays { Number ("day" | "days" | "d") } |
-  DurationHours { Number ("hour" | "hours" | "hr" | "hrs" | "h") } |
-  DurationMinutes { Number ("minute" | "minutes" | "min" | "mins" | "m") } |
-  DurationSeconds { Number ("second" | "seconds" | "sec" | "secs" | "s") }
+  DurationYears | DurationMonths | DurationWeeks | DurationDays |
+  DurationHours | DurationMinutes | DurationSeconds
 }
 
 @external tokens unknownTokenizer from "./schema.tokens" { unknown }

@@ -19,7 +19,7 @@
     "run:build:lezer": "lezer-generator src/parser/schema.grammar -o src/parser/schema.parser.js",
     "run:dev": "pnpm run run:dev:lezer & pnpm run run:dev:tsup",
     "run:dev:tsup": "tsup --watch",
-    "run:dev:lezer": "nodemon --watch src --ext 'grammar' --exec 'pnpm run run:build:lezer'",
+    "run:dev:lezer": "nodemon --watch src --ext 'grammar' --exec 'pnpm run run:build:lezer' --on-change-only",
     "run:test": "jest --no-cache",
     "run:clean": "rimraf dist src/**/*.parser.js src/**/*.parser.terms.js .turbo & jest --clearCache"
   },
