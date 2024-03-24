@@ -61,7 +61,7 @@ const theme = EditorView.theme({
   "&": {
     color,
     fontFamily,
-    fontSize: inherit,
+    fontSize: ".875em",
     fontWeight,
     backgroundColor,
     lineHeight
@@ -101,7 +101,8 @@ const theme = EditorView.theme({
     lineHeight,
     backgroundColor: codeBackground,
     color,
-    border: "none"
+    border: "none",
+    padding: "0 0 0 12px"
   },
 
   ".cm-activeLineGutter": {

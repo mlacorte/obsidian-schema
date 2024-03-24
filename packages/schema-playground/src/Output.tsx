@@ -38,7 +38,7 @@ const emit = (type: Type, prev: boolean): boolean => {
   return !type.isType();
 };
 
-const formatRec = (type: Type, lines: Lines): Lines => {
+const formatRec = (type: Type, lines: Lines, flatten = false): Lines => {
   const last = type.types.length - 1;
 
   for (const [i, t] of type.splitTypesShallow().entries()) {
@@ -61,7 +61,8 @@ const formatRec = (type: Type, lines: Lines): Lines => {
       lines.append("]");
     } else if (t.is("object")) {
       const outer = lines.current;
-      lines.append("{");
+      const indent = flatten ? outer.indent : outer.indent + 1;
+      if (!flatten) lines.append("{");
 
       const values: Array<[string, Type]> = [];
       const types: Array<[string, Type]> = [];
@@ -74,29 +75,24 @@ const formatRec = (type: Type, lines: Lines): Lines => {
         }
       }
 
-      for (const [prop, val] of values) {
-        lines.newLine(outer.indent + 1, emit(val, outer.bold));
+      for (const [prop, val] of [...values, ...types]) {
+        if (!flatten) lines.newLine(indent, emit(val, outer.bold));
         lines.append(prop);
         lines.append(": ");
         formatRec(val, lines);
         lines.append(",");
+        if (flatten) lines.newLine(indent, emit(val, outer.bold));
       }
 
-      for (const [prop, val] of types) {
-        lines.newLine(outer.indent + 1, emit(val, outer.bold));
-        lines.append(prop);
-        lines.append(": ");
-        formatRec(val, lines);
-        lines.append(",");
-      }
-
-      lines.newLine(outer.indent + 1, false);
+      if (!flatten) lines.newLine(indent, false);
       lines.append("of ");
       formatRec(t.value.unknown, lines);
       lines.append(",");
 
-      lines.newLine(outer.indent, outer.bold);
-      lines.append("}");
+      if (!flatten) {
+        lines.newLine(outer.indent, outer.bold);
+        lines.append("}");
+      }
     } else {
       const vals = [...t.splitTypes()];
       const last = vals.length - 1;
@@ -130,7 +126,7 @@ export const Output = (props: OutputProps): JSX.Element => {
       return <b>Syntax error!</b>;
     }
 
-    return formatRec(type, new Lines(0, true)).all.map((line) => {
+    return formatRec(type, new Lines(0, true), true).all.map((line) => {
       const str = "  ".repeat(line.indent) + line.chunks.join("") + "\n";
       return line.bold ? (
         <b>{str}</b>
@@ -141,7 +137,7 @@ export const Output = (props: OutputProps): JSX.Element => {
   };
 
   return (
-    <pre>
+    <pre style="height: 100%; border-radius: 0; margin: 0">
       <code>{lines()}</code>
     </pre>
   );

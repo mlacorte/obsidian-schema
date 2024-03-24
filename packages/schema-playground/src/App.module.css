@@ -2,6 +2,36 @@
   padding: 0 var(--pico-block-spacing-horizontal);
   background-color: var(--pico-primary-background);
 }
+.header svg {
+  height: 20px;
+  margin: -15px -8px -10px 0;
+}
+@media (min-width: 576px) {
+  .header svg {
+    height: 24px;
+  }
+}
+@media (min-width: 768px) {
+  .header svg {
+    height: 28px;
+  }
+}
+@media (min-width: 1024px) {
+  .header svg {
+    height: 32px;
+  }
+}
+@media (min-width: 1280px) {
+  .header svg {
+    height: 36px;
+  }
+}
+@media (min-width: 1536px) {
+  .header svg {
+    height: 40px;
+  }
+}
+
 .header a,
 .header strong {
   color: var(--pico-primary-inverse);
@@ -31,10 +61,13 @@
   height: 100%;
 }
 
+.playground {
+  margin-bottom: 0;
+}
 .playground > div {
   height: 100%;
 }
 
 .results {
-  padding: var(--pico-spacing);
+  overflow: auto !important; /* override resizer */
 }

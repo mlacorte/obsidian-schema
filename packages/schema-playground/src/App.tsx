@@ -1,17 +1,10 @@
 import "./App.css";
 
-import {
-  $any,
-  $array,
-  $never,
-  $null,
-  $number,
-  $object,
-  type Type
-} from "schema";
+import { $never, type Type } from "schema";
 import { createSignal, type JSX } from "solid-js";
 import { Panel, PanelGroup, ResizeHandle } from "solid-resizable-panels";
 
+import Logo from "../public/logo.svg";
 import classes from "./App.module.css";
 import { code } from "./Code";
 import { Editor } from "./Editor";
@@ -26,7 +19,7 @@ export const App = (): JSX.Element => {
         <nav>
           <ul>
             <li>
-              <img src="logo.svg" width="40px" />
+              <Logo />
             </li>
             <li>
               <strong>Obsidian Schema</strong>
@@ -65,8 +58,8 @@ export const App = (): JSX.Element => {
           tag="aside"
           id="sidebar"
           class={classes.sidebar}
-          minSize={15}
-          initialSize={15}
+          minSize={10}
+          initialSize={10}
         >
           Sidebar
         </Panel>
@@ -87,21 +80,17 @@ export const App = (): JSX.Element => {
         <ResizeHandle />
         <Panel tag="section" id="playground" class={classes.playground}>
           <PanelGroup direction="column">
-            <Panel tag="div" id="editor" class={classes.editor}>
+            <Panel
+              tag="div"
+              id="editor"
+              class={classes.editor}
+              initialSize={65}
+            >
               <Editor setType={setType} />
             </Panel>
             <ResizeHandle />
             <Panel tag="div" id="results" class={classes.results}>
               <Output type={type} />
-              <Output
-                type={() =>
-                  $object({
-                    foo: $null,
-                    bar: $any,
-                    baz: $array([$number(1), $number(2), $number(3)])
-                  })
-                }
-              />
             </Panel>
           </PanelGroup>
         </Panel>
