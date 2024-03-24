@@ -10,5 +10,5 @@
   --schema-border-width: 1px;
   --schema-border-color: #ddd;
   --schema-border: var(--schema-border-color) solid var(--schema-border-width);
-  --schema-header-height: 80px;
+  --schema-dark-background-color: #4d386a;
 }

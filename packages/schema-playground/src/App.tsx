@@ -61,7 +61,25 @@ export const App = (): JSX.Element => {
           minSize={10}
           initialSize={10}
         >
-          Sidebar
+          <nav>
+            <ul>
+              <li>
+                <a href="#">Introduction</a>
+              </li>
+              <li>
+                <a href="#">Dataview Overview</a>
+              </li>
+              <li>
+                <a href="#">Types</a>
+              </li>
+              <li>
+                <a href="#">Functions</a>
+              </li>
+              <li>
+                <a href="#">Sets</a>
+              </li>
+            </ul>
+          </nav>
         </Panel>
         <ResizeHandle />
         <Panel tag="article" id="docs" class={classes.docs}>
