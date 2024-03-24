@@ -1,56 +1,65 @@
 import "./App.css";
 
-import { classHighlighter, highlightCode } from "@lezer/highlight";
-import { $never, type Type } from "schema";
-import { schemaLanguage } from "schema-parser";
-import { type Accessor, createSignal, type JSX } from "solid-js";
+import {
+  $any,
+  $array,
+  $never,
+  $null,
+  $number,
+  $object,
+  type Type
+} from "schema";
+import { createSignal, type JSX } from "solid-js";
 import { Panel, PanelGroup, ResizeHandle } from "solid-resizable-panels";
 
 import classes from "./App.module.css";
+import { code } from "./Code";
 import { Editor } from "./Editor";
-
-interface CodeProps {
-  type: Accessor<Type>;
-}
-
-export const Code = (props: CodeProps): JSX.Element => {
-  const parser = schemaLanguage.parser;
-
-  const res = (): HTMLElement => {
-    const code = props.type().toString();
-    const result = document.createElement("code");
-
-    const emit = (text: string, classes = ""): void => {
-      let node: Node = document.createTextNode(text);
-
-      if (classes.length !== 0) {
-        const span = document.createElement("span");
-        span.appendChild(node);
-        span.className = classes;
-        node = span;
-      }
-
-      result.appendChild(node);
-    };
-
-    const emitBreak = (): void => {
-      result.appendChild(document.createTextNode("\n"));
-    };
-
-    highlightCode(code, parser.parse(code), classHighlighter, emit, emitBreak);
-
-    return result;
-  };
-
-  return <>{res()}</>;
-};
+import { Output } from "./Output";
 
 export const App = (): JSX.Element => {
   const [type, setType] = createSignal<Type>($never);
 
   return (
     <>
-      <header class={classes.header}>Header</header>
+      <header class={classes.header}>
+        <nav>
+          <ul>
+            <li>
+              <img src="logo.svg" width="40px" />
+            </li>
+            <li>
+              <strong>Obsidian Schema</strong>
+            </li>
+          </ul>
+          <ul>
+            <li>
+              <a
+                target="_blank"
+                href="https://blacksmithgu.github.io/obsidian-dataview/reference/functions/"
+              >
+                Functions
+              </a>
+            </li>
+            <li>
+              <a
+                target="_blank"
+                href="https://blacksmithgu.github.io/obsidian-dataview/reference/expressions/"
+              >
+                Expressions
+              </a>
+            </li>
+            <li>
+              <a
+                target="_blank"
+                href="https://github.com/mlacorte/obsidian-schema"
+              >
+                GitHub
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </header>
       <PanelGroup tag="main" class={classes.main}>
         <Panel
           tag="aside"
@@ -65,9 +74,10 @@ export const App = (): JSX.Element => {
         <Panel tag="article" id="docs" class={classes.docs}>
           <h1>Tutorial</h1>
           <p>Describe how to use schema editor here.</p>
-          <p>
-            <code>{`{ json: true }`}</code>
-          </p>
+          {code(`
+            json: true,
+            other: val,
+          `)}
           <select>
             <option>One</option>
             <option>Two</option>
@@ -82,7 +92,16 @@ export const App = (): JSX.Element => {
             </Panel>
             <ResizeHandle />
             <Panel tag="div" id="results" class={classes.results}>
-              <Code type={type} />
+              <Output type={type} />
+              <Output
+                type={() =>
+                  $object({
+                    foo: $null,
+                    bar: $any,
+                    baz: $array([$number(1), $number(2), $number(3)])
+                  })
+                }
+              />
             </Panel>
           </PanelGroup>
         </Panel>
