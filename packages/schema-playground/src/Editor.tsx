@@ -31,7 +31,7 @@ import {
 import { EditorView } from "codemirror";
 import { Context, type Type } from "schema";
 import { schema, schemaTreeEval } from "schema-parser";
-import { type JSX, onCleanup, onMount, type Setter } from "solid-js";
+import { createEffect, type JSX, on, onCleanup, type Setter } from "solid-js";
 
 const color = "var(--pico-color)";
 const fontSize = "var(--pico-font-size)";
@@ -287,26 +287,35 @@ export const Editor = (props: EditorProps): JSX.Element => {
   const ctx = new Context();
 
   const evalType = (): void => {
-    // console.clear();
+    console.clear();
     const tree = syntaxTree(editorView.state);
     const text = editorView.state.doc;
     props.setType(ctx.eval(schemaTreeEval(text, tree)));
   };
 
-  onMount(() => {
-    editorView = new EditorView({
-      extensions: [
-        ...extensions,
-        EditorView.updateListener.of((e) => {
-          if (e.docChanged) evalType();
-        })
-      ],
-      parent: editorViewDiv,
-      doc: props.initialText
-    });
+  createEffect(
+    on(
+      () => props.initialText,
+      () => {
+        if (editorView !== undefined) {
+          editorView.destroy();
+        }
 
-    evalType();
-  });
+        editorView = new EditorView({
+          extensions: [
+            ...extensions,
+            EditorView.updateListener.of((e) => {
+              if (e.docChanged) evalType();
+            })
+          ],
+          parent: editorViewDiv,
+          doc: props.initialText
+        });
+
+        evalType();
+      }
+    )
+  );
 
   onCleanup(() => {
     editorView.destroy();
