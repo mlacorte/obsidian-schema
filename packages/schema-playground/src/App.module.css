@@ -44,11 +44,12 @@
 }
 
 .sidebar {
+  width: 280px;
   background-color: var(--schema-dark-background-color);
 }
 .sidebar ul {
   margin: 0;
-  padding: calc(var(--pico-spacing) / 2) 0;
+  padding: var(--pico-spacing) 0;
 }
 .sidebar li {
   margin: 0;
@@ -57,12 +58,15 @@
 .sidebar a {
   margin: 0;
   color: var(--pico-primary-inverse);
-  text-decoration-color: var(--pico-primary-inverse);
   padding: calc(var(--pico-spacing) / 2) var(--pico-spacing)
     calc(var(--pico-spacing) / 2) calc(var(--pico-spacing) + 10px);
 }
+.sidebar a:global(.active) {
+  background-color: #63448e;
+}
 .sidebar a:hover {
-  background-color: var(--pico-primary-background);
+  background-color: var(--pico-primary);
+  text-decoration: none;
 }
 .sidebar li:global(.active) {
 }

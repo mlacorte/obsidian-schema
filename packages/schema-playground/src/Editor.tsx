@@ -19,7 +19,7 @@ import {
   syntaxHighlighting,
   syntaxTree
 } from "@codemirror/language";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, type Extension, type Text } from "@codemirror/state";
 import {
   crosshairCursor,
   drawSelection,
@@ -248,7 +248,7 @@ const theme = EditorView.theme({
   }
 });
 
-export const extensions: Extension[] = (() => [
+export const extensions: Extension[] = [
   theme,
   EditorView.lineWrapping,
   lineNumbers(),
@@ -273,54 +273,11 @@ export const extensions: Extension[] = (() => [
     indentWithTab
   ]),
   schema()
-])();
-
-const doc = `local cmp: (a,b) => error("NEVER"),
-local cmp: (a,b) => a < b,
-
-fired: "fired",
-pending: "pending",
-event: { status: this.fired } or { status: this.pending },
-
-foo: {
-  a: 10,
-  bar: this.bar.foo,
-  of string,
-},
-
-bar: {
-  foo: this.foo.a,
-},
-
-other:
-  local a: 10,
-  local b: 20,
-  [a, b, a + b],
-
-test: local a: 10, a,
-
-a: 20,
-b: 10 or 30,
-c: choice(
-  cmp(this.a, this.b),
-  this.a + 3,
-  this.b + 5
-),
-
-c: 23,
-
-/*
-cmp/1: <lambda>,
-cmp/2: <lambda>,
-a/1: 20,
-b/1: 30,
-c/1: 20,
-
-c/1 -> {a/1, b/1, cmp/2}
-*/`;
+];
 
 interface EditorProps {
   setType: Setter<Type>;
+  initialText: Text;
 }
 
 export const Editor = (props: EditorProps): JSX.Element => {
@@ -330,7 +287,7 @@ export const Editor = (props: EditorProps): JSX.Element => {
   const ctx = new Context();
 
   const evalType = (): void => {
-    console.clear();
+    // console.clear();
     const tree = syntaxTree(editorView.state);
     const text = editorView.state.doc;
     props.setType(ctx.eval(schemaTreeEval(text, tree)));
@@ -345,7 +302,7 @@ export const Editor = (props: EditorProps): JSX.Element => {
         })
       ],
       parent: editorViewDiv,
-      doc
+      doc: props.initialText
     });
 
     evalType();

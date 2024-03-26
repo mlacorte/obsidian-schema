@@ -26,9 +26,11 @@ export const code = (text: string): JSX.Element => {
   const dedent = Math.min(...lines.map((t) => t.search(/\S/)));
   if (dedent !== 0) lines = lines.map((t) => t.slice(dedent));
 
-  return (
-    <pre>
-      <code>{lines.join("\n")}</code>
-    </pre>
-  );
+  return <Code text={lines.join("\n")} />;
 };
+
+export const Code = (props: { text: string }): JSX.Element => (
+  <pre>
+    <code>{props.text}</code>
+  </pre>
+);
