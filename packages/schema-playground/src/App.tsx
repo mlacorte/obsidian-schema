@@ -8,6 +8,7 @@ import { Dynamic } from "solid-js/web";
 import { Panel, PanelGroup, ResizeHandle } from "solid-resizable-panels";
 
 import classes from "./App.module.css";
+import External from "./assets/external.svg";
 import Logo from "./assets/logo.svg";
 import { Editor } from "./Editor";
 import { Output } from "./Output";
@@ -66,6 +67,7 @@ export const App = (): JSX.Element => {
             {links.map(({ name, url }) => (
               <li>
                 <a target="_blank" href={url}>
+                  <External />
                   {name}
                 </a>
               </li>
@@ -77,9 +79,10 @@ export const App = (): JSX.Element => {
         <aside class={classes.sidebar}>
           <nav>
             <ul>
-              {[...pages.entries()].map(([path, { name }]) => (
+              {[...pages.entries()].map(([path, { name }], i) => (
                 <li>
                   <A href={path} end>
+                    {`${i + 1}. `}
                     {name}
                   </A>
                 </li>

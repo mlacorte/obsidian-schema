@@ -37,6 +37,10 @@
   color: var(--pico-primary-inverse);
   text-decoration-color: var(--pico-primary-inverse);
 }
+.header a svg {
+  width: 22px;
+  margin-right: 6px;
+}
 
 .main {
   overflow: hidden;
@@ -48,15 +52,9 @@
   background-color: var(--schema-dark-background-color);
 }
 .sidebar ul {
-  margin: 0;
   padding: var(--pico-spacing) 0;
 }
-.sidebar li {
-  margin: 0;
-  padding: 0;
-}
 .sidebar a {
-  margin: 0;
   color: var(--pico-primary-inverse);
   padding: calc(var(--pico-spacing) / 2) var(--pico-spacing)
     calc(var(--pico-spacing) / 2) calc(var(--pico-spacing) + 10px);
