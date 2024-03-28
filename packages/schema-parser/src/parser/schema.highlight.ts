@@ -17,8 +17,6 @@ export const highlight: NodePropSource = styleTags({
   "override protected": tags.modifier,
   "and or of include": tags.operatorKeyword,
   local: tags.definitionKeyword,
-  "Lambda/LambdaArgs/Arg/Identifier, Lambda/LambdaArgs/TypedArg/Identifier":
-    tags.definition(tags.propertyName),
   '"*" "/" + -': tags.arithmeticOperator,
   '"!" & |': tags.logicOperator,
   '>= <= "!=" > < =': tags.compareOperator,

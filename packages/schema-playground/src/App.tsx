@@ -3,7 +3,13 @@ import "./App.css";
 import { type Text } from "@codemirror/state";
 import { A, Navigate, useLocation } from "@solidjs/router";
 import { $never, type Type } from "schema";
-import { type Component, createSignal, type JSX, Show } from "solid-js";
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  type JSX,
+  Show
+} from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { Panel, PanelGroup, ResizeHandle } from "solid-resizable-panels";
 
@@ -47,12 +53,10 @@ const pages = new Map<string, Page>([
 export const App = (): JSX.Element => {
   const [type, setType] = createSignal<Type>($never);
   const location = useLocation();
+  const page = createMemo(() => pages.get(location.pathname)!);
 
   return (
-    <Show
-      when={pages.has(location.pathname)}
-      fallback={<Navigate href={"/"} />}
-    >
+    <Show when={page()} fallback={<Navigate href={"/"} />}>
       <header class={classes.header}>
         <nav>
           <ul>
@@ -91,7 +95,7 @@ export const App = (): JSX.Element => {
           </nav>
         </aside>
         <Panel tag="article" id="docs" class={classes.docs} initialSize={46.5}>
-          <Dynamic component={pages.get(location.pathname)!.article} />
+          <Dynamic component={page().article} />
         </Panel>
         <ResizeHandle />
         <Panel tag="section" id="playground" class={classes.playground}>
@@ -102,14 +106,11 @@ export const App = (): JSX.Element => {
               class={classes.editor}
               initialSize={65}
             >
-              <Editor
-                setType={setType}
-                initialText={pages.get(location.pathname)!.editor}
-              />
+              <Editor setType={setType} initialText={page().editor} />
             </Panel>
             <ResizeHandle />
             <Panel tag="div" id="results" class={classes.results}>
-              <Output type={type} />
+              <Output type={type()} />
             </Panel>
           </PanelGroup>
         </Panel>

@@ -200,7 +200,7 @@ const evalExpr = <T extends TypeRef>(
     },
     fn: (args, expr) => {
       const snapshot = ref.ctx;
-      const cleaned: Array<[name: string, type: Type]> = args.map((a) =>
+      const cleaned: Array<[name: string, type: TypeRef]> = args.map((a) =>
         typeof a === "string" ? [a, $any] : a
       );
 
@@ -213,7 +213,7 @@ const evalExpr = <T extends TypeRef>(
           ctx.scope.set(
             name,
             lit(
-              TypeSet.call([arg], (arg) => {
+              TypeSet.call([arg, fromTypeRef(type)], (arg, type) => {
                 switch (arg.cmp(type)) {
                   case Cmp.Equal:
                   case Cmp.Subset:
@@ -434,7 +434,7 @@ export interface IExprCtx {
   get: (ref: string, properties?: TypeRef[]) => TypeRef;
   call: (fn: TypeRef, args: TypeRef[]) => TypeRef;
   fn: (
-    args: Array<string | [string, Type]>,
+    args: Array<string | [string, TypeRef]>,
     expr: (ctx: IExprCtx) => TypeRef
   ) => SingleType<"function">;
   obj: (obj: (ctx: IObjectCtx) => void) => TypeRef;

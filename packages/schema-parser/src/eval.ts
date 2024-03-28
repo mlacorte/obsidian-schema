@@ -7,7 +7,6 @@ import {
   $never,
   type IExprCtx,
   type IObjectCtx,
-  type Type,
   type TypeRef
 } from "schema";
 
@@ -22,37 +21,50 @@ import {
 } from "./parser/schema.parser.terms";
 
 const evalExpr = (text: Text, cursor: TreeCursor, c: IExprCtx): TypeRef => {
-  expr: do {
+  const results = [] as unknown as [TypeRef, ...TypeRef[]];
+
+  expr: while (true) {
     switch (cursor.type.id) {
       case Lambda: {
         cursor.next(); // => "("
         cursor.next(); // => LambdaArgs
-        const args: Array<[string, Type]> = [];
+        const args: Array<[string, TypeRef]> = [];
 
         args: while (true) {
-          cursor.next();
+          cursor.next(); // => Arg or TypedArg or "=>"
 
           switch (cursor.type.id as unknown) {
             case Arg:
+              cursor.next(); // => Identifier;
               args.push([text.sliceString(cursor.from, cursor.to), $any]);
+              cursor.next(); // => "," or ")";
               break;
-            case TypedArg:
-              console.log("TODO");
+            case TypedArg: {
+              cursor.next(); // => Identifier
+              const arg = text.sliceString(cursor.from, cursor.to);
+              cursor.next(); // => ":"
+              cursor.next(); // => expression
+              args.push([arg, evalExpr(text, cursor, c)]);
+              cursor.next(); // => "," or ")"
               break;
+            }
             default:
               break args;
           }
         }
-        console.log(cursor.name);
+
+        cursor.next(); // => LambdaExpr
+        cursor.next(); // => expression
+        results.push(c.fn(args, (c) => evalExpr(text, cursor, c)));
         break expr;
       }
       default:
-        console.error("UNKNOWN:", cursor.name);
+        results.push($never(`UNKNOWN: ${cursor.name}`));
         break expr;
     }
-  } while (cursor.next());
+  }
 
-  return $never("TODO");
+  return c.or(...results);
 };
 
 const evalObj = (text: Text, cursor: TreeCursor, c: IObjectCtx): void => {

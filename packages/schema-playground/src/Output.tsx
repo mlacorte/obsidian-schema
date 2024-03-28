@@ -1,5 +1,5 @@
 import { type Type } from "schema";
-import { type Accessor, type JSX } from "solid-js";
+import { type JSX } from "solid-js";
 
 interface Line {
   indent: number;
@@ -62,7 +62,10 @@ const formatRec = (type: Type, lines: Lines, flatten = false): Lines => {
     } else if (t.is("object")) {
       const outer = lines.current;
       const indent = flatten ? outer.indent : outer.indent + 1;
-      if (!flatten) lines.append("{");
+      if (!flatten) {
+        lines.append("{");
+        lines.newLine(indent, outer.bold);
+      }
 
       const values: Array<[string, Type]> = [];
       const types: Array<[string, Type]> = [];
@@ -76,15 +79,15 @@ const formatRec = (type: Type, lines: Lines, flatten = false): Lines => {
       }
 
       for (const [prop, val] of [...values, ...types]) {
-        if (!flatten) lines.newLine(indent, emit(val, outer.bold));
+        lines.current.bold &&= emit(val, outer.bold);
         lines.append(prop);
         lines.append(": ");
         formatRec(val, lines);
         lines.append(",");
-        if (flatten) lines.newLine(indent, emit(val, outer.bold));
+        lines.newLine(indent, outer.bold);
       }
 
-      if (!flatten) lines.newLine(indent, false);
+      lines.current.bold = false;
       lines.append("of ");
       formatRec(t.value.unknown, lines);
       lines.append(",");
@@ -115,12 +118,12 @@ const formatRec = (type: Type, lines: Lines, flatten = false): Lines => {
 };
 
 interface OutputProps {
-  type: Accessor<Type>;
+  type: Type;
 }
 
 export const Output = (props: OutputProps): JSX.Element => {
   const lines = (): JSX.Element => {
-    const type = props.type();
+    const type = props.type;
 
     if (type.type === "never") {
       return <b>Syntax error!</b>;
