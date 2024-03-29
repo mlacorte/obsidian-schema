@@ -57,6 +57,7 @@ export interface TypeBase<K extends IKey> {
   isSingle: () => this is SingleType<K>;
   isType: () => boolean;
   splitTypes: () => Iterable<SingleType<K>>;
+  isTruthy: () => SingleType<"boolean">;
   get: (key: Type) => Type;
 }
 
@@ -129,6 +130,10 @@ class TypeClass<K extends IKey> implements Type<K> {
 
   splitTypesShallow(): [SingleType<K>, ...Array<SingleType<K>>] {
     return this.types.map((t) => new TypeClass([t])) as any;
+  }
+
+  isTruthy(): SingleType<"boolean"> {
+    return TypeFns.isTruthy(this.types);
   }
 
   clone(): TypeClass<any> {
@@ -297,6 +302,19 @@ export const TypeFns = {
       }
     }
   },
+  isTruthy(types: IType<any>): SingleType<"boolean"> {
+    let truthy: SingleType<"boolean"> = $never as any;
+
+    for (const t of types) {
+      const { isTruthy } = getFns(t.type);
+      for (const v of t.values) {
+        truthy = truthy.or(isTruthy(v)) as SingleType<"boolean">;
+        if (truthy.value === null) return truthy;
+      }
+    }
+
+    return truthy;
+  },
   clone(types: IType<any>): IType<any> {
     return [
       ...types.map((t) => {
@@ -352,6 +370,7 @@ interface IFnsType<T> {
   isSingle: (value: T) => boolean;
   isType: (value: T) => boolean;
   splitTypes: (value: T) => Iterable<T>;
+  isTruthy: (value: T) => SingleType<"boolean">;
   clone: (value: T) => T;
 }
 
@@ -371,6 +390,7 @@ interface IUnitFns<K extends IKey> {
   _cmp: INonNullFn<K, "cmp">;
   _string: INonNullFn<K, "string">;
   _clone: INonNullFn<K, "clone">;
+  _isTruthy: INonNullFn<K, "isTruthy">;
 }
 type IUnitFnsArgs<K extends IKey> = Optional<
   IUnitFns<K>,
@@ -418,6 +438,8 @@ const unitFns = <K extends IKey, T>(
     isSingle: () => true,
     isType: (value) => value === null,
     splitTypes: (value) => [value],
+    isTruthy: (value) =>
+      value === null ? $boolean : fns._isTruthy(value as NonNull),
     clone: (value) => (value === null ? null : fns._clone(value as NonNull)),
     ...fns
   };
@@ -431,6 +453,7 @@ export const AnyFns = baseFns<"any">(() => ({
   isSingle: () => true,
   isType: () => true,
   splitTypes: () => [null],
+  isTruthy: () => $boolean,
   clone: () => null
 }));
 
@@ -438,6 +461,8 @@ export const NeverFns = unitFns("never", () => ({
   _cmp: (a, b, sortOnly) => StringFns._cmp(a, b, sortOnly),
   _string: (msg) => `error(${JSON.stringify(msg)})`,
   isType: () => true,
+  isTruthy: () => $false,
+  _isTruthy: () => $false,
   error(a: IType, b: IType): string {
     return `Can't combine '${TypeFns.string(a)}' and '${TypeFns.string(b)}'.`;
   }
@@ -450,6 +475,7 @@ export const NullFns = baseFns<"null">(() => ({
   string: () => "null",
   isSingle: () => true,
   isType: () => false,
+  isTruthy: () => $false,
   splitTypes: () => [null],
   clone: () => null
 }));
@@ -462,19 +488,22 @@ export const BooleanFns = unitFns("boolean", () => ({
   },
   splitTypes: (value) => (value === null ? [false, true] : [value]),
   _cmp: (a: boolean, b: boolean) =>
-    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt,
+  _isTruthy: (value) => singleType("boolean", value)
 }));
 
 export const NumberFns = unitFns("number", () => ({
   _cmp: (a: number, b: number) =>
-    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt
+    a === b ? Cmp.Equal : a < b ? Cmp.DisjointLt : Cmp.DisjointGt,
+  _isTruthy: (value) => (value === 0 ? $false : $true)
 }));
 
 export const StringFns = unitFns("string", () => ({
   _cmp: (a: string, b: string) => {
     const cmp = a.localeCompare(b);
     return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
-  }
+  },
+  _isTruthy: (value) => (value.length === 0 ? $false : $true)
 }));
 
 export const DateFns = unitFns("date", () => ({
@@ -482,7 +511,8 @@ export const DateFns = unitFns("date", () => ({
     const cmp = a.toMillis() - b.toMillis();
     return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
   },
-  _clone: (v) => L.DateTime.fromMillis(v.toMillis())
+  _clone: (v) => L.DateTime.fromMillis(v.toMillis()),
+  _isTruthy: (value) => (value.toMillis() === 0 ? $false : $true)
 }));
 
 export const DurationFns = unitFns("duration", () => ({
@@ -490,17 +520,24 @@ export const DurationFns = unitFns("duration", () => ({
     const cmp = a.toMillis() - b.toMillis();
     return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
   },
-  _clone: (v) => L.Duration.fromMillis(v.toMillis())
+  _clone: (value) => L.Duration.fromMillis(value.toMillis()),
+  _isTruthy: (value) => (value.as("seconds") === 0 ? $false : $true)
 }));
 
 export const LinkFns = unitFns("link", () => ({
   _cmp: (_a, _b) => {
+    throw new Error("TODO");
+  },
+  _isTruthy: (_value) => {
     throw new Error("TODO");
   }
 }));
 
 export const WidgetFns = unitFns("widget", () => ({
   _cmp: (_a, _b) => {
+    throw new Error("TODO");
+  },
+  _isTruthy: (_value) => {
     throw new Error("TODO");
   }
 }));
@@ -663,6 +700,12 @@ export const collectionFns = <K extends "array" | "object", V>(
         yield { known, unknown };
       }
     },
+    isTruthy: (obj) =>
+      args._size(obj.known) > 0
+        ? $true
+        : obj.unknown.type === "never"
+          ? $false
+          : $boolean,
     clone(obj): ITypeMap[K] {
       const unknown = obj.unknown.clone();
       const knownVals: Array<[any, Type]> = [];
@@ -713,6 +756,7 @@ export const FunctionFns = baseFns<"function">(() => {
     isSingle: () => true,
     isType: () => false,
     splitTypes: (val) => [val],
+    isTruthy: () => $true,
     clone: (fn) => fn.bind({})
   };
 });

@@ -22,7 +22,7 @@ const depEq = (a: TypeSet, b: Array<Array<[TypeSet, SingleType]>>): void => {
   ).toEqual(b.map((p) => p.map(([ts, t]) => [ts.id, t.types])));
 };
 
-describe("valueset", () => {
+describe("typeset", () => {
   const a = TypeSet.val($one.or($two));
   const b = TypeSet.val($one.or($two));
   const empty = TypeSet.call([], () => $one);

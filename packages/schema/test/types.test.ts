@@ -5,6 +5,7 @@ import {
   $array,
   $boolean,
   $false,
+  $function,
   $never,
   $null,
   $number,
@@ -110,7 +111,7 @@ describe("util", () => {
   });
 });
 
-describe("typeset", () => {
+describe("types", () => {
   describe("boolean", () => {
     test("promotion", () => {
       eq($true.or($false), $boolean);
@@ -301,5 +302,50 @@ describe("typeset", () => {
         eq(builtins.choice.value(ctx, ...args).type(), types[3]);
       });
     }
+  });
+  describe("truthiness", () => {
+    describe("true", () => {
+      const truthy = [
+        $number(1),
+        $string("foo"),
+        $true,
+        $object({ a: $true }),
+        $array([$true]),
+        $function
+      ];
+
+      for (const type of truthy) {
+        test(type.toString(), () => {
+          expect(type.isTruthy().value).toBe(true);
+        });
+      }
+    });
+
+    describe("false", () => {
+      const falsey = [
+        $never,
+        $number(0),
+        $string(""),
+        $false,
+        $object({}, $never),
+        $array([], $never)
+      ];
+
+      for (const type of falsey) {
+        test(type.toString(), () => {
+          expect(type.isTruthy().value).toBe(false);
+        });
+      }
+    });
+
+    describe("unknown", () => {
+      const unknown = [$any, $number, $string, $boolean, $object, $array];
+
+      for (const type of unknown) {
+        test(type.toString(), () => {
+          expect(type.isTruthy().value).toBe(null);
+        });
+      }
+    });
   });
 });
