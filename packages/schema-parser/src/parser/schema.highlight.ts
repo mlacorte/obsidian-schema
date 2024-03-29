@@ -18,7 +18,7 @@ export const highlight: NodePropSource = styleTags({
   "and or of include": tags.operatorKeyword,
   local: tags.definitionKeyword,
   '"*" "/" + -': tags.arithmeticOperator,
-  '"!" & |': tags.logicOperator,
+  '"!"': tags.logicOperator,
   '>= <= "!=" > < =': tags.compareOperator,
   ":": tags.punctuation,
   ",": tags.separator,

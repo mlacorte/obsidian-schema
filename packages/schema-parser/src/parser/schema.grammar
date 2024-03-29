@@ -41,8 +41,8 @@ Eq { expression !cmp "=" expression }
 comparisonExpression { Gte | Lte | Neq | Gt | Lt | Eq }
 
 Not { "!" expression }
-And { expression !logic ("and" | "&") expression }
-Or { expression !logic ("or" | "|") expression }
+And { expression !logic "and" expression }
+Or { expression !logic "or" expression }
 logicalExpression { And | Or }
 
 Identifier { kw<"this"> | identifier }

@@ -1,9 +1,12 @@
 import {
   $any,
   $array,
+  $boolean,
+  $false,
   $never,
   $null,
   $object,
+  $true,
   builtins,
   type SingleType,
   singleType,
@@ -240,7 +243,14 @@ const evalExpr = <T extends TypeRef>(
     },
     and: (a, ...bs) => {
       return andRef(a, ...bs);
-    }
+    },
+    not: (ref) =>
+      lit(
+        TypeSet.call([fromTypeRef(ref)], (type) => {
+          const res = type.isTruthy();
+          return res.value === null ? $boolean : res.value ? $false : $true;
+        })
+      )
   });
 };
 
@@ -441,4 +451,5 @@ export interface IExprCtx {
   arr: (arr: (ctx: IArrayCtx) => void) => TypeRef;
   or: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | OrRef;
   and: <T extends TypeRef>(a: T, ...bs: TypeRef[]) => T | AndRef;
+  not: (ref: TypeRef) => TypeRef;
 }
