@@ -20,7 +20,7 @@ value {
 
 @precedence { postfix @left, mulDiv @left, plsMin @left, cmp @left, logic @left }
 
-Call { expression !postfix "(" listOf<expression | Of | Include> ")" }
+Call { expression !postfix "(" listOf<expression> ")" }
 Index { expression !postfix "[" expression "]" }
 Dot { expression !postfix "." DotIdentifier }
 DotIdentifier { identifier }

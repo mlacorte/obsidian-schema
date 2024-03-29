@@ -140,7 +140,7 @@ describe("parser", () => {
         include foo,
         foo: [1, 2, 3, of number],
         bar: { of string },
-        baz: object(include this.bar),
+        baz: object(this.bar),
         protected #some/tag: true,
         override pi: 3.14,
         override protected #a/little/weird: "meh",
