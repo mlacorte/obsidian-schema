@@ -272,7 +272,10 @@ export const treeEval =
   (doc: Text, tree: Tree) =>
   (c: IObjectCtx): void => {
     const cursor = new SchemaCursor(tree.cursor(), doc);
-    if (cursor.hasError()) return;
+    if (cursor.hasError()) {
+      c.include(() => $never("Syntax error"));
+      return;
+    }
     cursor.firstChild(); // => Block
     evalBlock(cursor, c);
   };

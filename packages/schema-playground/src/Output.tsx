@@ -126,7 +126,7 @@ export const Output = (props: OutputProps): JSX.Element => {
     const type = props.type;
 
     if (type.type === "never") {
-      return <b>Syntax error!</b>;
+      return <b>{type.toString()}</b>;
     }
 
     return formatRec(type, new Lines(0, true), true).all.map((line) => {
