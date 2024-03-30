@@ -1,7 +1,7 @@
 /* eslint-disable no-unreachable-loop */
 /* eslint-disable no-labels */
 import { type Text } from "@codemirror/state";
-import { type Tree, type TreeCursor } from "@lezer/common";
+import { type IterMode, type Tree, type TreeCursor } from "@lezer/common";
 import {
   $any,
   $boolean,
@@ -61,8 +61,8 @@ class SchemaCursor {
     return this.text.sliceString(this.cursor.from, this.cursor.to);
   }
 
-  clone(): SchemaCursor {
-    return new SchemaCursor(this.cursor.node.cursor(), this.text);
+  clone(mode?: IterMode): SchemaCursor {
+    return new SchemaCursor(this.cursor.node.cursor(mode), this.text);
   }
 
   private get isSkipped(): boolean {
@@ -76,7 +76,7 @@ class SchemaCursor {
   next(enter?: boolean): boolean {
     while (true) {
       const res = this.cursor.next(enter);
-      if (!this.isSkipped) return res;
+      if (!res || !this.isSkipped) return res;
     }
   }
 
@@ -90,6 +90,16 @@ class SchemaCursor {
       const res = this.cursor.nextSibling();
       if (!res || !this.isSkipped) return res;
     }
+  }
+
+  hasError(): boolean {
+    const cursor = this.cursor.node.cursor();
+
+    do {
+      if (cursor.type.isError) return true;
+    } while (cursor.next());
+
+    return false;
   }
 }
 
@@ -262,6 +272,7 @@ export const treeEval =
   (doc: Text, tree: Tree) =>
   (c: IObjectCtx): void => {
     const cursor = new SchemaCursor(tree.cursor(), doc);
+    if (cursor.hasError()) return;
     cursor.firstChild(); // => Block
     evalBlock(cursor, c);
   };
