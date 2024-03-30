@@ -1,17 +1,18 @@
-@top MarkdownDoc { ("%{" Schema "}" | Markdown)* }
-@top SchemaDoc { block }
+@top MarkdownDoc { (SchemaBlock | MarkdownBlock)* }
+@top SchemaDoc { Block }
 
-Markdown { unknown }
-Schema { block }
-
-block { listOf<property> }
+MarkdownBlock { unknown }
+SchemaBlock { "%{" Block "}" }
 
 expression {
   value | postfixExpression | mathExpression |
   comparisonExpression | logicalExpression  |
-  Not | LocalProperty "," expression |
-  "(" expression ~lambdaOrParen ")"
+  Not | LocalExpression | Parens
 }
+
+Not { "!" expression }
+LocalExpression { kw<"local"> propertyKey ":" expression "," expression }
+Parens { "(" expression ~lambdaOrParen ")" }
 
 value {
   Identifier | Bool | Null | Number | String | Link | EmbedLink |
@@ -40,7 +41,6 @@ Lt { expression !cmp "<" expression }
 Eq { expression !cmp "=" expression }
 comparisonExpression { Gte | Lte | Neq | Gt | Lt | Eq }
 
-Not { "!" expression }
 And { expression !logic "and" expression }
 Or { expression !logic "or" expression }
 logicalExpression { And | Or }
@@ -55,11 +55,12 @@ LambdaExpr { expression }
 Arg { Identifier }
 TypedArg { Identifier ":" expression }
 
-Array  { "[" listOf<expression | Of | Include> "]" }
-Object { "{" listOf<property> "}" }
+Array  { "[" listOf<expression | Of> "]" }
+Object { "{" Block "}" }
 Property { kw<"override">? propertyKey ":" expression }
 PropertyIdentifier { identifier }
 
+Block { listOf<property> }
 property { Of | Include | LocalProperty | Property }
 propertyKey {
   PropertyIdentifier |

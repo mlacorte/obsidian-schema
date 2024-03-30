@@ -63,7 +63,7 @@
   background-color: #63448e;
 }
 .sidebar a:hover {
-  background-color: var(--pico-primary);
+  background-color: var(--pico-primary-background);
   text-decoration: none;
 }
 .sidebar li:global(.active) {
