@@ -55,13 +55,14 @@ LambdaExpr { expression }
 Arg { Identifier }
 TypedArg { Identifier ":" expression }
 
-Array  { "[" listOf<expression | Of> "]" }
+Array { "[" listOf<expression | Of> "]" }
 Object { "{" Block "}" }
-Property { kw<"override">? propertyKey ":" expression }
+Property { propertyKey ":" expression }
+OverrideProperty { kw<"override"> propertyKey ":" expression }
 PropertyIdentifier { identifier }
 
 Block { listOf<property> }
-property { Of | Include | LocalProperty | Property }
+property { Of | Include | LocalProperty | Property | OverrideProperty }
 propertyKey {
   PropertyIdentifier |
   String |

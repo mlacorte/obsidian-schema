@@ -31,7 +31,7 @@ import {
   Number as _Number,
   Object as _Object,
   Of,
-  override,
+  OverrideProperty,
   Property,
   PropertyIdentifier,
   String as _String,
@@ -41,59 +41,59 @@ import {
 
 class SchemaCursor {
   constructor(
-    private readonly cursor: TreeCursor,
-    private readonly text: Text
+    private readonly _cursor: TreeCursor,
+    private readonly _text: Text
   ) {
     while (this.isSkipped) {
-      this.cursor.next();
+      this._cursor.next();
     }
   }
 
   get id(): number {
-    return this.cursor.type.id;
+    return this._cursor.type.id;
   }
 
   get name(): string {
-    return this.cursor.type.name;
+    return this._cursor.type.name;
   }
 
-  get inner(): string {
-    return this.text.sliceString(this.cursor.from, this.cursor.to);
+  get text(): string {
+    return this._text.sliceString(this._cursor.from, this._cursor.to);
   }
 
   clone(mode?: IterMode): SchemaCursor {
-    return new SchemaCursor(this.cursor.node.cursor(mode), this.text);
+    return new SchemaCursor(this._cursor.node.cursor(mode), this._text);
   }
 
   private get isSkipped(): boolean {
-    return (
-      this.cursor.type.isSkipped ||
-      this.cursor.name === "/*" ||
-      this.cursor.name === "//"
-    );
+    return this._cursor.type.isSkipped || !/^[A-Z]/.test(this._cursor.name);
   }
 
   next(enter?: boolean): boolean {
     while (true) {
-      const res = this.cursor.next(enter);
+      const res = this._cursor.next(enter);
       if (!res || !this.isSkipped) return res;
     }
   }
 
+  parent(): boolean {
+    return this._cursor.parent();
+  }
+
   firstChild(): boolean {
-    if (!this.cursor.firstChild()) return false;
+    if (!this._cursor.firstChild()) return false;
     return this.isSkipped ? this.nextSibling() : true;
   }
 
   nextSibling(): boolean {
     while (true) {
-      const res = this.cursor.nextSibling();
+      const res = this._cursor.nextSibling();
       if (!res || !this.isSkipped) return res;
     }
   }
 
   hasError(): boolean {
-    const cursor = this.cursor.node.cursor();
+    const cursor = this._cursor.node.cursor();
 
     do {
       if (cursor.type.isError) return true;
@@ -113,44 +113,39 @@ const readProp = (cursor: SchemaCursor): string => {
     case PropertyIdentifier:
     case Tag:
     case Link:
-      return cursor.inner;
+      return cursor.text;
   }
 
-  return JSON.parse(cursor.inner);
+  return JSON.parse(cursor.text);
 };
 
 const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
-  switch (cursor.id) {
+  switch (cursor.id as unknown) {
     case LocalExpression: {
-      cursor.next(); // => "local"
-      cursor.next(); // => propertyKey
+      cursor.firstChild(); // => propertyKey
       const name = readProp(cursor);
-      cursor.next(); // => ":"
-      cursor.next(); // => expression
+      cursor.nextSibling(); // => expression
       const lazyCursor = cursor.clone();
       c.local(name, (c) => evalExpr(lazyCursor, c));
-      cursor.next(false); // => ","
-      cursor.next(); // => expression
+      cursor.nextSibling(); // => expression
       return evalExpr(cursor, c);
     }
     case Not:
-      cursor.next(); // => "!"
-      cursor.next(); // => expression
+      cursor.firstChild(); // => expression
       return c.not(evalExpr(cursor, c));
     case Identifier:
-      return c.get(cursor.inner);
+      return c.get(cursor.text);
     case Bool:
-      return $boolean(/^true$/i.test(cursor.inner));
+      return $boolean(/^true$/i.test(cursor.text));
     case Null:
       return $null;
     case _Number:
-      return $number(Number(cursor.inner));
+      return $number(Number(cursor.text));
     case _String:
-      return $string(JSON.parse(cursor.inner) as string);
+      return $string(JSON.parse(cursor.text) as string);
     case _Object:
       return c.obj((c) => {
-        cursor.next(); // => "{"
-        cursor.next(); // => Block
+        cursor.firstChild(); // => Block
         evalBlock(cursor, c);
       });
     case _Array:
@@ -158,26 +153,20 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
         evalArr(cursor, c);
       });
     case Lambda: {
-      cursor.next(); // => "("
-      cursor.next(); // => LambdaArgs
+      cursor.firstChild(); // => LambdaArgs
       const args: Array<[string, TypeRef]> = [];
 
-      args: while (true) {
-        cursor.next(); // => Arg or TypedArg or "=>"
-
+      args: while (cursor.next() /* Arg or TypedArg or LambdaExpr */) {
         switch (cursor.id as unknown) {
           case Arg:
-            cursor.next(); // => Identifier;
-            args.push([cursor.inner, $any]);
-            cursor.next(); // => "," or ")";
+            cursor.firstChild(); // => Identifier;
+            args.push([cursor.text, $any]);
             break;
           case TypedArg: {
-            cursor.next(); // => Identifier
-            const arg = cursor.inner;
-            cursor.next(); // => ":"
-            cursor.next(); // => expression
+            cursor.firstChild(); // => Identifier
+            const arg = cursor.text;
+            cursor.nextSibling(); // => expression
             args.push([arg, evalExpr(cursor, c)]);
-            cursor.next(); // => "," or ")"
             break;
           }
           default:
@@ -185,8 +174,7 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
         }
       }
 
-      cursor.next(); // => LambdaExpr
-      cursor.next(); // => expression
+      cursor.firstChild(); // => expression
       return c.fn(args, (c) => evalExpr(cursor, c));
     }
     default:
@@ -195,16 +183,15 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
 };
 
 const evalArr = (cursor: SchemaCursor, c: IArrayCtx): void => {
-  cursor.next(); // => "["
-  cursor.next(); // => expression or "]";
+  if (!cursor.firstChild()) return;
 
-  while (cursor.name !== "]") {
+  do {
     switch (cursor.id as unknown) {
       case Of: {
-        cursor.next(); // => "of"
-        cursor.next(); // => expression
+        cursor.firstChild(); // => expression
         const lazyCursor = cursor.clone();
         c.of((c) => evalExpr(lazyCursor, c));
+        cursor.parent();
         break;
       }
       default: {
@@ -213,58 +200,50 @@ const evalArr = (cursor: SchemaCursor, c: IArrayCtx): void => {
         break;
       }
     }
-
-    cursor.next(false);
-    cursor.nextSibling();
-  }
+  } while (cursor.nextSibling());
 };
 
 const evalBlock = (cursor: SchemaCursor, c: IObjectCtx): void => {
   if (!cursor.firstChild()) return;
 
-  obj: do {
+  block: do {
     switch (cursor.id as unknown) {
       case Of: {
-        cursor.next(); // => "of"
-        cursor.next(); // => expression
+        cursor.firstChild(); // => expression
         const lazyCursor = cursor.clone();
         c.of((c) => evalExpr(lazyCursor, c));
         break;
       }
       case Include: {
-        cursor.next(); // => "include"
-        cursor.next(); // => expression
+        cursor.firstChild(); // => expression
         const lazyCursor = cursor.clone();
         c.include((c) => evalExpr(lazyCursor, c));
         break;
       }
       case LocalProperty: {
-        cursor.next(); // => "local"
-        cursor.next(); // => propertyKey
+        cursor.firstChild(); // => propertyKey
         const name = readProp(cursor);
-        cursor.next(); // => ":"
-        cursor.next(); // => expression
+        cursor.nextSibling(); // => expression
         const lazyCursor = cursor.clone();
         c.local(name, (c) => evalExpr(lazyCursor, c));
         break;
       }
-      case Property: {
-        cursor.next(); // => "override" or propertyKey
-        // TODO: add override logic
-        if (cursor.id === override) cursor.next();
+      // TODO: add override logic
+      case Property:
+      case OverrideProperty: {
+        cursor.firstChild(); // => propertyKey
         const name = readProp(cursor);
-        cursor.next(); // => ":"
-        cursor.next(); // => expression;
+        cursor.nextSibling(); // => expression;
         const lazyCursor = cursor.clone();
         c.set(name, (c) => evalExpr(lazyCursor, c));
         break;
       }
       default:
         console.error("UNKNOWN:", cursor.name);
-        break obj;
+        break block;
     }
 
-    cursor.next(false);
+    cursor.parent();
   } while (cursor.nextSibling());
 };
 

@@ -63,7 +63,10 @@ describe("parser", () => {
     expect(children(tree).length).toBe(1);
     expect(toJSON(str, { tree })).toEqual([
       "SchemaDoc",
-      ["Property", ["PropertyIdentifier", "key"], ["Identifier", expr]]
+      [
+        "Block",
+        ["Property", ["PropertyIdentifier", "key"], ["Identifier", expr]]
+      ]
     ]);
   });
 
