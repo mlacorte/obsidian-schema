@@ -16,22 +16,22 @@
     "@codemirror/language": "^6.10.1",
     "@codemirror/lint": "^6.5.0",
     "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.26.0",
+    "@codemirror/view": "^6.26.1",
     "@picocss/pico": "^2.0.6",
     "@solidjs/router": "^0.13.1",
     "codemirror": "^6.0.1",
     "schema": "workspace:*",
     "schema-parser": "workspace:*",
     "solid-js": "^1.8.16",
-    "solid-resizable-panels": "^0.5.2"
+    "solid-resizable-panels": "^0.5.4"
   },
   "devDependencies": {
-    "pnpm": "^8.15.5",
+    "pnpm": "^8.15.6",
     "rimraf": "^5.0.5",
-    "turbo": "^1.13.0",
+    "turbo": "^1.13.2",
     "typescript": "^5.4.3",
-    "vite": "^5.2.2",
+    "vite": "^5.2.8",
     "vite-plugin-solid": "^2.10.2",
-    "vite-plugin-solid-svg": "^0.8.0"
+    "vite-plugin-solid-svg": "^0.8.1"
   }
 }
