@@ -16,14 +16,12 @@ import {
 } from "schema";
 
 import {
-  _protected,
   Arg,
   Array as _Array,
   Bool,
   Identifier,
   Include,
   Lambda,
-  Link,
   LocalExpression,
   LocalProperty,
   Not,
@@ -31,11 +29,11 @@ import {
   Number as _Number,
   Object as _Object,
   Of,
+  OverrideItem,
   OverrideProperty,
   Property,
-  PropertyIdentifier,
+  Protected,
   String as _String,
-  Tag,
   TypedArg
 } from "./parser/schema.parser.terms";
 
@@ -105,18 +103,13 @@ class SchemaCursor {
 
 // TODO: add Link and Tag types + protection logic
 const readProp = (cursor: SchemaCursor): string => {
-  if (cursor.id === _protected) {
-    cursor.next();
-  }
+  const protect = cursor.id === Protected;
+  if (protect) cursor.firstChild();
 
-  switch (cursor.id) {
-    case PropertyIdentifier:
-    case Tag:
-    case Link:
-      return cursor.text;
-  }
+  const res = cursor.id === _String ? JSON.parse(cursor.text) : cursor.text;
 
-  return JSON.parse(cursor.text);
+  if (protect) cursor.parent();
+  return res;
 };
 
 const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
@@ -186,20 +179,25 @@ const evalArr = (cursor: SchemaCursor, c: IArrayCtx): void => {
   if (!cursor.firstChild()) return;
 
   do {
+    const override = cursor.id === OverrideItem;
+    if (override) cursor.firstChild();
+
     switch (cursor.id as unknown) {
       case Of: {
         cursor.firstChild(); // => expression
         const lazyCursor = cursor.clone();
-        c.of((c) => evalExpr(lazyCursor, c));
+        c.of(override, (c) => evalExpr(lazyCursor, c));
         cursor.parent();
         break;
       }
       default: {
         const lazyCursor = cursor.clone();
-        c.set((c) => evalExpr(lazyCursor, c));
+        c.set(override, (c) => evalExpr(lazyCursor, c));
         break;
       }
     }
+
+    if (override) cursor.parent();
   } while (cursor.nextSibling());
 };
 
@@ -207,17 +205,20 @@ const evalBlock = (cursor: SchemaCursor, c: IObjectCtx): void => {
   if (!cursor.firstChild()) return;
 
   block: do {
+    const override = cursor.id === OverrideProperty;
+    if (override) cursor.firstChild();
+
     switch (cursor.id as unknown) {
       case Of: {
         cursor.firstChild(); // => expression
         const lazyCursor = cursor.clone();
-        c.of((c) => evalExpr(lazyCursor, c));
+        c.of(override, (c) => evalExpr(lazyCursor, c));
         break;
       }
       case Include: {
         cursor.firstChild(); // => expression
         const lazyCursor = cursor.clone();
-        c.include((c) => evalExpr(lazyCursor, c));
+        c.include(override, (c) => evalExpr(lazyCursor, c));
         break;
       }
       case LocalProperty: {
@@ -228,14 +229,12 @@ const evalBlock = (cursor: SchemaCursor, c: IObjectCtx): void => {
         c.local(name, (c) => evalExpr(lazyCursor, c));
         break;
       }
-      // TODO: add override logic
-      case Property:
-      case OverrideProperty: {
+      case Property: {
         cursor.firstChild(); // => propertyKey
         const name = readProp(cursor);
         cursor.nextSibling(); // => expression;
         const lazyCursor = cursor.clone();
-        c.set(name, (c) => evalExpr(lazyCursor, c));
+        c.set(name, override, (c) => evalExpr(lazyCursor, c));
         break;
       }
       default:
@@ -244,6 +243,7 @@ const evalBlock = (cursor: SchemaCursor, c: IObjectCtx): void => {
     }
 
     cursor.parent();
+    if (override) cursor.parent();
   } while (cursor.nextSibling());
 };
 
@@ -252,7 +252,7 @@ export const treeEval =
   (c: IObjectCtx): void => {
     const cursor = new SchemaCursor(tree.cursor(), doc);
     if (cursor.hasError()) {
-      c.include(() => $never("Syntax error"));
+      c.include(true, () => $never("Syntax error"));
       return;
     }
     cursor.firstChild(); // => Block

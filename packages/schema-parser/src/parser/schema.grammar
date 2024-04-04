@@ -55,23 +55,28 @@ LambdaExpr { expression }
 Arg { Identifier }
 TypedArg { Identifier ":" expression }
 
-Array { "[" listOf<expression | Of> "]" }
+Array { "[" listOf<item | OverrideItem> "]" }
+item { Of | expression }
+OverrideItem { kw<"override"> item }
+
 Object { "{" Block "}" }
 Property { propertyKey ":" expression }
-OverrideProperty { kw<"override"> propertyKey ":" expression }
 PropertyIdentifier { identifier }
 
-Block { listOf<property> }
-property { Of | Include | LocalProperty | Property | OverrideProperty }
+Block { listOf<property | OverrideProperty> }
+OverrideProperty { kw<"override"> property }
+property { Of | Include | LocalProperty | Property }
 propertyKey {
   PropertyIdentifier |
   String |
-  kw<"protected">? Tag |
-  kw<"protected">? Link
+  Protected |
+  Tag |
+  Link
 }
 Of { kw<"of"> expression }
 Include { kw<"include"> expression }
 LocalProperty { kw<"local"> propertyKey ":" expression }
+Protected { kw<"protected"> (Tag | Link) }
 
 DurationYears { Number ("year" | "years" | "yr" | "yrs") }
 DurationMonths { Number ("month" | "months" | "mo" | "mos") }
