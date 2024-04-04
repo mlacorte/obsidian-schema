@@ -125,19 +125,19 @@ const evalObj = (
         thunk(() => evalExpr(ref.ctx, expr))
       );
     },
-    set(key, expr) {
+    set(key, override, expr) {
       obj.vals.set(
         key,
         thunk(() => evalExpr(ref.ctx, expr))
       );
     },
-    of(expr) {
+    of(override, expr) {
       obj.of = andRef(
         obj.of,
         thunk(() => evalExpr(ref.ctx, expr))
       );
     },
-    include(expr) {
+    include(override, expr) {
       ands.push(thunk(() => evalExpr(ref.ctx, expr)));
     }
   });
@@ -149,10 +149,10 @@ const evalArr = (ctx: IContext, fn: (ctx: IArrayCtx) => void): TypeRef => {
   const arr = arrayRef(ctx, $array);
 
   fn({
-    set: (expr) => {
+    set: (override, expr) => {
       arr.vals.push(thunk(() => evalExpr(ctx, expr)));
     },
-    of: (expr) => {
+    of: (override, expr) => {
       arr.of = thunk(() => andRef(arr.of, evalExpr(ctx, expr)));
     }
   });
@@ -429,14 +429,18 @@ export const fromAndRef = (or: AndRef): TypeSet => {
 
 export interface IObjectCtx {
   local: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  set: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  of: (expr: (ctx: IExprCtx) => TypeRef) => void;
-  include: (expr: (ctx: IExprCtx) => TypeRef) => void;
+  set: (
+    key: string,
+    override: boolean,
+    expr: (ctx: IExprCtx) => TypeRef
+  ) => void;
+  of: (override: boolean, expr: (ctx: IExprCtx) => TypeRef) => void;
+  include: (override: boolean, expr: (ctx: IExprCtx) => TypeRef) => void;
 }
 
 export interface IArrayCtx {
-  set: (expr: (ctx: IExprCtx) => TypeRef) => void;
-  of: (expr: (ctx: IExprCtx) => TypeRef) => void;
+  set: (override: boolean, expr: (ctx: IExprCtx) => TypeRef) => void;
+  of: (override: boolean, expr: (ctx: IExprCtx) => TypeRef) => void;
 }
 
 export interface IExprCtx {

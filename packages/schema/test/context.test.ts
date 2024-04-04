@@ -10,41 +10,43 @@ const input = new Context().eval((c) => {
     c.fn(["a", "b"], (c) => c.call(ops.lt, [c.get("a"), c.get("b")]))
   );
 
-  c.set("foo", (c) =>
+  c.set("foo", false, (c) =>
     c.obj((c) => {
-      c.set("a", () => $number(10));
-      c.set("bar", (c) => c.get("this", [$string("bar"), $string("foo")]));
+      c.set("a", false, () => $number(10));
+      c.set("bar", false, (c) =>
+        c.get("this", [$string("bar"), $string("foo")])
+      );
     })
   );
 
-  c.set("bar", (c) =>
+  c.set("bar", false, (c) =>
     c.obj((c) => {
-      c.set("foo", (c) => c.get("this", [$string("foo"), $string("a")]));
+      c.set("foo", false, (c) => c.get("this", [$string("foo"), $string("a")]));
     })
   );
 
-  c.set("other", (c) => {
+  c.set("other", false, (c) => {
     c.local("a", () => $number(10));
     c.local("b", () => $number(10));
 
     return c.arr((c) => {
-      c.set((c) => c.get("a"));
-      c.set((c) => c.get("b"));
-      c.set((c) => c.call(ops.plus, [c.get("a"), c.get("b")]));
+      c.set(false, (c) => c.get("a"));
+      c.set(false, (c) => c.get("b"));
+      c.set(false, (c) => c.call(ops.plus, [c.get("a"), c.get("b")]));
     });
   });
 
-  c.set("test", (c) => {
+  c.set("test", false, (c) => {
     c.local("a", () => $number(10));
 
     return c.get("a");
   });
 
-  c.set("a", () => $number(20));
+  c.set("a", false, () => $number(20));
 
-  c.set("b", (c) => c.or($number(10), $number(30)));
+  c.set("b", false, (c) => c.or($number(10), $number(30)));
 
-  c.set("c", (c) =>
+  c.set("c", false, (c) =>
     c.call(c.get("choice"), [
       c.call(c.get("cmp"), [
         c.get("this", [$string("a")]),
@@ -55,7 +57,7 @@ const input = new Context().eval((c) => {
     ])
   );
 
-  c.set("c", () => $number(23));
+  c.set("c", false, () => $number(23));
 });
 
 const output = $object({
