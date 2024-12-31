@@ -197,17 +197,37 @@ export const singleType: {
   self?: T
 ): SingleType<K> | (SingleType<K> & T) => type(val(key, value), self as any);
 
-export const callable = <T extends { $: (...args: any[]) => any }>(
+type DropFirstArgument<T extends (...args: any[]) => any> = T extends (
+  first: any,
+  ...rest: infer U
+) => infer R
+  ? (...args: U) => R
+  : never;
+
+type CallableInput = {
+  $: (...args: any[]) => any;
+  [keys: string]: (...args: any[]) => any;
+};
+
+type RemoveSelfs<T extends Omit<CallableInput, "$">> = {
+  [K in keyof T]: DropFirstArgument<T[K]>;
+};
+
+type CallableOutput<T extends CallableInput> = T["$"] &
+  RemoveSelfs<Omit<T, "$">>;
+
+export const callable = <T extends CallableInput>(
   obj: T
-): T["$"] & Omit<T, "$"> => {
-  const fn = obj.$ as T["$"] & Omit<T, "$">;
-  delete (obj as any).$;
+): CallableOutput<T> => {
+  const self = obj.$ as CallableOutput<T>;
 
   for (const key of Object.keys(obj) as Array<keyof Omit<T, "$">>) {
-    fn[key] = obj[key] as any;
+    if (key === "$") continue;
+    const fn = obj[key] as (self: CallableOutput<T>, ...args: any[]) => any;
+    self[key] = ((...args: any[]) => fn(self, ...args)) as any;
   }
 
-  return fn;
+  return self;
 };
 
 export const TypeFns = {
@@ -521,7 +541,8 @@ export const DurationFns = unitFns("duration", () => ({
     return cmp === 0 ? Cmp.Equal : cmp < 0 ? Cmp.DisjointLt : Cmp.DisjointGt;
   },
   _clone: (value) => L.Duration.fromMillis(value.toMillis()),
-  _isTruthy: (value) => (value.as("seconds") === 0 ? $false : $true)
+  _isTruthy: (value) => (value.as("seconds") === 0 ? $false : $true),
+  normalize: (value: L.Duration) => value.shiftToAll().normalize()
 }));
 
 export const LinkFns = unitFns("link", () => ({
@@ -768,7 +789,12 @@ type IVararg = [Type];
 
 interface IFnDec<T> {
   (args: IArgs, fn: IFn<SingleType<any>>): T;
-  (args: IArgs, type: Type, valufy: number[], valFn: IFn<any>): T;
+  (
+    args: IArgs,
+    type: Type,
+    requireVals: number[],
+    valFn: IFn<SingleType<any>>
+  ): T;
 }
 
 interface IFnBuilder {
@@ -804,13 +830,12 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
     return res;
   };
 
-  const valufyFn =
-    (def: Type, valufy: number[], fn: IFn<any>): IFn<SingleType> =>
+  const requireValsFn =
+    (def: Type, requireVals: number[], fn: IFn<any>): IFn<SingleType> =>
     (ctx: IContext, ...args: SingleType[]): Type => {
-      for (const pos of valufy.filter((pos) => pos < args.length)) {
+      for (const pos of requireVals.filter((pos) => pos < args.length)) {
         const arg = args[pos];
         if (arg.isType()) return def;
-        args[pos] = arg.value as any;
       }
       return fn(ctx, ...args);
     };
@@ -953,8 +978,8 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
   const add: IFnBuilder["add"] = (
     args: IArgs,
     typeOrFn: Type | IFn<SingleType<any>>,
-    valufy?: number[],
-    valFn?: IFn<any>
+    requireVals?: number[],
+    valFn?: IFn<SingleType<any>>
   ): IFnBuilder => {
     const { required, optional, vararg } = splitArgs(args);
     const argList = [...required, ...optional];
@@ -974,8 +999,10 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
     // vararg types
     const types = $array(argList, vararg ?? $never);
 
-    // valufy function
-    let fn = isType(typeOrFn) ? valufyFn(typeOrFn, valufy!, valFn!) : typeOrFn;
+    // required value logic
+    let fn = isType(typeOrFn)
+      ? requireValsFn(typeOrFn, requireVals!, valFn!)
+      : typeOrFn;
 
     // vectorize function
     fn = vectorizeFn(fn);
@@ -1052,7 +1079,8 @@ export const $never = singleType(
   null,
   callable({
     $: (msg: string) => singleType("never", msg),
-    andError: (a: Type, b: Type) => $never(NeverFns.error(a.types, b.types))
+    andError: (_: SingleType<"never">, a: Type, b: Type) =>
+      $never(NeverFns.error(a.types, b.types))
   })
 );
 

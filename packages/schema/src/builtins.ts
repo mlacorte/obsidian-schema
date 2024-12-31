@@ -1,14 +1,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   $any,
+  $array,
   $boolean,
+  $date,
+  $duration,
   $link,
   $never,
   $null,
   $number,
+  $object,
   $string,
   define,
-  type SingleType
+  DurationFns,
+  type SingleType as T
 } from "./types";
 
 const lt = define("lt", [])
@@ -35,17 +40,54 @@ const neq = define("neq", [])
   .add([$any, $any], (_, a, b) => $boolean(a.cmp(b, true) !== 0))
   .build();
 
-// TODO: make this dataview compliant
-const plus = define("neq", [])
-  .add([$number, $number], $number, [0, 1], (_, a: number, b: number) =>
-    $number(a + b)
+const plus = define("plus", [])
+  .add(
+    [$number, $number],
+    $number,
+    [0, 1],
+    (_, a: T<"number">, b: T<"number">) => $number(a.value! + b.value!)
   )
+  .add([$string, $any], $string, [0, 1], (_, a: T<"string">, b) =>
+    $string(a.value! + b.toString())
+  )
+  .add([$any, $string], $string, [0, 1], (_, a, b: T<"string">) =>
+    $string(a.toString() + b.value!)
+  )
+  .add([$date, $duration], $date, [0, 1], (_, a: T<"date">, b: T<"duration">) =>
+    $date(a.value!.plus(b.value!))
+  )
+  .add(
+    [$duration, $duration],
+    $duration,
+    [0, 1],
+    (_, a: T<"duration">, b: T<"duration">) =>
+      $duration(DurationFns.normalize(a.value!.plus(b.value!)))
+  )
+  .add([$array, $array], $array, [0, 1], (_, a: T<"array">, b: T<"array">) =>
+    $array(
+      [...a.value.known, ...b.value.known],
+      a.value.unknown.or(b.value.unknown)
+    )
+  )
+  .add(
+    [$object, $object],
+    $object,
+    [0, 1],
+    (_, a: T<"object">, b: T<"object">) =>
+      $object(
+        Object.fromEntries([...a.value.known, ...b.value.known]),
+        a.value.unknown.or(b.value.unknown)
+      )
+  )
+  .add([$null, $null], () => $null)
+  .add([$date, $null], () => $null)
+  .add([$null, $date], () => $null)
   .build();
 
 export const ops = { lt, lte, gt, gte, eq, neq, plus };
 
 const choice = define("choice", [0, 1, 2])
-  .add([$boolean, $any, $any], (_, cond: SingleType<"boolean">, pass, fail) =>
+  .add([$boolean, $any, $any], (_, cond: T<"boolean">, pass, fail) =>
     cond.value! ? pass : fail
   )
   .build();
