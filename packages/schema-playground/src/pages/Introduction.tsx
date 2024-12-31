@@ -21,48 +21,52 @@ other: val,`}
   </>
 );
 
-export const editor = Text.of([
-  'local cmp: (a,b) => error("NEVER"),',
-  "local cmp: (a,b) => a < b,",
-  "",
-  'fired: "fired",',
-  'pending: "pending",',
-  "event: { status: this.fired } or { status: this.pending },",
-  "",
-  "foo: {",
-  "  a: 10,",
-  "  bar: this.bar.foo,",
-  "  of string,",
-  "},",
-  "",
-  "bar: {",
-  "  foo: this.foo.a,",
-  "},",
-  "",
-  "other:",
-  "  local a: 10,",
-  "  local b: 20,",
-  "  [a, b, a + b],",
-  "",
-  "test: local a: 10, a,",
-  "",
-  "a: 20,",
-  "b: 10 or 30,",
-  "c: choice(",
-  "  cmp(this.a, this.b),",
-  "  this.a + 3,",
-  "  this.b + 5",
-  "),",
-  "",
-  "c: 23,",
-  "",
-  "/*",
-  "cmp/1: <lambda>,",
-  "cmp/2: <lambda>,",
-  "a/1: 20,",
-  "b/1: 30,",
-  "c/1: 20,",
-  "",
-  "c/1 -> {a/1, b/1, cmp/2}",
-  "*/"
-]);
+export const editor = Text.of(
+  `local cmp: (a,b) => error("NEVER"),
+local cmp: (a,b) => a < b,
+
+fired: "fired",
+pending: "pending",
+event: { status: this.fired } or { status: this.pending },
+
+foo: {
+  a: 10,
+  shared: "foo",
+  bar: this.bar.foo,
+  of string,
+},
+
+bar: {
+  shared: "bar",
+  foo: this.foo.a,
+},
+
+foobar: choice(this.a < 10, this.foo, this.bar).shared,
+
+other:
+  local a: 10,
+  local b: 20,
+  [a, b, a + b],
+
+test: local a: 10, a,
+
+a: 20,
+b: 10 or 30,
+c: choice(
+  cmp(this.a, this.b),
+  this.a + 3,
+  this.b + 5
+),
+
+c: 23,
+
+/*
+cmp/1: <lambda>,
+cmp/2: <lambda>,
+a/1: 20,
+b/1: 30,
+c/1: 20,
+
+c/1 -> {a/1, b/1, cmp/2}
+*/`.split("\n")
+);
