@@ -9,6 +9,7 @@ import {
   $null,
   $number,
   $string,
+  ops,
   type IArrayCtx,
   type IExprCtx,
   type IObjectCtx,
@@ -34,7 +35,17 @@ import {
   Property,
   Protected,
   String as _String,
-  TypedArg
+  TypedArg,
+  Dot,
+  Index,
+  DotIdentifier,
+  Plus,
+  Eq,
+  Gt,
+  Neq,
+  Lt,
+  Gte,
+  Lte
 } from "./parser/schema.parser.terms";
 
 class SchemaCursor {
@@ -112,6 +123,16 @@ const readProp = (cursor: SchemaCursor): string => {
   return res;
 };
 
+const OpFns = {
+  [Eq]: ops.eq,
+  [Neq]: ops.neq,
+  [Gt]: ops.gt,
+  [Gte]: ops.gte,
+  [Lt]: ops.lt,
+  [Lte]: ops.lte,
+  [Plus]: ops.plus
+};
+
 const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
   switch (cursor.id as unknown) {
     case LocalExpression: {
@@ -145,6 +166,28 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
       return c.arr((c) => {
         evalArr(cursor, c);
       });
+    case Dot:
+    case Index: {
+      cursor.firstChild(); // expression
+      const obj = evalExpr(cursor, c);
+
+      cursor.nextSibling(); // DotIdentifier | expression
+      const res = c.get(
+        obj,
+        cursor.id === DotIdentifier ? $string(cursor.text) : evalExpr(cursor, c)
+      );
+
+      cursor.parent();
+      return res;
+    }
+    case Plus: {
+      cursor.firstChild(); // expression
+      const l = evalExpr(cursor, c);
+      cursor.nextSibling(); // expression
+      const r = evalExpr(cursor, c);
+      cursor.parent();
+      return c.callOp(OpFns[cursor.id as keyof typeof OpFns], l, r);
+    }
     case Lambda: {
       cursor.firstChild(); // => LambdaArgs
       const args: Array<[string, TypeRef]> = [];
