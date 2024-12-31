@@ -31,7 +31,8 @@ Multiply { expression !mulDiv "*" expression }
 Divide { expression !mulDiv divideOp expression }
 Plus { expression !plsMin "+" expression }
 Minus { expression !plsMin "-" expression }
-mathExpression { Multiply | Divide | Plus | Minus }
+Modulo { expression !plsMin "%" expression }
+mathExpression { Multiply | Divide | Plus | Minus | Modulo }
 
 Gte { expression !cmp ">=" expression }
 Lte { expression !cmp "<=" expression }
@@ -121,7 +122,7 @@ durationPair {
   whitespace { @whitespace }
   @precedence { lineComment, divideOp }
 
-  "%{" "}" "!" "(" ")" "," "[" "]" "." "*" "/" "+" "-"
+  "%{" "}" "!" "(" ")" "," "[" "]" "." "*" "/" "+" "-" "%"
   ">=" "<=" "!=" ">" "<" "=" "and" "&" "or" "|" "=>" "{" ":"
 }
 

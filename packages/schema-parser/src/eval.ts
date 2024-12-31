@@ -45,7 +45,11 @@ import {
   Neq,
   Lt,
   Gte,
-  Lte
+  Lte,
+  Minus,
+  Divide,
+  Multiply,
+  Modulo
 } from "./parser/schema.parser.terms";
 
 class SchemaCursor {
@@ -130,7 +134,11 @@ const OpFns = {
   [Gte]: ops.gte,
   [Lt]: ops.lt,
   [Lte]: ops.lte,
-  [Plus]: ops.plus
+  [Plus]: ops.plus,
+  [Minus]: ops.minus,
+  [Multiply]: ops.multiply,
+  [Divide]: ops.divide,
+  [Modulo]: ops.modulo
 };
 
 const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
@@ -180,7 +188,17 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
       cursor.parent();
       return res;
     }
-    case Plus: {
+    case Eq:
+    case Neq:
+    case Gt:
+    case Gte:
+    case Lt:
+    case Lte:
+    case Plus:
+    case Minus:
+    case Multiply:
+    case Divide:
+    case Modulo: {
       cursor.firstChild(); // expression
       const l = evalExpr(cursor, c);
       cursor.nextSibling(); // expression

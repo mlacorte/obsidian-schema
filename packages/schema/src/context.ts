@@ -8,7 +8,6 @@ import {
   $object,
   $true,
   builtins,
-  ops,
   type SingleType,
   singleType,
   type Type
@@ -205,9 +204,8 @@ const evalExpr = <T extends TypeRef>(
     callOp: (fn, lRef, rRef) => {
       const ctx = ref.ctx;
       const [l, r] = [lRef, rRef].map(fromTypeRef);
-      const res = fn.value(ctx, l, r)
+      const res = fn.value(ctx, l, r);
 
-      console.log({ ctx, l, r, res });
       return lit(res);
     },
     fn: (args, expr) => {

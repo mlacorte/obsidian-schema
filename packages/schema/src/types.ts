@@ -1102,8 +1102,14 @@ export const $date = singleType("date", null, (date: L.DateTime) =>
   singleType("date", date)
 );
 
-export const $duration = singleType("duration", null, (duration: L.Duration) =>
-  singleType("duration", duration)
+export const $duration = singleType(
+  "duration",
+  null,
+  (duration: L.Duration, normalize = false) =>
+    singleType(
+      "duration",
+      normalize ? DurationFns.normalize(duration) : duration
+    )
 );
 
 export const $function = singleType<"function", IFnDec<Type>>(

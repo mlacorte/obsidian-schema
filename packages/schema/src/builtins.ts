@@ -12,7 +12,6 @@ import {
   $object,
   $string,
   define,
-  DurationFns,
   type SingleType as T
 } from "./types";
 
@@ -61,7 +60,7 @@ const plus = define("plus", [])
     $duration,
     [0, 1],
     (_, a: T<"duration">, b: T<"duration">) =>
-      $duration(DurationFns.normalize(a.value!.plus(b.value!)))
+      $duration(a.value!.plus(b.value!), true)
   )
   .add([$array, $array], $array, [0, 1], (_, a: T<"array">, b: T<"array">) =>
     $array(
@@ -84,7 +83,105 @@ const plus = define("plus", [])
   .add([$null, $date], () => $null)
   .build();
 
-export const ops = { lt, lte, gt, gte, eq, neq, plus };
+const minus = define("minus", [])
+  .add(
+    [$number, $number],
+    $number,
+    [0, 1],
+    (_, a: T<"number">, b: T<"number">) => $number(a.value! - b.value!)
+  )
+  .add([$date, $date], $duration, [0, 1], (_, a: T<"date">, b: T<"date">) =>
+    $duration(
+      a.value!.diff(b.value!, [
+        "years",
+        "months",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "milliseconds"
+      ]),
+      true
+    )
+  )
+  .add([$date, $duration], $date, [0, 1], (_, a: T<"date">, b: T<"duration">) =>
+    $date(a.value!.minus(b.value!))
+  )
+  .add(
+    [$duration, $duration],
+    $duration,
+    [0, 1],
+    (_, a: T<"duration">, b: T<"duration">) =>
+      $duration(a.value!.minus(b.value!), true)
+  )
+  .add([$null, $null], () => $null)
+  .add([$date, $null], () => $null)
+  .add([$null, $date], () => $null)
+  .build();
+
+const multiply = define("multiply", [])
+  .add(
+    [$number, $number],
+    $number,
+    [0, 1],
+    (_, a: T<"number">, b: T<"number">) => $number(a.value! * b.value!)
+  )
+  .add(
+    [$duration, $number],
+    $duration,
+    [0, 1],
+    (_, a: T<"duration">, b: T<"number">) =>
+      $duration(
+        a.value!.mapUnits((x) => b.value! * x),
+        true
+      )
+  )
+  .add([$null, $null], () => $null)
+  .build();
+
+const divide = define("divide", [])
+  .add(
+    [$number, $number],
+    $number,
+    [0, 1],
+    (_, a: T<"number">, b: T<"number">) => $number(a.value! / b.value!)
+  )
+  .add(
+    [$duration, $number],
+    $duration,
+    [0, 1],
+    (_, a: T<"duration">, b: T<"number">) =>
+      $duration(
+        a.value!.mapUnits((x) => b.value! / x),
+        true
+      )
+  )
+  .add([$null, $null], () => $null)
+  .build();
+
+const modulo = define("modulo", [])
+  .add(
+    [$number, $number],
+    $number,
+    [0, 1],
+    (_, a: T<"number">, b: T<"number">) => $number(a.value! % b.value!)
+  )
+  .add([$null, $null], () => $null)
+  .build();
+
+export const ops = {
+  lt,
+  lte,
+  gt,
+  gte,
+  eq,
+  neq,
+  plus,
+  minus,
+  multiply,
+  divide,
+  modulo
+};
 
 const choice = define("choice", [0, 1, 2])
   .add([$boolean, $any, $any], (_, cond: T<"boolean">, pass, fail) =>
