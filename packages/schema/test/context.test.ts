@@ -13,15 +13,13 @@ const input = new Context().eval((c) => {
   c.set("foo", false, (c) =>
     c.obj((c) => {
       c.set("a", false, () => $number(10));
-      c.set("bar", false, (c) =>
-        c.get("this", [$string("bar"), $string("foo")])
-      );
+      c.set("bar", false, (c) => c.get("this", $string("bar"), $string("foo")));
     })
   );
 
   c.set("bar", false, (c) =>
     c.obj((c) => {
-      c.set("foo", false, (c) => c.get("this", [$string("foo"), $string("a")]));
+      c.set("foo", false, (c) => c.get("this", $string("foo"), $string("a")));
     })
   );
 
@@ -49,11 +47,11 @@ const input = new Context().eval((c) => {
   c.set("c", false, (c) =>
     c.call(c.get("choice"), [
       c.call(c.get("cmp"), [
-        c.get("this", [$string("a")]),
-        c.get("this", [$string("b")])
+        c.get("this", $string("a")),
+        c.get("this", $string("b"))
       ]),
-      c.call(ops.plus, [c.get("this", [$string("a")]), $number(3)]),
-      c.call(ops.plus, [c.get("this", [$string("b")]), $number(5)])
+      c.call(ops.plus, [c.get("this", $string("a")), $number(3)]),
+      c.call(ops.plus, [c.get("this", $string("b")), $number(5)])
     ])
   );
 

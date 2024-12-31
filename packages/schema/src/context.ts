@@ -8,6 +8,7 @@ import {
   $object,
   $true,
   builtins,
+  ops,
   type SingleType,
   singleType,
   type Type
@@ -86,7 +87,7 @@ export class Context implements IGlobalContext {
     const deleted = new Set<path>();
 
     while (tbd.size > 0) {
-      const path: path = tbd.values().next().value;
+      const path = tbd.values().next().value!;
       const note = this.notes.get(path)!;
 
       // mark as deleted
@@ -174,12 +175,12 @@ const evalExpr = <T extends TypeRef>(
         thunk(() => evalExpr(ref.ctx, expr))
       );
     },
-    get: (name: string, properties = []) => {
-      const curr = ref.ctx.scope.get(name);
+    get: (obj, ...props) => {
+      const curr = typeof obj === "string" ? ref.ctx.scope.get(obj) : obj;
       if (curr === undefined) return lit(TypeSet.val($null));
 
       const objSet = fromTypeRef(curr);
-      const propsSet = properties.map((v) => fromTypeRef(v));
+      const propsSet = props.map((v) => fromTypeRef(v));
 
       return lit(
         TypeSet.call([objSet, ...propsSet], (obj, ...props) => {
@@ -200,6 +201,14 @@ const evalExpr = <T extends TypeRef>(
       const argSets = argRefs.map(fromTypeRef);
 
       return lit(TypeSet.eval(ctx, fnSet, argSets));
+    },
+    callOp: (fn, lRef, rRef) => {
+      const ctx = ref.ctx;
+      const [l, r] = [lRef, rRef].map(fromTypeRef);
+      const res = fn.value(ctx, l, r)
+
+      console.log({ ctx, l, r, res });
+      return lit(res);
     },
     fn: (args, expr) => {
       const snapshot = ref.ctx;
@@ -445,8 +454,9 @@ export interface IArrayCtx {
 
 export interface IExprCtx {
   local: (key: string, expr: (ctx: IExprCtx) => TypeRef) => void;
-  get: (ref: string, properties?: TypeRef[]) => TypeRef;
   call: (fn: TypeRef, args: TypeRef[]) => TypeRef;
+  callOp: (op: SingleType<"function">, l: TypeRef, r: TypeRef) => TypeRef;
+  get: (obj: string | TypeRef, ...props: TypeRef[]) => TypeRef;
   fn: (
     args: Array<string | [string, TypeRef]>,
     expr: (ctx: IExprCtx) => TypeRef
