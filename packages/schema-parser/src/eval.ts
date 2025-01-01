@@ -49,7 +49,10 @@ import {
   Minus,
   Divide,
   Multiply,
-  Modulo
+  Modulo,
+  Or,
+  And,
+  Call
 } from "./parser/schema.parser.terms";
 
 class SchemaCursor {
@@ -188,6 +191,17 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
       cursor.parent();
       return res;
     }
+    case Call: {
+      cursor.firstChild(); // expression
+      const fn = evalExpr(cursor, c);
+      const args: TypeRef[] = [];
+      while (cursor.nextSibling()) {
+        args.push(evalExpr(cursor, c));
+      }
+      cursor.parent();
+      // return c.call(fn, args);
+      return $never("TODO");
+    }
     case Eq:
     case Neq:
     case Gt:
@@ -205,6 +219,16 @@ const evalExpr = (cursor: SchemaCursor, c: IExprCtx): TypeRef => {
       const r = evalExpr(cursor, c);
       cursor.parent();
       return c.callOp(OpFns[cursor.id as keyof typeof OpFns], l, r);
+    }
+    case And:
+    case Or: {
+      const fn = cursor.id === And ? c.and : c.or;
+      cursor.firstChild();
+      const l = evalExpr(cursor, c);
+      cursor.nextSibling();
+      const r = evalExpr(cursor, c);
+      cursor.parent();
+      return fn(l, r);
     }
     case Lambda: {
       cursor.firstChild(); // => LambdaArgs
