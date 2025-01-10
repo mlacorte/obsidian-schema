@@ -33,7 +33,7 @@
       "outputs": ["dist/**"]
     },
     "run:test": {
-      "dependsOn": ["^run:build"],
+      "dependsOn": ["run:build", "schema#run:build"],
       "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
     }
   }
