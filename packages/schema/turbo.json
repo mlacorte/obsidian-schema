@@ -1,7 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "run:build": {
       "inputs": [
         "./**",
@@ -10,7 +12,9 @@
         "!node_modules/**",
         "!test/**"
       ],
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "run:dev": {
       "inputs": [
@@ -20,10 +24,17 @@
         "!node_modules/**",
         "!test/**"
       ],
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "run:test": {
-      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**"
+      ]
     }
   }
 }

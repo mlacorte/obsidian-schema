@@ -1,15 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["**/.env.*local"],
-  "globalEnv": ["PORT"],
-  "pipeline": {
+  "globalDependencies": [
+    "**/.env.*local"
+  ],
+  "globalEnv": [
+    "PORT"
+  ],
+  "tasks": {
     "run:build": {
-      "outputMode": "new-only"
+      "outputLogs": "new-only"
     },
     "run:dev": {
       "cache": false,
       "persistent": true,
-      "outputMode": "new-only"
+      "outputLogs": "new-only"
     },
     "run:clean": {
       "cache": false

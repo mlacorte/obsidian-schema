@@ -1,17 +1,23 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "run:build:lezer": {
-      "inputs": ["src/parser/schema.grammar"],
+      "inputs": [
+        "src/parser/schema.grammar"
+      ],
       "outputs": [
         "src/parser/schema.parser.js",
         "src/parser/schema.parser.terms.js"
       ],
-      "outputMode": "new-only"
+      "outputLogs": "new-only"
     },
     "run:build": {
-      "dependsOn": ["run:build:lezer"],
+      "dependsOn": [
+        "run:build:lezer"
+      ],
       "inputs": [
         "./**",
         "!.turbo/**",
@@ -19,10 +25,14 @@
         "!node_modules/**",
         "!test/**"
       ],
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "run:dev": {
-      "dependsOn": ["run:build:lezer"],
+      "dependsOn": [
+        "run:build:lezer"
+      ],
       "inputs": [
         "./**",
         "!.turbo/**",
@@ -30,11 +40,21 @@
         "!node_modules/**",
         "!test/**"
       ],
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "run:test": {
-      "dependsOn": ["run:build", "schema#run:build"],
-      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
+      "dependsOn": [
+        "run:build",
+        "schema#run:build"
+      ],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**"
+      ]
     }
   }
 }

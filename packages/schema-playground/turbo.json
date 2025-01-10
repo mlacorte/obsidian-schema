@@ -1,15 +1,33 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "run:build": {
-      "dependsOn": ["schema-parser#run:build"],
-      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"],
-      "outputs": ["dist/**"]
+      "dependsOn": [
+        "schema-parser#run:build"
+      ],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     },
     "run:dev": {
-      "dependsOn": ["schema-parser#run:build"],
-      "inputs": ["./**", "!.turbo/**", "!dist/**", "!node_modules/**"]
+      "dependsOn": [
+        "schema-parser#run:build"
+      ],
+      "inputs": [
+        "./**",
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**"
+      ]
     }
   }
 }
