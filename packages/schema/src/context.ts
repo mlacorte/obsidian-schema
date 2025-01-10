@@ -199,14 +199,21 @@ const evalExpr = <T extends TypeRef>(
       const fnSet = fromTypeRef(fnRef);
       const argSets = argRefs.map(fromTypeRef);
 
-      return lit(TypeSet.eval(ctx, fnSet, argSets));
+      return lit(
+        TypeSet.call([fnSet, ...argSets], (fn, ...args) => {
+          return fn.value(ctx, ...args);
+        })
+      );
     },
     callOp: (fn, lRef, rRef) => {
       const ctx = ref.ctx;
       const [l, r] = [lRef, rRef].map(fromTypeRef);
-      const res = fn.value(ctx, l, r);
 
-      return lit(res);
+      return lit(
+        TypeSet.call([l, r], (l, r) => {
+          return fn.value(ctx, l, r);
+        })
+      );
     },
     fn: (args, expr) => {
       const snapshot = ref.ctx;
@@ -214,7 +221,7 @@ const evalExpr = <T extends TypeRef>(
         typeof a === "string" ? [a, $any] : a
       );
 
-      return singleType("function", (_, ...args): TypeSet => {
+      return singleType("function", (_, ...args): Type => {
         const ctx = cloneCtx(snapshot);
 
         for (const [pos, arg] of args.slice(0, cleaned.length).entries()) {
@@ -223,7 +230,7 @@ const evalExpr = <T extends TypeRef>(
           ctx.scope.set(
             name,
             lit(
-              TypeSet.call([arg, fromTypeRef(type)], (arg, type) => {
+              TypeSet.call([fromTypeRef(type)], (type) => {
                 switch (arg.cmp(type)) {
                   case Cmp.Equal:
                   case Cmp.Subset:
@@ -236,7 +243,7 @@ const evalExpr = <T extends TypeRef>(
           );
         }
 
-        return fromTypeRef(evalExpr(ctx, expr));
+        return fromTypeRef(evalExpr(ctx, expr)).type();
       });
     },
     obj: (obj) => {

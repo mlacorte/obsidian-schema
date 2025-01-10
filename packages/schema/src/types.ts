@@ -19,7 +19,7 @@ export interface ITypeMapBase<T> {
   boolean: null | boolean;
   date: null | L.DateTime;
   duration: null | L.Duration;
-  function: (ctx: IContext, ...args: TypeSet[]) => TypeSet;
+  function: (ctx: IContext, ...args: Type[]) => Type;
   link: Stubs.Link;
   null: null;
   number: null | number;
@@ -840,139 +840,60 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
       return fn(ctx, ...args);
     };
 
-  const expandVecs = (args: TypeSet[]): TypeSet[] => {
-    // (1) Create a set of arguments to be vectorized
-    const vecArgs = new Map(
-      vectorize
-        .filter((pos) => pos < args.length)
-        .map((i) => [args[i].id, args[i].potentials])
-    );
-    if (vecArgs.size === 0) return args;
-
-    const vecs = [...vecArgs].map(([id, potentials]) =>
-      potentials.map((potential) => [id, potential] as const)
-    );
-
-    const expanded = new Map<id, TypeSet>(
-      [...vecArgs.keys()].map((id) => [id, new TypeSet(id, [])])
-    );
-
-    // (2) Cartesian product over them for various combos
-    // (3) Iterate over each combo:
-    for (const vecCombo of UtilFns.cartesian(vecs)) {
-      const vecMap = new Map(vecCombo);
-      // (4) Filter combo to just arrays
-      const vecs = [...vecMap.values()]
-        .filter((t) => t.type.type === "array")
-        .map((t) => t.type.value as ISingleTypeMap["array"]);
-
-      // short circuit if there aren't any arrays
-      if (vecs.length === 0) {
-        for (const potential of vecMap.values()) {
-          for (const [id, { type }] of vecMap) {
-            potential.conds.set(id, type);
-          }
-        }
-
-        for (const [id, potential] of vecMap) {
-          expanded.get(id)!.potentials.push(potential);
-        }
-
-        continue;
-      }
-
-      // (5) Calculate min, max, and if tail is needed for arrays
-      const min = Math.min(...vecs.map(ArrayFns.knownSize));
-      let max = Math.min(...vecs.map(ArrayFns.size));
-      let tail = false;
-
-      if (max === Infinity) {
-        max = Math.max(...vecs.map(ArrayFns.knownSize));
-        tail = true;
-      }
-
-      // (6) For each needed length:
-      for (let len = min; len <= max; len++) {
-        // (7) Create a set of potential types
-        const potentials = new Map<id, IPotentialType>();
-        const addTail = len === max && tail;
-
-        for (const [id, potential] of vecMap) {
-          const { type, conds } = potential;
-
-          if (!type.is("array")) {
-            potentials.set(id, { type, conds: new Map(conds) });
-            continue;
-          }
-
-          const known: SingleType[] = [];
-          const unknown = addTail ? type.value.unknown : $never;
-
-          for (let i = 0; i < len; i++) {
-            known.push(type.value.known[i] ?? type.value.unknown);
-          }
-
-          potentials.set(id, {
-            type: $array(known, unknown),
-            conds: new Map(conds)
-          });
-        }
-
-        // (8) Add each other to the conditions
-        for (const potential of potentials.values()) {
-          for (const [id, { type }] of potentials) {
-            potential.conds.set(id, type);
-          }
-        }
-
-        // (9) Push the set to results
-        for (const [id, potential] of potentials) {
-          expanded.get(id)!.potentials.push(potential);
-        }
-      }
-    }
-
-    // (10) Replace each vectorized typeset with new result
-    return args.map((arg) => expanded.get(arg.id) ?? arg);
-  };
-
   const vectorizeFn =
     (fn: IFn<SingleType>): IFn<SingleType> =>
     (ctx: IContext, ...args: SingleType[]): Type => {
-      const vecs = vectorize.filter((pos) => pos < args.length);
+      const vecMap = new Map<number, Type<"array">>();
+
+      for (const pos of vectorize) {
+        const arg = args[pos];
+        if (arg.type !== "array" || pos >= args.length) continue;
+        vecMap.set(pos, arg as Type<"array">);
+      }
+
+      const vecs = [...vecMap.values()].map((t) => t.value);
       if (vecs.length === 0) return fn(ctx, ...args);
 
-      // infer length of vectorized args
-      let len = -1;
-      let tail = false;
+      const maxOrInfinity = Math.min(...vecs.map(ArrayFns.size));
+      const min = Math.min(...vecs.map(ArrayFns.knownSize));
+      const max =
+        maxOrInfinity !== Infinity
+          ? maxOrInfinity
+          : Math.max(...vecs.map(ArrayFns.knownSize));
 
-      // TODO: figure out some way to not have to do this
-      for (const pos of vecs) {
-        const type = args[pos];
-        if (!type.is("array")) continue;
-        len = type.value.known.length;
-        tail = !type.value.unknown.is("never");
-        break;
+      let $res = $array([], $never);
+      const results: Array<Type<"array">> = min === 0 ? [$res] : [];
+
+      for (let subPos = 0; subPos < max; subPos++) {
+        const subArgs: SingleType[] = [...args];
+
+        for (const [vecPos, $vecArg] of vecMap.entries()) {
+          subArgs[vecPos] = ArrayFns.get($vecArg.value, subPos) as SingleType;
+        }
+
+        $res = $res.clone();
+        // TODO: fix this to handle single inputs -> multiple outputs
+        $res.value.known.push(fn(ctx, ...subArgs) as SingleType);
+
+        if (subPos + 1 >= min) {
+          results.push($res);
+        }
       }
 
-      if (len === -1) return fn(ctx, ...args);
+      if (maxOrInfinity === Infinity) {
+        const lastPos = results.length - 1;
+        const last = results[lastPos];
+        const subArgs = [...args];
 
-      const callFn = (getter: (arr: SingleType<"array">) => SingleType): Type =>
-        fn(
-          ctx,
-          ...args.map((arg, pos) =>
-            vecs.includes(pos) && arg.is("array") ? getter(arg) : arg
-          )
-        );
+        for (const [vecPos, vecArg] of vecMap.entries()) {
+          subArgs[vecPos] = (vecArg.value.known[max] ??
+            vecArg.value.unknown) as SingleType;
+        }
 
-      const known = [];
-      const unknown = tail ? callFn((arr) => arr.value.unknown) : $never;
-
-      for (let pos = 0; pos < len; pos++) {
-        known.push(callFn((arr) => arr.value.known[pos]));
+        results[lastPos] = $array(last.value.known, fn(ctx, ...subArgs));
       }
 
-      return $array(known, unknown);
+      return results.reduce<Type>((a, b) => a.or(b), $never);
     };
 
   const add: IFnBuilder["add"] = (
@@ -1014,41 +935,45 @@ export const define = (name: string, vectorize: number[]): IFnBuilder => {
   };
 
   const build: IFnBuilder["build"] = () =>
-    singleType(
-      "function",
-      (ctx: IContext, ...args: TypeSet[]): TypeSet =>
-        TypeSet.call(expandVecs(args), (...args) => {
-          // propagate errors
-          const errors = args.filter((arg) => arg.type === "never");
+    singleType("function", (ctx: IContext, ...args: Type[]): Type => {
+      // propagate errors
+      const errors = args.filter((arg) => arg.type === "never");
 
-          if (errors.length > 0) {
-            return errors.reduce<Type>((a, b) => a.or(b), $never);
-          }
+      if (errors.length > 0) {
+        return errors.reduce<Type>((a, b) => a.or(b), $never);
+      }
 
-          // finds match
-          const argList = $array(args, $never);
-          let matchFn: IFn<SingleType> | null = null;
+      // finds match
+      const argList = $array(args, $never);
+      let matchFn: IFn<SingleType> | null = null;
 
-          for (const { types, fn } of fns) {
-            const cmp = argList.cmp(types);
-            if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
-              matchFn = fn;
-              break;
-            }
-          }
+      for (const { types, fn } of fns) {
+        const cmp = argList.cmp(types);
+        if (cmp === Cmp.Equal || cmp === Cmp.Subset) {
+          matchFn = fn;
+          break;
+        }
+      }
 
-          // throws error if none found
-          if (matchFn === null) {
-            return $never(
-              `No implementation of '${name}' found for arguments: ${args
-                .map((arg) => arg.toString())
-                .join(", ")}`
-            );
-          }
+      // throws error if none found
+      if (matchFn === null) {
+        return $never(
+          `No implementation of '${name}' found for arguments: ${args
+            .map((arg) => arg.toString())
+            .join(", ")}`
+        );
+      }
 
-          return matchFn(ctx, ...args);
-        })
-    );
+      // union all results
+      const combos = args.map((arg) => arg.splitTypes());
+      let res: Type = $never;
+
+      for (const combo of UtilFns.cartesian(combos)) {
+        res = res.or(matchFn(ctx, ...combo));
+      }
+
+      return res;
+    });
 
   return { add, build };
 };
@@ -1114,7 +1039,7 @@ export const $duration = singleType(
 
 export const $function = singleType<"function", IFnDec<Type>>(
   "function",
-  () => TypeSet.val($any),
+  () => $any,
   (...args: [any, any]) =>
     define("<lambda>", [])
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument

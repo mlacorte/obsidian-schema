@@ -294,12 +294,12 @@ describe("types", () => {
     const ctx = new Context().empty();
 
     for (const types of tests) {
-      const args = types.slice(0, 3).map((t) => TypeSet.val(t));
+      const args = types.slice(0, 3);
       const s = types.map((t) => t.toString());
       const name = `choice(${s[0]}, ${s[1]}, ${s[2]}) => ${s[3]}`;
 
       test(name, () => {
-        eq(builtins.choice.value(ctx, ...args).type(), types[3]);
+        eq(builtins.choice.value(ctx, ...args), types[3]);
       });
     }
   });
