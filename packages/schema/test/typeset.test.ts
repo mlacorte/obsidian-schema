@@ -19,7 +19,7 @@ const depEq = (a: TypeSet, b: Array<Array<[TypeSet, SingleType]>>): void => {
     [...a.potentials.values()].map((p) =>
       [...p.conds].map(([id, t]) => [id, t.types])
     )
-  ).toEqual(b.map((p) => p.map(([ts, t]) => [ts.id, t.types])));
+  ).toEqual(b.map((p) => p.map(([ts, t]) => [ts, t.types])));
 };
 
 describe("typeset", () => {
@@ -59,7 +59,7 @@ describe("typeset", () => {
     });
 
     test("ids", () => {
-      expect(a.id).not.toBe(b.id);
+      expect(a).not.toBe(b);
     });
   });
 

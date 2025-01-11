@@ -1,28 +1,14 @@
 /* eslint-disable no-labels */
-import { type IContext } from "./context";
-import {
-  $never,
-  type IKey,
-  type ISingleTypeMap,
-  type SingleType,
-  type Type
-} from "./types";
+import { $never, type IKey, type SingleType, type Type } from "./types";
 import { cartesian, Cmp } from "./util";
-
-export type id = bigint;
 
 export interface IPotentialType<K extends IKey = IKey> {
   type: SingleType<K>;
-  conds: Map<id, SingleType>;
+  conds: Map<TypeSet, SingleType>;
 }
 
 export class TypeSet {
-  constructor(
-    public id: id,
-    public potentials: IPotentialType[]
-  ) {}
-
-  static ctr = BigInt(1);
+  constructor(public potentials: IPotentialType[] = []) {}
 
   type(): Type {
     return this.potentials.reduce<Type>((res, p) => res.or(p.type), $never);
@@ -30,9 +16,8 @@ export class TypeSet {
 
   clone(): TypeSet {
     return new TypeSet(
-      this.id,
       this.potentials.map((old) => {
-        const conds = new Map<id, SingleType>();
+        const conds = new Map<TypeSet, SingleType>();
         for (const [id, type] of old.conds) {
           conds.set(id, type.clone());
         }
@@ -42,21 +27,20 @@ export class TypeSet {
   }
 
   static val(value: Type): TypeSet {
-    const id = TypeSet.ctr++;
     const types = [...value.splitTypes()];
-    const potentials: IPotentialType[] = [];
+    const res = new TypeSet();
 
     if (types.length === 1) {
-      potentials.push({ type: types[0], conds: new Map() });
+      res.potentials.push({ type: types[0], conds: new Map() });
 
-      return new TypeSet(id, potentials);
+      return res;
     }
 
     for (const type of types) {
-      potentials.push({ type, conds: new Map([[id, type]]) });
+      res.potentials.push({ type, conds: new Map([[res, type]]) });
     }
 
-    return new TypeSet(id, potentials);
+    return res;
   }
 
   static call(
@@ -67,16 +51,15 @@ export class TypeSet {
       return TypeSet.val(fn());
     }
 
-    const id = TypeSet.ctr++;
-    const potentials: IPotentialType[] = [];
+    const res = new TypeSet();
     const argCombos = cartesian(
       args.map((arg) =>
-        arg.potentials.map((possible) => ({ ...arg, ...possible }))
+        arg.potentials.map((possible) => ({ id: arg, ...arg, ...possible }))
       )
     );
 
     outer: for (const argCombo of argCombos) {
-      const conds = new Map<id, SingleType>();
+      const conds = new Map<TypeSet, SingleType>();
 
       for (const arg of argCombo) {
         const curr = conds.get(arg.id);
@@ -98,19 +81,19 @@ export class TypeSet {
         }
       }
 
-      const res = fn(...args.map((branch) => conds.get(branch.id)!));
-      const types = [...res.splitTypes()];
+      const fnRes = fn(...args.map((branch) => conds.get(branch)!));
+      const types = [...fnRes.splitTypes()];
 
       if (types.length === 1) {
-        potentials.push({ type: types[0], conds });
+        res.potentials.push({ type: types[0], conds });
         continue;
       }
 
       for (const type of types) {
-        potentials.push({ type, conds: new Map(conds).set(id, type) });
+        res.potentials.push({ type, conds: new Map(conds).set(res, type) });
       }
     }
 
-    return new TypeSet(id, potentials);
+    return res;
   }
 }

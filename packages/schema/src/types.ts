@@ -3,7 +3,6 @@ import * as L from "luxon";
 
 import { type IContext } from "./context";
 import type * as Stubs from "./stubs";
-import { type id, type IPotentialType, TypeSet } from "./typeset";
 import * as UtilFns from "./util";
 import { Cmp } from "./util";
 
